@@ -1,0 +1,143 @@
+"""
+MercosService — recebe o webhook do Mercos e aciona o VhsysService.
+====================================================================
+
+Correções aplicadas:
+  1. Mapeamento correto dos campos da API Mercos V2
+  2. Idempotência thread-safe com lock por pedido
+  3. Cache thread-safe de produtos
+  4. Passa 'numero' e 'condicao_pagamento' para o VHSYS
+  5. Passa dados completos do cliente para cadastro automático
+"""
+
+import logging
+import threading
+
+from vhsys_service import VhsysService
+from src import database as db
+
+logger = logging.getLogger(__name__)
+
+
+class MercosService:
+    def __init__(self):
+        self.vhsys = VhsysService()
+        self._produtos_carregados = False
+
+        self._cache_lock = threading.Lock()
+        self._pedido_locks: dict[int, threading.Lock] = {}
+        self._pedido_locks_meta = threading.Lock()
+
+    def _get_lock_para_pedido(self, mercos_id: int) -> threading.Lock:
+        with self._pedido_locks_meta:
+            if mercos_id not in self._pedido_locks:
+                self._pedido_locks[mercos_id] = threading.Lock()
+            return self._pedido_locks[mercos_id]
+
+    def processar_para_vhsys(self, dados_mercos: dict):
+        mercos_id = dados_mercos.get("id")
+        numero    = dados_mercos.get("numero", mercos_id)
+
+        lock_pedido = self._get_lock_para_pedido(mercos_id)
+        if not lock_pedido.acquire(blocking=False):
+            logger.warning(f"[MercosService] Pedido #{numero} (id={mercos_id}) já está sendo processado.")
+            return None
+
+        try:
+            if db.pedido_ja_processado(mercos_id):
+                logger.info(f"[MercosService] Pedido #{numero} (id={mercos_id}) já processado anteriormente.")
+                return None
+
+            self._garantir_cache_produtos()
+
+            pedido_vhsys = self._traduzir_pedido(dados_mercos)
+            if not pedido_vhsys:
+                db.salvar_pedido_processado(mercos_id, "erro", status="erro")
+                return None
+
+            resposta = self.vhsys.lancar_pedido_venda(pedido_vhsys)
+
+            if resposta and resposta.get("code") == 200:
+                vhsys_id = str(resposta.get("data", [{}])[0].get("id_ped") or "desconhecido")
+                db.salvar_pedido_processado(mercos_id, vhsys_id, status="ok")
+                logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS {vhsys_id}")
+            else:
+                db.salvar_pedido_processado(mercos_id, "erro", status="erro")
+                logger.error(f"[MercosService] Falha ao criar pedido VHSYS para #{numero}")
+
+            return resposta
+
+        finally:
+            lock_pedido.release()
+
+    def _traduzir_pedido(self, dados: dict) -> dict | None:
+        cliente_cnpj = dados.get("cliente_cnpj", "")
+        if not cliente_cnpj:
+            logger.error(f"[MercosService] Pedido id={dados.get('id')} sem cliente_cnpj.")
+            return None
+
+        itens = []
+        for item in dados.get("itens", []):
+            if item.get("excluido"):
+                continue
+
+            sku            = str(item.get("produto_codigo", "")).strip()
+            quantidade     = float(item.get("quantidade", 0))
+            valor_unitario = float(item.get("preco_liquido", 0))
+
+            if not sku or quantidade <= 0 or valor_unitario <= 0:
+                logger.warning(f"[MercosService] Item inválido: SKU={sku}, qtd={quantidade}, valor={valor_unitario}")
+                continue
+
+            itens.append({
+                "codigo_referencia": sku,
+                "quantidade":        quantidade,
+                "valor_unitario":    valor_unitario,
+                "_descricao":        item.get("produto_nome", ""),
+            })
+
+        if not itens:
+            logger.error(f"[MercosService] Pedido id={dados.get('id')} sem itens válidos.")
+            return None
+
+        obs_partes = []
+        if dados.get("observacoes"):
+            obs_partes.append(dados["observacoes"])
+        obs_partes.append(f"Origem Mercos - Pedido #{dados.get('numero', dados.get('id'))}")
+
+        return {
+            # Dados do pedido
+            "cliente_cnpj":       cliente_cnpj,
+            "data":               dados.get("data_emissao") or dados.get("data_criacao", "")[:10],
+            "observacoes":        " | ".join(obs_partes),
+            "numero":             dados.get("numero") or dados.get("id", "sem numero"),
+            "condicao_pagamento": dados.get("condicao_pagamento", "Não informada"),
+            "itens":              itens,
+
+            # Transportadora
+            "transportadora_nome":   dados.get("transportadora_nome", ""),
+
+            # Dados do cliente — usados para cadastro automático se não existir no VHSYS
+            "cliente_razao_social":  dados.get("cliente_razao_social", ""),
+            "cliente_nome_fantasia": dados.get("cliente_nome_fantasia", ""),
+            "cliente_telefone":      dados.get("cliente_telefone", []),
+            "cliente_rua":           dados.get("cliente_rua", ""),
+            "cliente_numero":        dados.get("cliente_numero", ""),
+            "cliente_bairro":        dados.get("cliente_bairro", ""),
+            "cliente_cidade":        dados.get("cliente_cidade", ""),
+            "cliente_estado":        dados.get("cliente_estado", ""),
+        }
+
+    def _garantir_cache_produtos(self):
+        if self._produtos_carregados:
+            return
+
+        with self._cache_lock:
+            if self._produtos_carregados:
+                logger.debug("[MercosService] Cache já carregado por outra thread.")
+                return
+
+            logger.info("[MercosService] Carregando cache de produtos...")
+            self.vhsys.carregar_todos_produtos()
+            self._produtos_carregados = True
+            logger.info(f"[MercosService] Cache pronto: {len(self.vhsys.cache_produtos)} produtos.")

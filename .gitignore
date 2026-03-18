@@ -1,0 +1,34 @@
+# Segredos — NUNCA subir para o GitHub
+.env
+
+# Banco de dados local
+data/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Arquivos locais desnecessários
+*.xlsx
+*.csv
+coletar_contexto.py
+gerar_pasta_exe.py
+teste_*.json
