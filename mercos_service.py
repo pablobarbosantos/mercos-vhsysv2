@@ -15,6 +15,7 @@ import threading
 
 from vhsys_service import VhsysService
 from src import database as db
+from src.whatsapp import get_whatsapp
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +59,51 @@ class MercosService:
             resposta = self.vhsys.lancar_pedido_venda(pedido_vhsys)
 
             if resposta and resposta.get("code") == 200:
-                vhsys_id = str(resposta.get("data", [{}])[0].get("id_ped") or "desconhecido")
+                pedido_data = resposta.get("data", [{}])[0]
+                vhsys_id    = str(pedido_data.get("id_ped") or "desconhecido")
+                valor_total = float(pedido_data.get("valor_total_nota", 0) or 0)
                 db.salvar_pedido_processado(mercos_id, vhsys_id, status="ok")
                 logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS {vhsys_id}")
+
+                # Notificação WhatsApp — alerta interno
+                try:
+                    wa = get_whatsapp()
+                    wa.notificar_pedido_ok(
+                        numero_pedido=numero,
+                        mercos_id=mercos_id,
+                        vhsys_id=vhsys_id,
+                        cliente=dados_mercos.get("cliente_razao_social", ""),
+                        valor=valor_total,
+                        condicao=dados_mercos.get("condicao_pagamento", ""),
+                    )
+                    # Confirmação pro cliente (se tiver telefone)
+                    telefones = dados_mercos.get("cliente_telefone", [])
+                    fone = telefones[0] if telefones else ""
+                    if fone:
+                        wa.confirmar_pedido_cliente(
+                            telefone=fone,
+                            nome_cliente=dados_mercos.get("cliente_razao_social", ""),
+                            numero_pedido=numero,
+                            valor=valor_total,
+                            condicao=dados_mercos.get("condicao_pagamento", ""),
+                        )
+                except Exception as e:
+                    logger.warning(f"[WhatsApp] Falha na notificação (não crítico): {e}")
+
             else:
                 db.salvar_pedido_processado(mercos_id, "erro", status="erro")
                 logger.error(f"[MercosService] Falha ao criar pedido VHSYS para #{numero}")
+
+                # Notificação WhatsApp — alerta de erro
+                try:
+                    get_whatsapp().notificar_pedido_erro(
+                        numero_pedido=numero,
+                        mercos_id=mercos_id,
+                        cliente=dados_mercos.get("cliente_razao_social", ""),
+                        motivo="Falha ao criar pedido no VHSys",
+                    )
+                except Exception as e:
+                    logger.warning(f"[WhatsApp] Falha na notificação de erro (não crítico): {e}")
 
             return resposta
 

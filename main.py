@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 import logging
@@ -6,6 +9,7 @@ import os
 import sys
 from mercos_service import MercosService
 from src import database as db
+from src.admin_routes import router as admin_router
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -49,6 +53,7 @@ logger.info("[Startup] Banco OK.")
 mercos_service = MercosService()
 
 app = FastAPI()
+app.include_router(admin_router)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Endpoints
@@ -100,3 +105,4 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

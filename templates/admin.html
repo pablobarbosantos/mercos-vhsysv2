@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin — Mercos → VHSys</title>
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3e;
+      --accent:    #4f8ef7;
+      --ok:        #22c55e;
+      --erro:      #ef4444;
+      --warn:      #f59e0b;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --radius:    10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+    header h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+    header h1 span { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    #ultima-atualizacao { color: var(--muted); font-size: 12px; }
+    button.refresh {
+      background: var(--accent);
+      border: none; border-radius: 6px;
+      color: #fff; font-size: 13px; font-weight: 600;
+      padding: 6px 14px; cursor: pointer;
+      transition: opacity .2s;
+    }
+    button.refresh:hover { opacity: .85; }
+
+    /* ── Layout ── */
+    main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+    /* ── Cards de Stats ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .stat-card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+    .stat-card .value { font-size: 32px; font-weight: 700; margin-top: 6px; line-height: 1; }
+    .stat-card.ok    .value { color: var(--ok); }
+    .stat-card.erro  .value { color: var(--erro); }
+    .stat-card.hoje  .value { color: var(--accent); }
+    .stat-card.total .value { color: var(--text); }
+
+    /* ── Filtro ── */
+    .toolbar {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .toolbar input, .toolbar select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 7px 12px;
+      outline: none;
+    }
+    .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+    .toolbar input { width: 220px; }
+    #contagem { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+    /* ── Tabela ── */
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: #13161f; }
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-top: 1px solid var(--border);
+      transition: background .15s;
+    }
+    tbody tr:hover { background: #1f2335; }
+    td { padding: 11px 16px; vertical-align: middle; }
+
+    /* ── Badge status ── */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+    }
+    .badge-ok        { background: #16532830; color: var(--ok);   border: 1px solid #16532860; }
+    .badge-erro      { background: #7f1d1d30; color: var(--erro); border: 1px solid #7f1d1d60; }
+    .badge-duplicata { background: #1e293b;   color: var(--muted);border: 1px solid var(--border); }
+    .badge-pendente  { background: #78350f30; color: var(--warn); border: 1px solid #78350f60; }
+
+    /* ── IDs ── */
+    .id-cell { font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px; color: var(--muted); }
+    .vhsys-id { color: var(--accent); font-weight: 600; }
+
+    /* ── Erro msg ── */
+    .erro-msg {
+      font-size: 12px;
+      color: var(--erro);
+      max-width: 320px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .erro-msg[title] { cursor: help; }
+
+    /* ── Botão reprocessar ── */
+    button.reprocess {
+      background: transparent;
+      border: 1px solid var(--warn);
+      border-radius: 5px;
+      color: var(--warn);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      cursor: pointer;
+      letter-spacing: .3px;
+      transition: background .2s, color .2s;
+    }
+    button.reprocess:hover { background: var(--warn); color: #000; }
+    button.reprocess:disabled { opacity: .4; cursor: default; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty .icon { font-size: 40px; margin-bottom: 12px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 13px;
+      box-shadow: 0 8px 24px #0008;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s;
+      z-index: 100;
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok   { border-color: var(--ok);   color: var(--ok); }
+    #toast.erro { border-color: var(--erro);  color: var(--erro); }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Mercos <span>→</span> VHSys &nbsp;·&nbsp; Painel Admin</h1>
+  <div class="header-right">
+    <span id="ultima-atualizacao">—</span>
+    <button class="refresh" onclick="carregar()">↻ Atualizar</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card hoje">
+      <div class="label">Hoje</div>
+      <div class="value" id="st-hoje">—</div>
+    </div>
+    <div class="stat-card total">
+      <div class="label">Total</div>
+      <div class="value" id="st-total">—</div>
+    </div>
+    <div class="stat-card ok">
+      <div class="label">Processados OK</div>
+      <div class="value" id="st-ok">—</div>
+    </div>
+    <div class="stat-card erro">
+      <div class="label">Com Erro</div>
+      <div class="value" id="st-erro">—</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" id="filtro-busca" placeholder="🔍 Buscar Mercos ID, VHSys ID…" oninput="filtrar()" />
+    <select id="filtro-status" onchange="filtrar()">
+      <option value="">Todos os status</option>
+      <option value="ok">✅ OK</option>
+      <option value="erro">❌ Erro</option>
+      <option value="duplicata">↩ Duplicata</option>
+      <option value="pendente">⏳ Pendente</option>
+    </select>
+    <span id="contagem">— pedidos</span>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap">
+    <table id="tabela">
+      <thead>
+        <tr>
+          <th>Mercos ID</th>
+          <th>VHSys ID</th>
+          <th>Processado em</th>
+          <th>Status</th>
+          <th>Erro</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr>
+          <td colspan="6" class="empty">
+            <div class="icon">⏳</div>
+            <div><span class="spinner"></span> Carregando pedidos…</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+  let _todos = [];
+
+  async function carregar() {
+    try {
+      const res  = await fetch('/admin/api/pedidos?limit=500');
+      const data = await res.json();
+
+      _todos = data.pedidos || [];
+
+      // Stats
+      const s = data.stats || {};
+      document.getElementById('st-hoje').textContent  = s.hoje  ?? '—';
+      document.getElementById('st-total').textContent = s.total ?? '—';
+      document.getElementById('st-ok').textContent    = s.ok    ?? '—';
+      document.getElementById('st-erro').textContent  = s.erro  ?? '—';
+
+      // Hora
+      const agora = new Date();
+      document.getElementById('ultima-atualizacao').textContent =
+        'Atualizado às ' + agora.toLocaleTimeString('pt-BR');
+
+      filtrar();
+    } catch (e) {
+      toast('Erro ao carregar pedidos: ' + e.message, 'erro');
+    }
+  }
+
+  function filtrar() {
+    const busca  = document.getElementById('filtro-busca').value.toLowerCase();
+    const status = document.getElementById('filtro-status').value.toLowerCase();
+
+    const filtrados = _todos.filter(p => {
+      const matchBusca = !busca ||
+        String(p.mercos_id).includes(busca) ||
+        String(p.vhsys_id  || '').toLowerCase().includes(busca);
+
+      const matchStatus = !status || (p.status || '').toLowerCase().startsWith(status);
+
+      return matchBusca && matchStatus;
+    });
+
+    document.getElementById('contagem').textContent = filtrados.length + ' pedidos';
+    renderTabela(filtrados);
+  }
+
+  function renderTabela(pedidos) {
+    const tbody = document.getElementById('tbody');
+
+    if (!pedidos.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">
+        <div class="icon">📭</div>
+        <div>Nenhum pedido encontrado.</div>
+      </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = pedidos.map(p => {
+      const status     = p.status || 'desconhecido';
+      const badgeClass = badgePara(status);
+      const vhsysId    = (p.vhsys_id && p.vhsys_id !== 'erro') ? p.vhsys_id : '—';
+      const dataFmt    = p.processado_em ? formatarData(p.processado_em) : '—';
+      const erroHtml   = p.erro
+        ? `<span class="erro-msg" title="${escHtml(p.erro)}">${escHtml(p.erro)}</span>`
+        : '<span style="color:var(--muted)">—</span>';
+
+      const podeReprocessar = status === 'erro' || status === 'pendente_reprocessamento';
+      const btnHtml = podeReprocessar
+        ? `<button class="reprocess" onclick="reprocessar(${p.mercos_id}, this)">⟳ Reprocessar</button>`
+        : '—';
+
+      return `<tr>
+        <td class="id-cell">#${p.mercos_id}</td>
+        <td class="id-cell ${vhsysId !== '—' ? 'vhsys-id' : ''}">${vhsysId}</td>
+        <td style="color:var(--muted);white-space:nowrap">${dataFmt}</td>
+        <td><span class="badge ${badgeClass}">${status}</span></td>
+        <td>${erroHtml}</td>
+        <td>${btnHtml}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function reprocessar(mercosId, btn) {
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const res  = await fetch(`/admin/api/reprocessar/${mercosId}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`Pedido #${mercosId} marcado para reprocessamento.`, 'ok');
+        await carregar();
+      } else {
+        toast(data.detail || 'Erro desconhecido.', 'erro');
+        btn.disabled = false;
+        btn.textContent = '⟳ Reprocessar';
+      }
+    } catch (e) {
+      toast('Falha na requisição: ' + e.message, 'erro');
+      btn.disabled = false;
+      btn.textContent = '⟳ Reprocessar';
+    }
+  }
+
+  function badgePara(status) {
+    if (status === 'ok')                       return 'badge-ok';
+    if (status === 'erro')                     return 'badge-erro';
+    if (status === 'duplicata')                return 'badge-duplicata';
+    if (status.startsWith('pendente'))         return 'badge-pendente';
+    return 'badge-duplicata';
+  }
+
+  function formatarData(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  let _toastTimer;
+  function toast(msg, tipo = 'ok') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show ' + tipo;
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+  }
+
+  // Auto-refresh a cada 30s
+  carregar();
+  setInterval(carregar, 30000);
+</script>
+
+</body>
+</html>

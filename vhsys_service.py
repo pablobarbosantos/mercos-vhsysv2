@@ -125,16 +125,62 @@ class VhsysService:
     # LOOKUPS
     # ──────────────────────────────────────────────────────────────────────────
 
+    # Mapa direto: nome Mercos (lower) → ID VHSys
+    # Fonte: correlação manual Pablo Agro 2026-03-18
+    _MAPA_CONDICOES_ID = {
+        # Parcelado
+        "14 / 21":  "185163",
+        "14/21":    "185163",
+        "14/":      "185164",
+        "14 dias":  "185164",
+        "21 / 28":  "185165",
+        "21/28":    "185165",
+        "21/":      "185166",
+        "21 dias":  "185166",
+        "28/":      "185167",
+        "28 dias":  "185167",
+        "30 dias":  "185167",   # aproximação: 28 dias é o mais próximo
+        "7 / 14":   "185168",
+        "7/14":     "185168",
+        "7/":       "185169",
+        "7 dias":   "185169",
+        # Formas especiais
+        "dinheiro": "185170",
+        "a vista":  "185170",
+        "à vista":  "185170",
+        "pix":      "185171",
+        "assinar":  "185172",
+    }
+
     def buscar_id_condicao(self, nome: str) -> str | None:
-        """Busca id_condicao pelo nome. Ex: '14 / 21' → '185163'"""
+        """
+        Busca id_condicao pelo nome.
+        Tenta: 1) mapa direto por ID  2) match exato cache  3) match parcial cache
+        """
         if not nome:
             return None
+
+        # 1) Mapa direto — IDs confirmados manualmente
+        nome_lower = nome.strip().lower()
+        id_direto = self._MAPA_CONDICOES_ID.get(nome_lower)
+        if id_direto:
+            logger.info(f"[CONDICAO] '{nome}' -> id={id_direto} (mapa direto)")
+            return id_direto
+
+        # 2) Match exato normalizado no cache
         nome_norm = _normalizar_nome(nome)
         for c in self.cache_condicoes:
             if _normalizar_nome(c.get("nome_condicao", "")) == nome_norm:
-                logger.info(f"[CONDICAO] '{nome}' → id={c['id_condicao']}")
+                logger.info(f"[CONDICAO] '{nome}' (exato cache) -> id={c['id_condicao']}")
                 return str(c["id_condicao"])
-        logger.warning(f"[CONDICAO] '{nome}' não encontrada no cache.")
+
+        # 3) Match parcial no cache
+        for c in self.cache_condicoes:
+            if nome_norm in _normalizar_nome(c.get("nome_condicao", "")):
+                logger.info(f"[CONDICAO] '{nome}' (parcial cache) -> id={c['id_condicao']}")
+                return str(c["id_condicao"])
+
+        logger.warning(f"[CONDICAO] '{nome}' nao encontrada.")
         return None
 
     def resolver_frete(self, nome: str) -> tuple:
@@ -278,8 +324,10 @@ class VhsysService:
         id_condicao   = self.buscar_id_condicao(nome_condicao)
 
         # ── Frete ─────────────────────────────────────────────────────────────
-        nome_transp  = dados.get("transportadora_nome", "")
-        frete_codigo, frete_nome = self.resolver_frete(nome_transp)
+        # Regra fixa: Remetente (FOB) — modalidade 0
+        frete_codigo = 0
+        frete_nome   = "FOB"
+        logger.info("[FRETE] Fixo: Remetente/FOB (modalidade=0)")
 
         # ── Itens ─────────────────────────────────────────────────────────────
         numero_pedido = dados.get("numero") or dados.get("id", "?")
