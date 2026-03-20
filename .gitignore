@@ -32,3 +32,16 @@ env/
 coletar_contexto.py
 gerar_pasta_exe.py
 teste_*.json
+
+# SSH Keys
+*.key
+*.key.pub
+
+# Binários
+ngrok.exe
+
+# Arquivos de remessa
+REMESSA_*.txt
+
+# Backup v1
+v1/
