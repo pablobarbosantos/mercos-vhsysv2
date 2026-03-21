@@ -13,6 +13,8 @@
       --ok:        #22c55e;
       --erro:      #ef4444;
       --warn:      #f59e0b;
+      --info:      #38bdf8;
+      --purple:    #a78bfa;
       --text:      #e2e8f0;
       --muted:     #64748b;
       --radius:    10px;
@@ -48,14 +50,57 @@
       transition: opacity .2s;
     }
     button.refresh:hover { opacity: .85; }
+    button.audit-now {
+      background: transparent;
+      border: 1px solid var(--purple);
+      border-radius: 6px;
+      color: var(--purple); font-size: 13px; font-weight: 600;
+      padding: 6px 14px; cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    button.audit-now:hover { background: var(--purple); color: #000; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 28px;
+    }
+    .tab {
+      padding: 12px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .2s, border-color .2s;
+      user-select: none;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-badge {
+      display: inline-block;
+      background: var(--erro);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 1px 6px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
 
     /* ── Layout ── */
     main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
 
     /* ── Cards de Stats ── */
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 16px;
       margin-bottom: 28px;
     }
@@ -67,12 +112,15 @@
     }
     .stat-card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
     .stat-card .value { font-size: 32px; font-weight: 700; margin-top: 6px; line-height: 1; }
-    .stat-card.ok    .value { color: var(--ok); }
-    .stat-card.erro  .value { color: var(--erro); }
-    .stat-card.hoje  .value { color: var(--accent); }
-    .stat-card.total .value { color: var(--text); }
+    .stat-card.ok      .value { color: var(--ok); }
+    .stat-card.erro    .value { color: var(--erro); }
+    .stat-card.hoje    .value { color: var(--accent); }
+    .stat-card.total   .value { color: var(--text); }
+    .stat-card.warn    .value { color: var(--warn); }
+    .stat-card.info    .value { color: var(--info); }
+    .stat-card.purple  .value { color: var(--purple); }
 
-    /* ── Filtro ── */
+    /* ── Toolbar ── */
     .toolbar {
       display: flex; align-items: center; gap: 12px;
       margin-bottom: 16px; flex-wrap: wrap;
@@ -88,7 +136,7 @@
     }
     .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
     .toolbar input { width: 220px; }
-    #contagem { color: var(--muted); font-size: 12px; margin-left: auto; }
+    #contagem, #contagem-fluxo, #contagem-seq { color: var(--muted); font-size: 12px; margin-left: auto; }
 
     /* ── Tabela ── */
     .table-wrap {
@@ -116,7 +164,7 @@
     tbody tr:hover { background: #1f2335; }
     td { padding: 11px 16px; vertical-align: middle; }
 
-    /* ── Badge status ── */
+    /* ── Badges ── */
     .badge {
       display: inline-block;
       padding: 3px 10px;
@@ -126,10 +174,17 @@
       letter-spacing: .4px;
       text-transform: uppercase;
     }
-    .badge-ok        { background: #16532830; color: var(--ok);   border: 1px solid #16532860; }
-    .badge-erro      { background: #7f1d1d30; color: var(--erro); border: 1px solid #7f1d1d60; }
-    .badge-duplicata { background: #1e293b;   color: var(--muted);border: 1px solid var(--border); }
-    .badge-pendente  { background: #78350f30; color: var(--warn); border: 1px solid #78350f60; }
+    .badge-ok         { background: #16532830; color: var(--ok);    border: 1px solid #16532860; }
+    .badge-erro       { background: #7f1d1d30; color: var(--erro);  border: 1px solid #7f1d1d60; }
+    .badge-duplicata  { background: #1e293b;   color: var(--muted); border: 1px solid var(--border); }
+    .badge-pendente   { background: #78350f30; color: var(--warn);  border: 1px solid #78350f60; }
+    .badge-recebido   { background: #1e293b;   color: var(--info);  border: 1px solid #38bdf840; }
+    .badge-processado { background: #16532830; color: var(--ok);    border: 1px solid #16532860; }
+    .badge-separado   { background: #1e3a5f;   color: var(--accent);border: 1px solid #4f8ef740; }
+    .badge-enviado    { background: #1a2e1a;   color: var(--ok);    border: 1px solid #22c55e60; }
+    .badge-cancelado  { background: #1e293b;   color: var(--muted); border: 1px solid var(--border); }
+    .badge-aberto     { background: #7f1d1d30; color: var(--erro);  border: 1px solid #7f1d1d60; }
+    .badge-resolvido  { background: #16532830; color: var(--ok);    border: 1px solid #16532860; }
 
     /* ── IDs ── */
     .id-cell { font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px; color: var(--muted); }
@@ -137,36 +192,58 @@
 
     /* ── Erro msg ── */
     .erro-msg {
-      font-size: 12px;
-      color: var(--erro);
-      max-width: 320px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 12px; color: var(--erro);
+      max-width: 280px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
     }
-    .erro-msg[title] { cursor: help; }
 
-    /* ── Botão reprocessar ── */
-    button.reprocess {
+    /* ── Botões de ação ── */
+    button.reprocess, button.action {
       background: transparent;
-      border: 1px solid var(--warn);
       border-radius: 5px;
-      color: var(--warn);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 4px 10px;
-      cursor: pointer;
+      font-size: 11px; font-weight: 700;
+      padding: 4px 10px; cursor: pointer;
       letter-spacing: .3px;
       transition: background .2s, color .2s;
     }
+    button.reprocess {
+      border: 1px solid var(--warn); color: var(--warn);
+    }
     button.reprocess:hover { background: var(--warn); color: #000; }
-    button.reprocess:disabled { opacity: .4; cursor: default; }
+    button.action-sep {
+      border: 1px solid var(--accent); color: var(--accent);
+      background: transparent; border-radius: 5px;
+      font-size: 11px; font-weight: 700;
+      padding: 4px 8px; cursor: pointer;
+      transition: background .2s, color .2s; margin-right: 4px;
+    }
+    button.action-sep:hover { background: var(--accent); color: #000; }
+    button.action-env {
+      border: 1px solid var(--ok); color: var(--ok);
+      background: transparent; border-radius: 5px;
+      font-size: 11px; font-weight: 700;
+      padding: 4px 8px; cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    button.action-env:hover { background: var(--ok); color: #000; }
+    button.action-res {
+      border: 1px solid var(--muted); color: var(--muted);
+      background: transparent; border-radius: 5px;
+      font-size: 11px; font-weight: 700;
+      padding: 4px 8px; cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    button.action-res:hover { background: var(--muted); color: #000; }
+    button:disabled { opacity: .4; cursor: default; }
+
+    /* ── Tempo relativo ── */
+    .tempo { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .tempo.atrasado { color: var(--warn); font-weight: 600; }
+    .tempo.critico  { color: var(--erro); font-weight: 600; }
 
     /* ── Empty state ── */
     .empty {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--muted);
+      text-align: center; padding: 60px 20px; color: var(--muted);
     }
     .empty .icon { font-size: 40px; margin-bottom: 12px; }
 
@@ -176,18 +253,17 @@
       background: #1e293b;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px 18px;
-      font-size: 13px;
+      padding: 12px 18px; font-size: 13px;
       box-shadow: 0 8px 24px #0008;
       opacity: 0; pointer-events: none;
-      transition: opacity .3s;
-      z-index: 100;
+      transition: opacity .3s; z-index: 100;
     }
     #toast.show { opacity: 1; }
     #toast.ok   { border-color: var(--ok);   color: var(--ok); }
     #toast.erro { border-color: var(--erro);  color: var(--erro); }
+    #toast.info { border-color: var(--info);  color: var(--info); }
 
-    /* ── Loading spinner ── */
+    /* ── Spinner ── */
     .spinner {
       display: inline-block; width: 16px; height: 16px;
       border: 2px solid var(--border);
@@ -197,6 +273,19 @@
       vertical-align: middle; margin-right: 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Etapas visuais do fluxo ── */
+    .fluxo-steps {
+      display: flex; gap: 4px; align-items: center; font-size: 11px;
+    }
+    .step {
+      padding: 2px 7px; border-radius: 4px;
+      font-weight: 600; opacity: .3;
+    }
+    .step.done  { opacity: 1; background: #16532830; color: var(--ok); border: 1px solid #22c55e40; }
+    .step.current { opacity: 1; background: #1e3a5f; color: var(--accent); border: 1px solid #4f8ef760; }
+    .step.erro  { opacity: 1; background: #7f1d1d30; color: var(--erro); border: 1px solid #ef444460; }
+    .step-arrow { color: var(--border); font-size: 10px; }
   </style>
 </head>
 <body>
@@ -205,67 +294,183 @@
   <h1>Mercos <span>→</span> VHSys &nbsp;·&nbsp; Painel Admin</h1>
   <div class="header-right">
     <span id="ultima-atualizacao">—</span>
-    <button class="refresh" onclick="carregar()">↻ Atualizar</button>
+    <button class="audit-now" onclick="auditarAgora()">⚡ Auditar agora</button>
+    <button class="refresh" onclick="carregarTudo()">↻ Atualizar</button>
   </div>
 </header>
 
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="trocarAba('pedidos')">📦 Pedidos</div>
+  <div class="tab" onclick="trocarAba('fluxo')" id="tab-fluxo">🔄 Fluxo Operacional</div>
+  <div class="tab" onclick="trocarAba('sequencia')" id="tab-seq">🔍 Auditoria de Sequência</div>
+</div>
+
 <main>
 
-  <!-- Stats -->
-  <div class="stats">
-    <div class="stat-card hoje">
-      <div class="label">Hoje</div>
-      <div class="value" id="st-hoje">—</div>
+  <!-- ══════════════════════════════════════════════
+       ABA 1 — PEDIDOS (existente)
+  ══════════════════════════════════════════════ -->
+  <div class="tab-content active" id="aba-pedidos">
+    <div class="stats">
+      <div class="stat-card hoje">
+        <div class="label">Hoje</div>
+        <div class="value" id="st-hoje">—</div>
+      </div>
+      <div class="stat-card total">
+        <div class="label">Total</div>
+        <div class="value" id="st-total">—</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="label">Processados OK</div>
+        <div class="value" id="st-ok">—</div>
+      </div>
+      <div class="stat-card erro">
+        <div class="label">Com Erro</div>
+        <div class="value" id="st-erro">—</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="label">Buracos abertos</div>
+        <div class="value" id="st-buracos">—</div>
+      </div>
     </div>
-    <div class="stat-card total">
-      <div class="label">Total</div>
-      <div class="value" id="st-total">—</div>
+
+    <div class="toolbar">
+      <input type="text" id="filtro-busca" placeholder="🔍 Buscar Mercos ID, VHSys ID…" oninput="filtrar()" />
+      <select id="filtro-status" onchange="filtrar()">
+        <option value="">Todos os status</option>
+        <option value="ok">✅ OK</option>
+        <option value="erro">❌ Erro</option>
+        <option value="duplicata">↩ Duplicata</option>
+        <option value="pendente">⏳ Pendente</option>
+      </select>
+      <span id="contagem">— pedidos</span>
     </div>
-    <div class="stat-card ok">
-      <div class="label">Processados OK</div>
-      <div class="value" id="st-ok">—</div>
-    </div>
-    <div class="stat-card erro">
-      <div class="label">Com Erro</div>
-      <div class="value" id="st-erro">—</div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mercos ID</th>
+            <th>VHSys ID</th>
+            <th>Processado em</th>
+            <th>Status</th>
+            <th>Erro</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="empty"><div class="icon">⏳</div><div><span class="spinner"></span> Carregando…</div></td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
-  <!-- Toolbar -->
-  <div class="toolbar">
-    <input type="text" id="filtro-busca" placeholder="🔍 Buscar Mercos ID, VHSys ID…" oninput="filtrar()" />
-    <select id="filtro-status" onchange="filtrar()">
-      <option value="">Todos os status</option>
-      <option value="ok">✅ OK</option>
-      <option value="erro">❌ Erro</option>
-      <option value="duplicata">↩ Duplicata</option>
-      <option value="pendente">⏳ Pendente</option>
-    </select>
-    <span id="contagem">— pedidos</span>
+  <!-- ══════════════════════════════════════════════
+       ABA 2 — FLUXO OPERACIONAL
+  ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="aba-fluxo">
+    <div class="stats">
+      <div class="stat-card total">
+        <div class="label">Total</div>
+        <div class="value" id="fl-total">—</div>
+      </div>
+      <div class="stat-card info">
+        <div class="label">Recebidos</div>
+        <div class="value" id="fl-recebidos">—</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="label">Processados</div>
+        <div class="value" id="fl-processados">—</div>
+      </div>
+      <div class="stat-card hoje">
+        <div class="label">Separados</div>
+        <div class="value" id="fl-separados">—</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="label">Enviados</div>
+        <div class="value" id="fl-enviados">—</div>
+      </div>
+      <div class="stat-card erro">
+        <div class="label">Com Erro</div>
+        <div class="value" id="fl-erros">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="filtro-fluxo" placeholder="🔍 Buscar pedido, cliente…" oninput="filtrarFluxo()" />
+      <select id="filtro-fluxo-status" onchange="filtrarFluxo()">
+        <option value="">Todos</option>
+        <option value="recebido">📥 Recebido</option>
+        <option value="processado">⚙️ Processado</option>
+        <option value="separado">📋 Separado</option>
+        <option value="enviado">🚚 Enviado</option>
+        <option value="erro">❌ Erro</option>
+        <option value="cancelado">🚫 Cancelado</option>
+      </select>
+      <span id="contagem-fluxo">— pedidos</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Pedido</th>
+            <th>Cliente</th>
+            <th>Valor</th>
+            <th>Fluxo</th>
+            <th>Status</th>
+            <th>Tempo</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-fluxo">
+          <tr><td colspan="7" class="empty"><div class="icon">⏳</div><div><span class="spinner"></span> Carregando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <!-- Tabela -->
-  <div class="table-wrap">
-    <table id="tabela">
-      <thead>
-        <tr>
-          <th>Mercos ID</th>
-          <th>VHSys ID</th>
-          <th>Processado em</th>
-          <th>Status</th>
-          <th>Erro</th>
-          <th>Ação</th>
-        </tr>
-      </thead>
-      <tbody id="tbody">
-        <tr>
-          <td colspan="6" class="empty">
-            <div class="icon">⏳</div>
-            <div><span class="spinner"></span> Carregando pedidos…</div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+  <!-- ══════════════════════════════════════════════
+       ABA 3 — AUDITORIA DE SEQUÊNCIA
+  ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="aba-sequencia">
+    <div class="stats">
+      <div class="stat-card erro">
+        <div class="label">Buracos abertos</div>
+        <div class="value" id="seq-abertos">—</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="label">Resolvidos</div>
+        <div class="value" id="seq-resolvidos">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <select id="filtro-seq" onchange="filtrarSequencia()">
+        <option value="abertos">⚠️ Apenas abertos</option>
+        <option value="todos">Todos</option>
+      </select>
+      <span id="contagem-seq">— registros</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mercos ID faltando</th>
+            <th>Classificação</th>
+            <th>Detectado em</th>
+            <th>Status</th>
+            <th>Resolução</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-seq">
+          <tr><td colspan="6" class="empty"><div class="icon">⏳</div><div><span class="spinner"></span> Carregando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </main>
@@ -273,27 +478,53 @@
 <div id="toast"></div>
 
 <script>
-  let _todos = [];
+  // ════════════════════════════════════════════════
+  // Estado global
+  // ════════════════════════════════════════════════
+  let _pedidos = [];
+  let _fluxo   = [];
+  let _buracos = [];
 
-  async function carregar() {
+  // ════════════════════════════════════════════════
+  // Tabs
+  // ════════════════════════════════════════════════
+  function trocarAba(nome) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('aba-' + nome).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  // ════════════════════════════════════════════════
+  // Carregamento geral
+  // ════════════════════════════════════════════════
+  async function carregarTudo() {
+    await Promise.all([carregarPedidos(), carregarFluxo(), carregarSequencia()]);
+    const agora = new Date();
+    document.getElementById('ultima-atualizacao').textContent =
+      'Atualizado às ' + agora.toLocaleTimeString('pt-BR');
+  }
+
+  // ════════════════════════════════════════════════
+  // ABA 1 — Pedidos
+  // ════════════════════════════════════════════════
+  async function carregarPedidos() {
     try {
       const res  = await fetch('/admin/api/pedidos?limit=500');
       const data = await res.json();
-
-      _todos = data.pedidos || [];
-
-      // Stats
+      _pedidos = data.pedidos || [];
       const s = data.stats || {};
-      document.getElementById('st-hoje').textContent  = s.hoje  ?? '—';
-      document.getElementById('st-total').textContent = s.total ?? '—';
-      document.getElementById('st-ok').textContent    = s.ok    ?? '—';
-      document.getElementById('st-erro').textContent  = s.erro  ?? '—';
+      document.getElementById('st-hoje').textContent    = s.hoje  ?? '—';
+      document.getElementById('st-total').textContent   = s.total ?? '—';
+      document.getElementById('st-ok').textContent      = s.ok    ?? '—';
+      document.getElementById('st-erro').textContent    = s.erro  ?? '—';
+      document.getElementById('st-buracos').textContent = s.buracos_abertos ?? '—';
 
-      // Hora
-      const agora = new Date();
-      document.getElementById('ultima-atualizacao').textContent =
-        'Atualizado às ' + agora.toLocaleTimeString('pt-BR');
-
+      // Badge na aba
+      if ((s.buracos_abertos || 0) > 0) {
+        document.getElementById('tab-seq').innerHTML =
+          `🔍 Auditoria de Sequência <span class="tab-badge">${s.buracos_abertos}</span>`;
+      }
       filtrar();
     } catch (e) {
       toast('Erro ao carregar pedidos: ' + e.message, 'erro');
@@ -303,32 +534,23 @@
   function filtrar() {
     const busca  = document.getElementById('filtro-busca').value.toLowerCase();
     const status = document.getElementById('filtro-status').value.toLowerCase();
-
-    const filtrados = _todos.filter(p => {
+    const filtrados = _pedidos.filter(p => {
       const matchBusca = !busca ||
         String(p.mercos_id).includes(busca) ||
-        String(p.vhsys_id  || '').toLowerCase().includes(busca);
-
+        String(p.vhsys_id || '').toLowerCase().includes(busca);
       const matchStatus = !status || (p.status || '').toLowerCase().startsWith(status);
-
       return matchBusca && matchStatus;
     });
-
     document.getElementById('contagem').textContent = filtrados.length + ' pedidos';
-    renderTabela(filtrados);
+    renderTabelaPedidos(filtrados);
   }
 
-  function renderTabela(pedidos) {
+  function renderTabelaPedidos(pedidos) {
     const tbody = document.getElementById('tbody');
-
     if (!pedidos.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">
-        <div class="icon">📭</div>
-        <div>Nenhum pedido encontrado.</div>
-      </td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty"><div class="icon">📭</div><div>Nenhum pedido encontrado.</div></td></tr>`;
       return;
     }
-
     tbody.innerHTML = pedidos.map(p => {
       const status     = p.status || 'desconhecido';
       const badgeClass = badgePara(status);
@@ -337,12 +559,10 @@
       const erroHtml   = p.erro
         ? `<span class="erro-msg" title="${escHtml(p.erro)}">${escHtml(p.erro)}</span>`
         : '<span style="color:var(--muted)">—</span>';
-
       const podeReprocessar = status === 'erro' || status === 'pendente_reprocessamento';
       const btnHtml = podeReprocessar
         ? `<button class="reprocess" onclick="reprocessar(${p.mercos_id}, this)">⟳ Reprocessar</button>`
         : '—';
-
       return `<tr>
         <td class="id-cell">#${p.mercos_id}</td>
         <td class="id-cell ${vhsysId !== '—' ? 'vhsys-id' : ''}">${vhsysId}</td>
@@ -355,31 +575,234 @@
   }
 
   async function reprocessar(mercosId, btn) {
-    btn.disabled = true;
-    btn.textContent = '…';
+    btn.disabled = true; btn.textContent = '…';
     try {
       const res  = await fetch(`/admin/api/reprocessar/${mercosId}`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         toast(`Pedido #${mercosId} marcado para reprocessamento.`, 'ok');
-        await carregar();
+        await carregarPedidos();
       } else {
         toast(data.detail || 'Erro desconhecido.', 'erro');
-        btn.disabled = false;
-        btn.textContent = '⟳ Reprocessar';
+        btn.disabled = false; btn.textContent = '⟳ Reprocessar';
       }
     } catch (e) {
-      toast('Falha na requisição: ' + e.message, 'erro');
-      btn.disabled = false;
-      btn.textContent = '⟳ Reprocessar';
+      toast('Falha: ' + e.message, 'erro');
+      btn.disabled = false; btn.textContent = '⟳ Reprocessar';
     }
   }
 
+  // ════════════════════════════════════════════════
+  // ABA 2 — Fluxo
+  // ════════════════════════════════════════════════
+  async function carregarFluxo() {
+    try {
+      const res  = await fetch('/admin/api/auditoria/fluxo?limit=500');
+      const data = await res.json();
+      _fluxo = data.pedidos || [];
+      const s = data.stats || {};
+      document.getElementById('fl-total').textContent      = s.total      ?? '—';
+      document.getElementById('fl-recebidos').textContent  = s.recebidos  ?? '—';
+      document.getElementById('fl-processados').textContent= s.processados?? '—';
+      document.getElementById('fl-separados').textContent  = s.separados  ?? '—';
+      document.getElementById('fl-enviados').textContent   = s.enviados   ?? '—';
+      document.getElementById('fl-erros').textContent      = s.com_erro   ?? '—';
+
+      // Badge na aba se tiver travados
+      const travados = (s.recebidos || 0) + (s.com_erro || 0);
+      if (travados > 0) {
+        document.getElementById('tab-fluxo').innerHTML =
+          `🔄 Fluxo Operacional <span class="tab-badge">${travados}</span>`;
+      }
+      filtrarFluxo();
+    } catch (e) {
+      toast('Erro ao carregar fluxo: ' + e.message, 'erro');
+    }
+  }
+
+  function filtrarFluxo() {
+    const busca  = document.getElementById('filtro-fluxo').value.toLowerCase();
+    const status = document.getElementById('filtro-fluxo-status').value.toLowerCase();
+    const filtrados = _fluxo.filter(p => {
+      const matchBusca = !busca ||
+        String(p.numero || p.mercos_id).toLowerCase().includes(busca) ||
+        String(p.cliente || '').toLowerCase().includes(busca);
+      const matchStatus = !status || (p.status_fluxo || '') === status;
+      return matchBusca && matchStatus;
+    });
+    document.getElementById('contagem-fluxo').textContent = filtrados.length + ' pedidos';
+    renderTabelaFluxo(filtrados);
+  }
+
+  function renderTabelaFluxo(pedidos) {
+    const tbody = document.getElementById('tbody-fluxo');
+    if (!pedidos.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="icon">📭</div><div>Nenhum pedido encontrado.</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = pedidos.map(p => {
+      const status  = p.status_fluxo || 'recebido';
+      const numero  = p.numero || ('#' + p.mercos_id);
+      const cliente = p.cliente || '—';
+      const valor   = p.valor ? `R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '—';
+
+      // Fluxo visual
+      const steps = fluxoSteps(p);
+
+      // Tempo desde recebido
+      const tempoHtml = tempoDesde(p.recebido_em, status);
+
+      // Botões de ação conforme etapa
+      let acoes = '—';
+      if (status === 'processado') {
+        acoes = `<button class="action-sep" onclick="marcarSeparado(${p.mercos_id}, this)">📋 Separado</button>`;
+      } else if (status === 'separado') {
+        acoes = `<button class="action-env" onclick="marcarEnviado(${p.mercos_id}, this)">🚚 Enviado</button>`;
+      }
+
+      return `<tr>
+        <td class="id-cell">#${numero}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(cliente)}">${escHtml(cliente)}</td>
+        <td style="white-space:nowrap">${valor}</td>
+        <td>${steps}</td>
+        <td><span class="badge badge-${status}">${status}</span></td>
+        <td>${tempoHtml}</td>
+        <td>${acoes}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function fluxoSteps(p) {
+    const s = p.status_fluxo;
+    const etapas = ['recebido','processado','separado','enviado'];
+    const idx = etapas.indexOf(s);
+    return `<div class="fluxo-steps">` +
+      etapas.map((e, i) => {
+        let cls = '';
+        if (s === 'erro' && i === 1) cls = 'erro';
+        else if (s === 'cancelado') cls = '';
+        else if (i < idx) cls = 'done';
+        else if (i === idx) cls = 'current';
+        const labels = ['REC','PROC','SEP','ENV'];
+        const sep = i < 3 ? `<span class="step-arrow">›</span>` : '';
+        return `<span class="step ${cls}">${labels[i]}</span>${sep}`;
+      }).join('') +
+    `</div>`;
+  }
+
+  function tempoDesde(iso, status) {
+    if (!iso || status === 'enviado' || status === 'cancelado') return '<span class="tempo">—</span>';
+    const diff = (Date.now() - new Date(iso).getTime()) / 60000; // minutos
+    const label = diff < 60
+      ? `${Math.round(diff)}min`
+      : `${(diff/60).toFixed(1)}h`;
+    let cls = 'tempo';
+    if (diff > 240) cls = 'tempo critico';
+    else if (diff > 120) cls = 'tempo atrasado';
+    return `<span class="${cls}">${label}</span>`;
+  }
+
+  async function marcarSeparado(mercosId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res = await fetch(`/admin/api/auditoria/fluxo/${mercosId}/separado`, { method: 'POST' });
+      if (res.ok) { toast(`Pedido #${mercosId} marcado como separado.`, 'ok'); await carregarFluxo(); }
+      else { toast('Erro ao marcar separado.', 'erro'); btn.disabled = false; btn.textContent = '📋 Separado'; }
+    } catch (e) { toast('Falha: ' + e.message, 'erro'); btn.disabled = false; }
+  }
+
+  async function marcarEnviado(mercosId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res = await fetch(`/admin/api/auditoria/fluxo/${mercosId}/enviado`, { method: 'POST' });
+      if (res.ok) { toast(`Pedido #${mercosId} marcado como enviado.`, 'ok'); await carregarFluxo(); }
+      else { toast('Erro ao marcar enviado.', 'erro'); btn.disabled = false; btn.textContent = '🚚 Enviado'; }
+    } catch (e) { toast('Falha: ' + e.message, 'erro'); btn.disabled = false; }
+  }
+
+  // ════════════════════════════════════════════════
+  // ABA 3 — Auditoria de Sequência
+  // ════════════════════════════════════════════════
+  async function carregarSequencia() {
+    try {
+      const apenasAbertos = document.getElementById('filtro-seq')?.value !== 'todos';
+      const res  = await fetch(`/admin/api/auditoria/sequencia?apenas_abertos=${apenasAbertos}`);
+      const data = await res.json();
+      _buracos = data.buracos || [];
+
+      const abertos   = _buracos.filter(b => !b.resolvido).length;
+      const resolvidos = _buracos.filter(b => b.resolvido).length;
+      document.getElementById('seq-abertos').textContent   = abertos;
+      document.getElementById('seq-resolvidos').textContent = resolvidos;
+
+      filtrarSequencia();
+    } catch (e) {
+      toast('Erro ao carregar sequência: ' + e.message, 'erro');
+    }
+  }
+
+  function filtrarSequencia() {
+    document.getElementById('contagem-seq').textContent = _buracos.length + ' registros';
+    renderTabelaSequencia(_buracos);
+  }
+
+  function renderTabelaSequencia(buracos) {
+    const tbody = document.getElementById('tbody-seq');
+    if (!buracos.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty"><div class="icon">✅</div><div>Nenhum buraco de sequência detectado!</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = buracos.map(b => {
+      const status    = b.resolvido ? 'resolvido' : 'aberto';
+      const badgeCls  = b.resolvido ? 'badge-resolvido' : 'badge-aberto';
+      const dataFmt   = b.detectado_em ? formatarData(b.detectado_em) : '—';
+      const resolucao = b.resolucao || '—';
+      const btnHtml   = !b.resolvido
+        ? `<button class="action-res" onclick="resolverBuraco(${b.mercos_id}, this)">✔ Resolver</button>`
+        : '—';
+      return `<tr>
+        <td class="id-cell" style="color:var(--erro);font-weight:600">#${b.mercos_id}</td>
+        <td><span style="color:var(--muted);font-size:12px">${b.classificacao}</span></td>
+        <td style="color:var(--muted);white-space:nowrap;font-size:12px">${dataFmt}</td>
+        <td><span class="badge ${badgeCls}">${status}</span></td>
+        <td style="color:var(--muted);font-size:12px">${resolucao}</td>
+        <td>${btnHtml}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function resolverBuraco(mercosId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res = await fetch(`/admin/api/auditoria/sequencia/${mercosId}/resolver`, { method: 'POST' });
+      if (res.ok) { toast(`Buraco #${mercosId} marcado como resolvido.`, 'ok'); await carregarSequencia(); }
+      else { toast('Erro ao resolver.', 'erro'); btn.disabled = false; btn.textContent = '✔ Resolver'; }
+    } catch (e) { toast('Falha: ' + e.message, 'erro'); btn.disabled = false; }
+  }
+
+  // ════════════════════════════════════════════════
+  // Auditar agora
+  // ════════════════════════════════════════════════
+  async function auditarAgora() {
+    toast('Executando auditoria…', 'info');
+    try {
+      const res  = await fetch('/admin/api/auditoria/verificar-agora', { method: 'POST' });
+      const data = await res.json();
+      toast(`Auditoria OK — ${data.buracos_encontrados} buraco(s), ${data.alertas_fluxo} alerta(s) de fluxo`, 'ok');
+      await carregarTudo();
+    } catch (e) {
+      toast('Erro na auditoria: ' + e.message, 'erro');
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  // Helpers
+  // ════════════════════════════════════════════════
   function badgePara(status) {
-    if (status === 'ok')                       return 'badge-ok';
-    if (status === 'erro')                     return 'badge-erro';
-    if (status === 'duplicata')                return 'badge-duplicata';
-    if (status.startsWith('pendente'))         return 'badge-pendente';
+    if (status === 'ok')               return 'badge-ok';
+    if (status === 'erro')             return 'badge-erro';
+    if (status === 'duplicata')        return 'badge-duplicata';
+    if (status.startsWith('pendente')) return 'badge-pendente';
     return 'badge-duplicata';
   }
 
@@ -404,8 +827,8 @@
   }
 
   // Auto-refresh a cada 30s
-  carregar();
-  setInterval(carregar, 30000);
+  carregarTudo();
+  setInterval(carregarTudo, 30000);
 </script>
 
 </body>

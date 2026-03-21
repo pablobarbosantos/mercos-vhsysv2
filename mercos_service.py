@@ -8,6 +8,7 @@ Correções aplicadas:
   3. Cache thread-safe de produtos
   4. Passa 'numero' e 'condicao_pagamento' para o VHSYS
   5. Passa dados completos do cliente para cadastro automático
+  6. Integração com fluxo operacional (auditoria de fluxo)
 """
 
 import logging
@@ -54,6 +55,7 @@ class MercosService:
             pedido_vhsys = self._traduzir_pedido(dados_mercos)
             if not pedido_vhsys:
                 db.salvar_pedido_processado(mercos_id, "erro", status="erro")
+                db.fluxo_marcar_erro(mercos_id)
                 return None
 
             resposta = self.vhsys.lancar_pedido_venda(pedido_vhsys)
@@ -63,6 +65,7 @@ class MercosService:
                 vhsys_id    = str(pedido_data.get("id_ped") or "desconhecido")
                 valor_total = float(pedido_data.get("valor_total_nota", 0) or 0)
                 db.salvar_pedido_processado(mercos_id, vhsys_id, status="ok")
+                db.fluxo_marcar_processado(mercos_id)
                 logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS {vhsys_id}")
 
                 # Notificação WhatsApp — alerta interno
@@ -92,6 +95,7 @@ class MercosService:
 
             else:
                 db.salvar_pedido_processado(mercos_id, "erro", status="erro")
+                db.fluxo_marcar_erro(mercos_id)
                 logger.error(f"[MercosService] Falha ao criar pedido VHSYS para #{numero}")
 
                 # Notificação WhatsApp — alerta de erro
