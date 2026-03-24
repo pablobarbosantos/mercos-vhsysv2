@@ -1,13 +1,11 @@
 """
-WhatsApp — Evolution API client
-================================
-Envia notificações via Evolution API (self-hosted).
+WhatsApp — cliente local via whatsapp-web.js
+=============================================
+Envia notificações via servidor Node.js local (porta 3000).
 
 Variáveis de ambiente necessárias:
-  EVOLUTION_API_URL      ex: http://147.15.95.71:8080
-  EVOLUTION_API_KEY      chave de autenticação
-  EVOLUTION_INSTANCE     nome da instância (ex: pablo-agro)
-  WHATSAPP_NOTIFY_NUMBER número que RECEBE alertas internos (ex: 5534999999999)
+  WHATSAPP_API_URL       ex: http://localhost:3000
+  WHATSAPP_NOTIFY_NUMBER número que RECEBE alertas internos (ex: 5534991027738)
 
 Opcional:
   WHATSAPP_ENABLED       true/false (default: true)
@@ -24,16 +22,13 @@ logger = logging.getLogger(__name__)
 class WhatsAppClient:
 
     def __init__(self):
-        self.base_url  = os.getenv("EVOLUTION_API_URL", "").rstrip("/")
-        self.api_key   = os.getenv("EVOLUTION_API_KEY", "")
-        self.instance  = os.getenv("EVOLUTION_INSTANCE", "pablo-agro")
+        self.base_url  = os.getenv("WHATSAPP_API_URL", "http://localhost:3000").rstrip("/")
         self.notify_to = os.getenv("WHATSAPP_NOTIFY_NUMBER", "")
         self.enabled   = os.getenv("WHATSAPP_ENABLED", "true").lower() == "true"
 
-        if self.enabled and not all([self.base_url, self.api_key, self.notify_to]):
+        if self.enabled and not self.notify_to:
             logger.warning(
-                "[WhatsApp] Variáveis incompletas — notificações DESATIVADAS. "
-                "Configure EVOLUTION_API_URL, EVOLUTION_API_KEY e WHATSAPP_NOTIFY_NUMBER no .env"
+                "[WhatsApp] WHATSAPP_NOTIFY_NUMBER não configurado — notificações DESATIVADAS."
             )
             self.enabled = False
 
@@ -46,13 +41,13 @@ class WhatsAppClient:
             logger.debug(f"[WhatsApp] (desativado) Para {numero}: {mensagem[:60]}...")
             return False
 
-        url = f"{self.base_url}/message/sendText/{self.instance}"
-        headers = {"apikey": self.api_key, "Content-Type": "application/json"}
-        payload = {"number": numero, "text": mensagem}
-
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=10)
-            if resp.status_code in (200, 201):
+            resp = requests.post(
+                f"{self.base_url}/send",
+                json={"numero": numero, "mensagem": mensagem},
+                timeout=10
+            )
+            if resp.status_code == 200:
                 logger.info(f"[WhatsApp] ✅ Enviado para {numero}")
                 return True
             else:
@@ -63,7 +58,7 @@ class WhatsAppClient:
             return False
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Pedido OK / Erro (existente)
+    # Pedido OK / Erro
     # ──────────────────────────────────────────────────────────────────────────
 
     def notificar_pedido_ok(self, numero_pedido, mercos_id: int, vhsys_id: str,
@@ -89,12 +84,12 @@ class WhatsAppClient:
             f"👤 Cliente: {cliente}\n"
             f"⚠️ Motivo: {motivo}\n"
             f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n"
-            f"👉 Painel: http://147.15.95.71:8000/admin"
+            f"👉 Painel: http://localhost:8000/admin"
         )
         return self._enviar(self.notify_to, msg)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Confirmação pro cliente (existente)
+    # Confirmação pro cliente
     # ──────────────────────────────────────────────────────────────────────────
 
     def confirmar_pedido_cliente(self, telefone: str, nome_cliente: str,
@@ -116,52 +111,36 @@ class WhatsAppClient:
         return self._enviar(fone, msg)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # NOVO: Alertas de Auditoria de Sequência
+    # Alertas de Auditoria de Sequência
     # ──────────────────────────────────────────────────────────────────────────
 
     def alertar_sequencia_quebrada(self, buracos: list[dict]):
-        """
-        Alerta quando há buracos na sequência de IDs Mercos.
-        buracos = [{"mercos_id": 92, "classificacao": "nao_recebido", ...}, ...]
-        """
         ids = [str(b["mercos_id"]) for b in buracos]
-
-        if len(ids) == 1:
-            titulo = f"⚠️ *1 pedido faltando na sequência!*"
-        else:
-            titulo = f"⚠️ *{len(ids)} pedidos faltando na sequência!*"
-
+        titulo = f"⚠️ *{len(ids)} pedido(s) faltando na sequência!*"
         lista = "\n".join(f"  • #{i}" for i in ids[:10])
         if len(ids) > 10:
             lista += f"\n  ... e mais {len(ids) - 10}"
-
         msg = (
             f"{titulo}\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"*IDs não recebidos:*\n"
             f"{lista}\n\n"
-            f"🔍 Esses pedidos existem no Mercos mas nunca chegaram via webhook.\n"
-            f"Pode ser: cancelamento, falha de rede ou erro de integração.\n\n"
-            f"👉 Verifique: http://147.15.95.71:8000/admin/auditoria\n"
+            f"🔍 Pode ser: cancelamento, falha de rede ou erro de integração.\n\n"
+            f"👉 http://localhost:8000/admin\n"
             f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )
         return self._enviar(self.notify_to, msg)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # NOVO: Alertas de Auditoria de Fluxo
+    # Alertas de Auditoria de Fluxo
     # ──────────────────────────────────────────────────────────────────────────
 
     def alertar_fluxo_travado(self, alertas: list[dict]):
-        """
-        Alerta sobre pedidos travados em etapas do fluxo.
-        Agrupa por tipo para não gerar uma mensagem gigante.
-        """
         por_tipo: dict[str, list] = {}
         for a in alertas:
             por_tipo.setdefault(a["tipo"], []).append(a)
 
         linhas = []
-
         if "nao_processado" in por_tipo:
             grupo = por_tipo["nao_processado"]
             linhas.append(f"🔴 *{len(grupo)} sem processar (>30min):*")
@@ -169,7 +148,6 @@ class WhatsAppClient:
                 linhas.append(f"  • #{a['numero']} — {a['cliente']}")
             if len(grupo) > 5:
                 linhas.append(f"  ... e mais {len(grupo) - 5}")
-
         if "parado_separacao" in por_tipo:
             grupo = por_tipo["parado_separacao"]
             linhas.append(f"\n🟡 *{len(grupo)} sem separação (>2h):*")
@@ -177,7 +155,6 @@ class WhatsAppClient:
                 linhas.append(f"  • #{a['numero']} — {a['cliente']}")
             if len(grupo) > 5:
                 linhas.append(f"  ... e mais {len(grupo) - 5}")
-
         if "parado_envio" in por_tipo:
             grupo = por_tipo["parado_envio"]
             linhas.append(f"\n🟠 *{len(grupo)} separados sem envio (>4h):*")
@@ -186,33 +163,25 @@ class WhatsAppClient:
             if len(grupo) > 5:
                 linhas.append(f"  ... e mais {len(grupo) - 5}")
 
-        total = len(alertas)
         msg = (
-            f"📦 *Auditoria de Fluxo — {total} alerta(s)*\n"
+            f"📦 *Auditoria de Fluxo — {len(alertas)} alerta(s)*\n"
             f"━━━━━━━━━━━━━━━━\n"
             + "\n".join(linhas) +
-            f"\n\n👉 http://147.15.95.71:8000/admin/auditoria\n"
+            f"\n\n👉 http://localhost:8000/admin\n"
             f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )
         return self._enviar(self.notify_to, msg)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # NOVO: Fechamento do dia
+    # Fechamento do dia
     # ──────────────────────────────────────────────────────────────────────────
 
     def enviar_fechamento_dia(self, stats: dict):
-        """
-        Resumo operacional do final do dia.
-        stats = {total, processados, separados, enviados, com_erro, buracos}
-        """
         hoje = datetime.now().strftime("%d/%m/%Y")
-
-        # Calcula taxa de conclusão
         total = stats.get("total", 0)
         enviados = stats.get("enviados", 0)
         taxa = f"{(enviados/total*100):.0f}%" if total > 0 else "—"
 
-        # Emoji de saúde geral
         if stats.get("com_erro", 0) == 0 and stats.get("buracos", 0) == 0:
             saude = "🟢 Operação sem problemas"
         elif stats.get("com_erro", 0) > 0 or stats.get("buracos", 0) > 0:
@@ -233,12 +202,12 @@ class WhatsAppClient:
             f"🔍 Buracos de sequência: *{stats.get('buracos', 0)}*\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"{saude}\n"
-            f"👉 http://147.15.95.71:8000/admin"
+            f"👉 http://localhost:8000/admin"
         )
         return self._enviar(self.notify_to, msg)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Resumo diário (existente — mantido por compatibilidade)
+    # Resumo diário
     # ──────────────────────────────────────────────────────────────────────────
 
     def enviar_resumo_diario(self, stats: dict, pedidos: list):
@@ -249,7 +218,6 @@ class WhatsAppClient:
             linhas_pedidos += f"  {status_emoji} #{p['mercos_id']} → VHSys {p['vhsys_id']}\n"
         if len(pedidos) > 10:
             linhas_pedidos += f"  ... e mais {len(pedidos) - 10} pedidos\n"
-
         msg = (
             f"📊 *Resumo do dia — {hoje}*\n"
             f"━━━━━━━━━━━━━━━━\n"
@@ -265,7 +233,7 @@ class WhatsAppClient:
         return self._enviar(self.notify_to, msg)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Lembrete de boleto (existente)
+    # Lembrete de boleto
     # ──────────────────────────────────────────────────────────────────────────
 
     def lembrete_boleto(self, telefone: str, nome_cliente: str,
@@ -275,7 +243,6 @@ class WhatsAppClient:
         fone = "".join(c for c in str(telefone) if c.isdigit())
         if not fone.startswith("55"):
             fone = "55" + fone
-
         msg = (
             f"Olá, *{nome_cliente}*! 👋\n\n"
             f"🔔 Lembrete: você tem um boleto vencendo em breve.\n\n"

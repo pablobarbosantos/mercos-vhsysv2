@@ -59,9 +59,9 @@ mercos_service = MercosService()
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-AUDIT_SEQ_MIN    = int(os.getenv("AUDIT_SEQ_INTERVAL_MIN", 15))     # verificação de sequência
-AUDIT_FLUXO_MIN  = int(os.getenv("AUDIT_FLUXO_INTERVAL_MIN", 30))   # verificação de fluxo
-FECHAMENTO_HORA  = os.getenv("AUDIT_FECHAMENTO_HORA", "20")          # hora do fechamento do dia
+AUDIT_SEQ_MIN    = int(os.getenv("AUDIT_SEQ_INTERVAL_MIN", 15))
+AUDIT_FLUXO_MIN  = int(os.getenv("AUDIT_FLUXO_INTERVAL_MIN", 30))
+FECHAMENTO_HORA  = os.getenv("AUDIT_FECHAMENTO_HORA", "20")
 
 
 def _job_sequencia():
@@ -146,16 +146,15 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
 
             # ── Pedido novo
             if evento == "pedido.gerado":
-                numero = dados.get("numero")
-                cnpj   = dados.get("cliente_cnpj", "N/A")
+                numero    = dados.get("numero")
+                cnpj      = dados.get("cliente_cnpj", "N/A")
+                mercos_id = dados.get("id")
                 logger.info(
                     f"[Webhook] Pedido #{numero} | "
                     f"CNPJ: {cnpj} | "
                     f"Itens: {len(dados.get('itens', []))}"
                 )
 
-                # Registra no fluxo imediatamente ao receber
-                mercos_id = dados.get("id")
                 if mercos_id:
                     db.fluxo_registrar_recebido(
                         mercos_id=mercos_id,
@@ -167,7 +166,36 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
                 background_tasks.add_task(mercos_service.processar_para_vhsys, dados)
                 logger.debug(f"[Webhook] Pedido #{numero} enfileirado.")
 
-            # ── Pedido atualizado (ex: status mudou no Mercos)
+            # ── Pedido faturado — segunda chance de importação
+            elif evento == "pedido.faturado":
+                mercos_id = dados.get("id")
+                numero    = dados.get("numero", mercos_id)
+
+                if not mercos_id:
+                    logger.warning("[Webhook] pedido.faturado sem ID — ignorado.")
+                    continue
+
+                if db.pedido_ja_processado(mercos_id):
+                    logger.info(
+                        f"[Webhook] pedido.faturado #{numero} (id={mercos_id}) "
+                        f"já consta no VHSys — nenhuma ação necessária."
+                    )
+                else:
+                    logger.warning(
+                        f"[Webhook] pedido.faturado #{numero} (id={mercos_id}) "
+                        f"NÃO encontrado no VHSys — criando agora (segunda chance)."
+                    )
+                    # Registra no fluxo se ainda não tiver
+                    db.fluxo_registrar_recebido(
+                        mercos_id=mercos_id,
+                        numero=str(numero),
+                        cliente=dados.get("cliente_razao_social", ""),
+                        valor=float(dados.get("valor_total", 0) or 0),
+                    )
+                    background_tasks.add_task(mercos_service.processar_para_vhsys, dados)
+                    logger.info(f"[Webhook] Pedido #{numero} enfileirado via pedido.faturado.")
+
+            # ── Pedido atualizado (status mudou no Mercos)
             elif evento == "pedido.atualizado":
                 mercos_id   = dados.get("id")
                 novo_status = str(dados.get("status_customizado_nome", "")).lower()

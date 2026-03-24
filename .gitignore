@@ -45,3 +45,11 @@ REMESSA_*.txt
 
 # Backup v1
 v1/
+
+node_modules/
+whatsapp_server/auth_info/
+whatsapp_server/.wwebjs_cache/
+whatsapp_server/.wwebjs_auth/
+package-lock.json
+package.json
+Claude Setup.exe

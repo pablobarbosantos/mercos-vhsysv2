@@ -9,6 +9,7 @@ Correções aplicadas:
   4. Passa 'numero' e 'condicao_pagamento' para o VHSYS
   5. Passa dados completos do cliente para cadastro automático
   6. Integração com fluxo operacional (auditoria de fluxo)
+  7. Confirmação pro cliente DESATIVADA (somente alertas internos)
 """
 
 import logging
@@ -79,17 +80,18 @@ class MercosService:
                         valor=valor_total,
                         condicao=dados_mercos.get("condicao_pagamento", ""),
                     )
-                    # Confirmação pro cliente (se tiver telefone)
-                    telefones = dados_mercos.get("cliente_telefone", [])
-                    fone = telefones[0] if telefones else ""
-                    if fone:
-                        wa.confirmar_pedido_cliente(
-                            telefone=fone,
-                            nome_cliente=dados_mercos.get("cliente_razao_social", ""),
-                            numero_pedido=numero,
-                            valor=valor_total,
-                            condicao=dados_mercos.get("condicao_pagamento", ""),
-                        )
+                    # ── Confirmação pro cliente DESATIVADA ──
+                    # Quando quiser ativar, descomentar o bloco abaixo:
+                    # telefones = dados_mercos.get("cliente_telefone", [])
+                    # fone = telefones[0] if telefones else ""
+                    # if fone:
+                    #     wa.confirmar_pedido_cliente(
+                    #         telefone=fone,
+                    #         nome_cliente=dados_mercos.get("cliente_razao_social", ""),
+                    #         numero_pedido=numero,
+                    #         valor=valor_total,
+                    #         condicao=dados_mercos.get("condicao_pagamento", ""),
+                    #     )
                 except Exception as e:
                     logger.warning(f"[WhatsApp] Falha na notificação (não crítico): {e}")
 
@@ -150,18 +152,13 @@ class MercosService:
         obs_partes.append(f"Origem Mercos - Pedido #{dados.get('numero', dados.get('id'))}")
 
         return {
-            # Dados do pedido
             "cliente_cnpj":       cliente_cnpj,
             "data":               dados.get("data_emissao") or dados.get("data_criacao", "")[:10],
             "observacoes":        " | ".join(obs_partes),
             "numero":             dados.get("numero") or dados.get("id", "sem numero"),
             "condicao_pagamento": dados.get("condicao_pagamento", "Não informada"),
             "itens":              itens,
-
-            # Transportadora
             "transportadora_nome":   dados.get("transportadora_nome", ""),
-
-            # Dados do cliente — usados para cadastro automático se não existir no VHSYS
             "cliente_razao_social":  dados.get("cliente_razao_social", ""),
             "cliente_nome_fantasia": dados.get("cliente_nome_fantasia", ""),
             "cliente_telefone":      dados.get("cliente_telefone", []),
