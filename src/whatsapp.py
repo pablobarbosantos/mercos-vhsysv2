@@ -295,6 +295,39 @@ class WhatsAppClient:
         )
         return self._enviar(self.notify_to, msg)
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Reconciliação fim de dia
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def notificar_reconciliacao(self, stats: dict) -> bool:
+        reenf     = len(stats["reenfileirados"])
+        andamento = len(stats["em_andamento"])
+        incons    = len(stats["inconsistentes"])
+        total     = stats["total"]
+
+        if total == 0:
+            msg = (
+                f"✅ *Reconciliação fim de dia*\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Todos os pedidos de hoje foram processados com sucesso.\n"
+                f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            )
+        else:
+            linhas = [f"⚠️ *Reconciliação fim de dia*\n━━━━━━━━━━━━━━━━"]
+            if reenf:
+                linhas.append(f"🔄 {reenf} pedido(s) reenfileirado(s):")
+                for p in stats["reenfileirados"][:5]:
+                    linhas.append(f"  • #{p['numero']} — {str(p.get('cliente',''))[:25]}")
+            if andamento:
+                linhas.append(f"⏳ {andamento} pedido(s) ainda em processamento")
+            if incons:
+                linhas.append(f"❗ {incons} pedido(s) com inconsistência — ver logs")
+            linhas.append(f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            linhas.append("http://localhost:8000/admin")
+            msg = "\n".join(linhas)
+
+        return self._enviar(self.notify_to, msg)
+
 
 # Instância global (singleton)
 _client: WhatsAppClient | None = None

@@ -122,6 +122,14 @@ def _job_boletos_vencidos():
         logger.error(f"[Scheduler/Boletos] Erro: {e}", exc_info=True)
 
 
+def _job_reconciliacao():
+    try:
+        from src.auditoria import reconciliar_fim_de_dia
+        reconciliar_fim_de_dia()
+    except Exception as e:
+        logger.error(f"[Scheduler/Reconciliacao] Erro: {e}", exc_info=True)
+
+
 # ── Worker da fila de eventos ──────────────────────────────────────────────
 
 _worker_lock = threading.Lock()
@@ -208,6 +216,11 @@ scheduler.add_job(
     _job_boletos_vencidos,
     CronTrigger(hour=9, minute=0, timezone="America/Sao_Paulo"),
     id="boletos_vencidos"
+)
+scheduler.add_job(
+    _job_reconciliacao,
+    CronTrigger(hour=19, minute=55, timezone="America/Sao_Paulo"),
+    id="reconciliacao_fim_dia"
 )
 # job_sync_expedicao desativado — API VHSys não expõe módulo Expedição
 # Marcar separado/enviado manualmente via painel admin ou POST /admin/api/expedicao/verificar-agora

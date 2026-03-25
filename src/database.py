@@ -281,6 +281,48 @@ def fluxo_listar_para_sync_expedicao(limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def reconciliar_pendentes_hoje() -> dict:
+    """
+    Detecta pedidos recebidos hoje que não foram processados com sucesso.
+    Reseta automaticamente os que estão em erro_permanente para pendente.
+    Retorna stats: {total, reenfileirados, em_andamento, inconsistentes}
+    """
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT f.mercos_id, f.numero, f.cliente, f.status_fluxo,
+                   fe.id as fila_id, fe.status as fila_status,
+                   fe.ultimo_erro, fe.tentativas
+            FROM pedidos_fluxo f
+            LEFT JOIN fila_eventos fe
+                ON f.mercos_id = fe.mercos_id AND fe.evento = 'pedido.gerado'
+            WHERE f.status_fluxo NOT IN ('processado','separado','enviado','cancelado')
+              AND DATE(f.recebido_em) = DATE('now','localtime')
+        """).fetchall()
+
+        reenfileirados, em_andamento, inconsistentes = [], [], []
+
+        for r in rows:
+            if r["fila_status"] == "erro_permanente":
+                conn.execute("""
+                    UPDATE fila_eventos
+                    SET status='pendente', tentativas=0, ultimo_erro=NULL,
+                        proxima_tentativa=NULL, atualizado_em=?
+                    WHERE id=?
+                """, (datetime.now(timezone.utc).isoformat(), r["fila_id"]))
+                reenfileirados.append(dict(r))
+            elif r["fila_status"] in ("pendente", "processando"):
+                em_andamento.append(dict(r))
+            else:
+                inconsistentes.append(dict(r))
+
+    return {
+        "total": len(rows),
+        "reenfileirados": reenfileirados,
+        "em_andamento": em_andamento,
+        "inconsistentes": inconsistentes,
+    }
+
+
 # ──────────────────────────────────────────────────────────────
 # NOVO: Auditoria de sequência
 # ──────────────────────────────────────────────────────────────

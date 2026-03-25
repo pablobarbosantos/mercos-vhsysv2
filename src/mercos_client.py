@@ -107,12 +107,6 @@ class MercosClient:
 
     def get_pedidos(self, alterado_apos: str = None) -> list:
         pedidos = self._get_all("/v1/pedidos/", alterado_apos=alterado_apos)
-
-        # 👇 DEBUG BRUTO
-        print("\n=== DEBUG MERCOS RAW ===")
-        print(pedidos)
-        print("=== FIM DEBUG ===\n")
-
         return pedidos
 
     def atualizar_status_pedido(self, pedido_id: int, status_id: int, detalhe: str = "") -> bool:

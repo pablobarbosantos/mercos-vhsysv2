@@ -352,3 +352,39 @@ def verificar_fila_eventos() -> dict:
         alertas.append(msg)
 
     return {"stats": stats, "alertas": alertas}
+
+
+# ══════════════════════════════════════════════════════════════
+# 6. RECONCILIAÇÃO FIM DE DIA
+# ══════════════════════════════════════════════════════════════
+
+def reconciliar_fim_de_dia():
+    """
+    Job fim de dia (19:55): detecta pedidos recebidos hoje que não foram
+    processados com sucesso, reinicia os que estão em erro_permanente,
+    e notifica via WhatsApp com resumo.
+    """
+    logger.info("[Reconciliacao] Iniciando reconciliação fim de dia...")
+    stats = db.reconciliar_pendentes_hoje()
+
+    reenf     = len(stats["reenfileirados"])
+    andamento = len(stats["em_andamento"])
+    incons    = len(stats["inconsistentes"])
+
+    logger.info(
+        f"[Reconciliacao] Total pendentes: {stats['total']} | "
+        f"Reenfileirados: {reenf} | Em andamento: {andamento} | "
+        f"Inconsistentes: {incons}"
+    )
+    for p in stats["reenfileirados"]:
+        logger.warning(
+            f"[Reconciliacao] Reenfileirado mercos_id={p['mercos_id']} "
+            f"#{p['numero']} — era erro_permanente (tentativas={p['tentativas']})"
+        )
+    for p in stats["inconsistentes"]:
+        logger.error(
+            f"[Reconciliacao] Inconsistência mercos_id={p['mercos_id']} "
+            f"#{p['numero']} — fila_status={p.get('fila_status')}"
+        )
+
+    get_whatsapp().notificar_reconciliacao(stats)

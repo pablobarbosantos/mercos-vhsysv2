@@ -166,6 +166,14 @@ async def api_expedicao_verificar_agora():
     return {"ok": True, "mensagem": "Job iniciado em background — verifique os logs."}
 
 
+@router.post("/api/reconciliacao/verificar-agora")
+async def api_reconciliacao_agora():
+    """Força execução imediata da reconciliação fim de dia (não bloqueia a resposta)."""
+    from src.auditoria import reconciliar_fim_de_dia
+    threading.Thread(target=reconciliar_fim_de_dia, daemon=True).start()
+    return {"ok": True, "mensagem": "Reconciliação iniciada em background — verifique logs e WhatsApp."}
+
+
 @router.post("/api/auditoria/fluxo/{mercos_id}/separado")
 async def api_marcar_separado(request: Request, mercos_id: int):
     """Marca pedido como separado manualmente via painel."""
