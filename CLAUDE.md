@@ -167,8 +167,16 @@ Known issue fixed: `verificar_sequencia()` in `src/auditoria.py` previously iter
 ### Transportadora (pendente)
 Mapeamento em `resolver_frete()` em `vhsys_service.py` está com problemas. Revisar lógica de mapeamento nome → código VHSys e integração com cache de transportadoras. Não enviar campo transportadora até corrigido.
 
-### Módulo Expedição (pendente)
-Implementar fluxo de expedição: quando pedido é marcado como expedido/enviado no VHSys ou no Mercos, registrar no fluxo e notificar. Ainda não existe nenhuma lógica para isso.
+### Módulo Expedição (implementado — pendente de validação em produção)
+Job `job_sync_expedicao` adicionado em `main.py` — roda a cada `EXPEDICAO_POLL_INTERVAL_MIN` minutos (padrão: 5min).
+
+**Estratégia primária:** `GET /expedicoes` — correlaciona expedições com pedidos pelo campo `id_pedido`/`id_ped`. Mapeamento: Pendente → `separado`, Concluído → `enviado`.
+
+**Fallback automático (se 404):** `GET /pedidos/{id}` individual. Mapeamento: `situacao_pedido = "Atendido"` → `enviado`.
+
+**Pendente de validação:** Confirmar o nome exato do campo de correlação expedição→pedido no payload real da API (provavelmente `id_pedido`). Ajustar em `sincronizar_expedicao()` em `vhsys_service.py` após confirmar nos logs de debug.
+
+**Trigger manual para testes:** `POST /admin/api/expedicao/verificar-agora`
 
 ### Contas a Receber / Parcelas (desativado)
 `gerar_parcelas()` em `vhsys_service.py` existe mas **não é mais chamada** — o lançamento de boletos/parcelas é feito manualmente no VHSys. Não reativar sem validação.

@@ -631,3 +631,121 @@ class VhsysService:
 
         logger.info(f"[Boletos] {len(resultados)} boleto(s) vencido(s) encontrado(s).")
         return resultados
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # EXPEDIÇÃO
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def buscar_expedicoes_recentes(self, limit: int = 100) -> list[dict] | None:
+        """
+        Tenta GET /expedicoes. Retorna lista de dicts se o endpoint existir,
+        ou None se 404 (módulo não exposto via API ou endpoint não documentado).
+        """
+        url = f"{self.base_url}/expedicoes"
+        resp = self._requisitar_com_retry(
+            "GET", url, params={"limit": limit, "offset": 0}, timeout=20
+        )
+        if resp is None:
+            logger.warning("[Expedicao] Falha de rede ao consultar /expedicoes.")
+            return None
+        if resp.status_code == 404:
+            logger.warning("[Expedicao] /expedicoes retornou 404 — usando fallback GET /pedidos/{id}.")
+            return None
+        if resp.status_code != 200:
+            logger.warning(f"[Expedicao] /expedicoes retornou HTTP {resp.status_code}.")
+            return None
+        data = resp.json().get("data", [])
+        logger.info(f"[Expedicao] {len(data)} expedição(ões) encontrada(s) via /expedicoes.")
+        logger.debug(f"[Expedicao] Amostra payload: {data[:1]}")
+        return data
+
+    def buscar_situacao_pedido(self, vhsys_id: str) -> str | None:
+        """
+        GET /pedidos/{id} — retorna o valor de situacao_pedido.
+        Valores conhecidos: 'Em Aberto', 'Atendido', 'Cancelado'.
+        Retorna None se não encontrado ou erro de rede.
+        """
+        url = f"{self.base_url}/pedidos/{vhsys_id}"
+        resp = self._requisitar_com_retry("GET", url, timeout=15)
+        if resp is None or resp.status_code != 200:
+            logger.warning(f"[Expedicao] GET /pedidos/{vhsys_id} → HTTP {resp.status_code if resp else 'sem_resposta'}.")
+            return None
+        raw = resp.json()
+        data = raw.get("data", raw)
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        situacao = data.get("situacao_pedido") or data.get("status_pedido")
+        logger.debug(f"[Expedicao] Pedido VHSys {vhsys_id} → situacao='{situacao}'")
+        return situacao
+
+    def sincronizar_expedicao(
+        self,
+        pedidos_para_sync: list[dict],
+        endpoint_disponivel: bool | None = None,
+    ) -> tuple[list[dict], bool]:
+        """
+        Detecta mudanças de expedição para uma lista de pedidos.
+
+        Estratégia primária: GET /expedicoes — correlaciona por id_pedido.
+        Fallback (se 404): GET /pedidos/{id} individual.
+
+        Retorna (lista_de_mudancas, endpoint_ok).
+        Cada mudança: dict com chave 'novo_status' ('separado' | 'enviado').
+        """
+        mudancas: list[dict] = []
+
+        if endpoint_disponivel is not False:
+            expedicoes = self.buscar_expedicoes_recentes(limit=100)
+            if expedicoes is not None:
+                # Monta índice vhsys_id → situacao_expedicao
+                idx: dict[str, str] = {}
+                for exp in expedicoes:
+                    id_ped = str(
+                        exp.get("id_pedido") or exp.get("id_ped") or
+                        exp.get("pedido_id") or ""
+                    )
+                    situacao = str(
+                        exp.get("situacao_expedicao") or exp.get("situacao") or ""
+                    )
+                    if id_ped:
+                        idx[id_ped] = situacao
+
+                for p in pedidos_para_sync:
+                    novo = _mapear_situacao_expedicao(
+                        idx.get(str(p["vhsys_id"]), ""), p["status_fluxo"]
+                    )
+                    if novo:
+                        mudancas.append({**p, "novo_status": novo})
+
+                return mudancas, True
+
+        # Fallback: polling individual
+        for p in pedidos_para_sync:
+            situacao = self.buscar_situacao_pedido(str(p["vhsys_id"]))
+            if situacao:
+                novo = _mapear_situacao_pedido_fallback(situacao, p["status_fluxo"])
+                if novo:
+                    mudancas.append({**p, "novo_status": novo})
+
+        return mudancas, False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helpers de mapeamento de status de expedição (nível de módulo)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _mapear_situacao_expedicao(situacao_exp: str, status_local: str) -> str | None:
+    """Converte situação da expedição VHSys → novo status local."""
+    s = situacao_exp.lower()
+    if status_local == "processado" and ("pendente" in s or "aberto" in s):
+        return "separado"
+    if status_local in ("processado", "separado") and "conclu" in s:
+        return "enviado"
+    return None
+
+
+def _mapear_situacao_pedido_fallback(situacao_pedido: str, status_local: str) -> str | None:
+    """Fallback: usa situacao_pedido do pedido VHSys. 'Atendido' → enviado."""
+    if "atendido" in situacao_pedido.lower() and status_local in ("processado", "separado"):
+        return "enviado"
+    return None

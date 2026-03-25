@@ -72,6 +72,7 @@ AUDIT_FLUXO_MIN      = int(os.getenv("AUDIT_FLUXO_INTERVAL_MIN", 30))
 FECHAMENTO_HORA      = os.getenv("AUDIT_FECHAMENTO_HORA", "20")
 FILA_WORKER_SEG      = int(os.getenv("FILA_WORKER_INTERVAL_SEG", 10))
 CACHE_REFRESH_HORAS  = int(os.getenv("VHSYS_CACHE_TTL_HORAS", 4))
+EXPEDICAO_POLL_MIN   = int(os.getenv("EXPEDICAO_POLL_INTERVAL_MIN", 5))
 
 
 def _job_sequencia():
@@ -185,6 +186,78 @@ def _job_processar_fila():
         _worker_lock.release()
 
 
+# ── Expedição VHSys ───────────────────────────────────────────────────────────
+
+_expedicao_lock = threading.Lock()
+_expedicao_endpoint_disponivel: bool | None = None  # None=não testado ainda
+
+
+def _job_sync_expedicao():
+    """
+    Detecta mudanças de expedição no VHSys e atualiza pedidos_fluxo automaticamente.
+    Tenta GET /expedicoes (estratégia primária); se 404, usa GET /pedidos/{id} (fallback).
+    """
+    global _expedicao_endpoint_disponivel
+
+    if not _expedicao_lock.acquire(blocking=False):
+        logger.debug("[Expedicao] Job já em execução — pulando.")
+        return
+
+    try:
+        pedidos = db.fluxo_listar_para_sync_expedicao(limit=50)
+        if not pedidos:
+            logger.debug("[Expedicao] Nenhum pedido aguardando sync de expedição.")
+            return
+
+        logger.info(f"[Expedicao] Verificando {len(pedidos)} pedido(s).")
+        mudancas, endpoint_ok = mercos_service.vhsys.sincronizar_expedicao(
+            pedidos, _expedicao_endpoint_disponivel
+        )
+        _expedicao_endpoint_disponivel = endpoint_ok
+
+        if not mudancas:
+            logger.debug("[Expedicao] Nenhuma mudança detectada.")
+            return
+
+        from src.whatsapp import get_whatsapp
+        wa = get_whatsapp()
+
+        for m in mudancas:
+            try:
+                if m["novo_status"] == "separado":
+                    db.fluxo_marcar_separado(m["mercos_id"])
+                    logger.info(f"[Expedicao] Pedido #{m['numero']} (mercos={m['mercos_id']}) → SEPARADO")
+                    try:
+                        wa.notificar_separado_automatico(
+                            m["numero"], m["mercos_id"], m["cliente"], m["vhsys_id"]
+                        )
+                    except Exception as e:
+                        logger.warning(f"[Expedicao] WhatsApp separado falhou: {e}")
+
+                elif m["novo_status"] == "enviado":
+                    db.fluxo_marcar_enviado(m["mercos_id"])
+                    logger.info(f"[Expedicao] Pedido #{m['numero']} (mercos={m['mercos_id']}) → ENVIADO")
+                    try:
+                        wa.notificar_enviado_automatico(
+                            m["numero"], m["mercos_id"], m["cliente"], m["vhsys_id"]
+                        )
+                    except Exception as e:
+                        logger.warning(f"[Expedicao] WhatsApp enviado falhou: {e}")
+
+            except Exception as e:
+                logger.error(
+                    f"[Expedicao] Erro ao processar mercos_id={m['mercos_id']}: {e}",
+                    exc_info=True,
+                )
+
+    except Exception as e:
+        logger.error(f"[Expedicao] Erro inesperado no job: {e}", exc_info=True)
+    finally:
+        _expedicao_lock.release()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 scheduler.add_job(_job_sequencia,       "interval", minutes=AUDIT_SEQ_MIN,   id="auditoria_sequencia")
 scheduler.add_job(_job_fluxo,           "interval", minutes=AUDIT_FLUXO_MIN,  id="auditoria_fluxo")
@@ -201,6 +274,8 @@ scheduler.add_job(
     CronTrigger(hour=9, minute=0, timezone="America/Sao_Paulo"),
     id="boletos_vencidos"
 )
+scheduler.add_job(_job_sync_expedicao, "interval", minutes=EXPEDICAO_POLL_MIN,
+                  id="job_sync_expedicao", max_instances=1)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI
@@ -233,6 +308,7 @@ async def startup_event():
         f"Worker fila: a cada {FILA_WORKER_SEG}s | "
         f"Sequência: a cada {AUDIT_SEQ_MIN}min | "
         f"Fluxo: a cada {AUDIT_FLUXO_MIN}min | "
+        f"Expedição: a cada {EXPEDICAO_POLL_MIN}min | "
         f"Fechamento: {FECHAMENTO_HORA}h"
     )
 

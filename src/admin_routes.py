@@ -157,6 +157,14 @@ async def api_verificar_agora():
     }
 
 
+@router.post("/api/expedicao/verificar-agora")
+async def api_expedicao_verificar_agora():
+    """Força execução imediata do job de sync de expedição (útil para testes)."""
+    from main import _job_sync_expedicao
+    _job_sync_expedicao()
+    return {"ok": True}
+
+
 @router.post("/api/auditoria/fluxo/{mercos_id}/separado")
 async def api_marcar_separado(request: Request, mercos_id: int):
     """Marca pedido como separado manualmente via painel."""

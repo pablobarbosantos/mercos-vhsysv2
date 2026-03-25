@@ -263,6 +263,38 @@ class WhatsAppClient:
         )
         return self._enviar(fone, msg)
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Expedição automática
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def notificar_separado_automatico(self, numero: str, mercos_id: int,
+                                       cliente: str, vhsys_id: str):
+        """Notifica que expedição foi criada no VHSys (pedido em separação)."""
+        msg = (
+            f"📦 *Pedido em separação!*\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📋 Mercos: *#{numero}*\n"
+            f"🔗 VHSys: *{vhsys_id}*\n"
+            f"👤 Cliente: {cliente}\n"
+            f"⚙️  Expedição criada no VHSys\n"
+            f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+        return self._enviar(self.notify_to, msg)
+
+    def notificar_enviado_automatico(self, numero: str, mercos_id: int,
+                                      cliente: str, vhsys_id: str):
+        """Notifica que expedição foi concluída no VHSys (pedido enviado)."""
+        msg = (
+            f"🚚 *Pedido enviado!*\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📋 Mercos: *#{numero}*\n"
+            f"🔗 VHSys: *{vhsys_id}*\n"
+            f"👤 Cliente: {cliente}\n"
+            f"✅ Expedição concluída no VHSys\n"
+            f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+        return self._enviar(self.notify_to, msg)
+
 
 # Instância global (singleton)
 _client: WhatsAppClient | None = None

@@ -259,6 +259,28 @@ def fluxo_listar(limit: int = 200) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def fluxo_listar_para_sync_expedicao(limit: int = 50) -> list[dict]:
+    """
+    Retorna pedidos em 'processado' ou 'separado' que já têm vhsys_id,
+    candidatos a terem expedição criada/concluída no VHSys.
+    """
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT f.mercos_id, f.numero, f.cliente, f.valor,
+                   f.status_fluxo, f.processado_em, f.separado_em,
+                   p.vhsys_id
+            FROM pedidos_fluxo f
+            INNER JOIN pedidos_processados p
+                ON f.mercos_id = p.mercos_id AND p.status = 'ok'
+            WHERE f.status_fluxo IN ('processado', 'separado')
+              AND f.processado_em IS NOT NULL
+              AND p.vhsys_id IS NOT NULL AND p.vhsys_id != ''
+            ORDER BY f.processado_em ASC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ──────────────────────────────────────────────────────────────
 # NOVO: Auditoria de sequência
 # ──────────────────────────────────────────────────────────────
