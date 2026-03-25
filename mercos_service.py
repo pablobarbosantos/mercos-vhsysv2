@@ -67,12 +67,13 @@ class MercosService:
             resposta = self.vhsys.lancar_pedido_venda(pedido_vhsys)
 
             if resposta and resposta.get("code") == 200:
-                pedido_data = resposta.get("data", [{}])[0]
-                vhsys_id    = str(pedido_data.get("id_ped") or "desconhecido")
-                valor_total = float(pedido_data.get("valor_total_nota", 0) or 0)
+                pedido_data   = resposta.get("data", [{}])[0]
+                vhsys_id      = str(pedido_data.get("id_ped") or "desconhecido")
+                vhsys_numero  = str(pedido_data.get("id_pedido") or vhsys_id)
+                valor_total   = float(pedido_data.get("valor_total_nota", 0) or 0)
                 db.salvar_pedido_processado(mercos_id, vhsys_id, status="ok")
                 db.fluxo_marcar_processado(mercos_id)
-                logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS {vhsys_id}")
+                logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS #{vhsys_numero} (id_ped={vhsys_id})")
 
                 # Persiste itens para analytics/ranking de produtos
                 try:
@@ -97,7 +98,7 @@ class MercosService:
                     wa.notificar_pedido_ok(
                         numero_pedido=numero,
                         mercos_id=mercos_id,
-                        vhsys_id=vhsys_id,
+                        vhsys_id=vhsys_numero,
                         cliente=dados_mercos.get("cliente_razao_social", ""),
                         valor=valor_total,
                         condicao=dados_mercos.get("condicao_pagamento", ""),

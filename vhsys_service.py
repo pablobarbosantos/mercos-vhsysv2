@@ -475,7 +475,6 @@ class VhsysService:
             pedido_data = resultado.get("data", [{}])[0]
             id_vhsys    = pedido_data.get("id_ped", "?")
             logger.info(f"[PEDIDO] ✅ Criado! ID VHSYS: {id_vhsys}")
-            logger.info(f"[PEDIDO] Campos disponíveis na resposta: {list(pedido_data.keys())}")
 
             return resultado
         else:
