@@ -73,6 +73,23 @@ class MercosService:
                 db.fluxo_marcar_processado(mercos_id)
                 logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS {vhsys_id}")
 
+                # Persiste itens para analytics/ranking de produtos
+                try:
+                    itens_raw = dados_mercos.get("itens", [])
+                    itens_para_salvar = [
+                        {
+                            "sku":          str(i.get("produto_codigo", "") or "").strip(),
+                            "nome_produto": i.get("produto_nome", ""),
+                            "quantidade":   float(i.get("quantidade", 0)),
+                            "valor_unit":   float(i.get("preco_liquido", 0)),
+                            "valor_total":  float(i.get("quantidade", 0)) * float(i.get("preco_liquido", 0)),
+                        }
+                        for i in itens_raw if not i.get("excluido")
+                    ]
+                    db.salvar_itens_pedido(mercos_id, itens_para_salvar)
+                except Exception as e:
+                    logger.warning(f"[MercosService] Falha ao salvar itens para analytics (não crítico): {e}")
+
                 # Notificação WhatsApp — alerta interno
                 try:
                     wa = get_whatsapp()

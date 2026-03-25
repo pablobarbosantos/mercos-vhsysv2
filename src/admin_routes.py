@@ -208,3 +208,181 @@ async def api_acoes_admin(limit: int = 100):
 async def api_fila_stats():
     """Retorna estatísticas da fila de eventos."""
     return {"stats": db.fila_stats()}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Analytics
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/analytics/resumo")
+async def api_analytics_resumo():
+    """Faturamento hoje/semana/mês, ticket médio, taxa de sucesso, tempo médio."""
+    with db.get_conn() as conn:
+        fat_hoje = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) FROM pedidos_fluxo WHERE DATE(recebido_em)=DATE('now') AND status_fluxo NOT IN ('cancelado','erro')"
+        ).fetchone()[0]
+        fat_semana = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) FROM pedidos_fluxo WHERE recebido_em >= datetime('now','-7 days') AND status_fluxo NOT IN ('cancelado','erro')"
+        ).fetchone()[0]
+        fat_mes = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) FROM pedidos_fluxo WHERE strftime('%Y-%m',recebido_em)=strftime('%Y-%m','now') AND status_fluxo NOT IN ('cancelado','erro')"
+        ).fetchone()[0]
+        pedidos_hoje = conn.execute(
+            "SELECT COUNT(*) FROM pedidos_fluxo WHERE DATE(recebido_em)=DATE('now')"
+        ).fetchone()[0]
+        ok_hoje = conn.execute(
+            "SELECT COUNT(*) FROM pedidos_fluxo WHERE DATE(recebido_em)=DATE('now') AND status_fluxo NOT IN ('cancelado','erro','recebido')"
+        ).fetchone()[0]
+        ticket_medio = round(fat_hoje / ok_hoje, 2) if ok_hoje > 0 else 0
+        taxa_sucesso = round(ok_hoje / pedidos_hoje * 100, 1) if pedidos_hoje > 0 else 100.0
+        # Tempo médio de processamento (segundos) hoje
+        tempo_medio = conn.execute("""
+            SELECT AVG((julianday(processado_em) - julianday(recebido_em)) * 86400)
+            FROM pedidos_fluxo
+            WHERE DATE(recebido_em) = DATE('now')
+              AND processado_em IS NOT NULL
+        """).fetchone()[0]
+    return {
+        "faturamento_hoje":   round(fat_hoje, 2),
+        "faturamento_semana": round(fat_semana, 2),
+        "faturamento_mes":    round(fat_mes, 2),
+        "pedidos_hoje":       pedidos_hoje,
+        "ticket_medio":       ticket_medio,
+        "taxa_sucesso":       taxa_sucesso,
+        "tempo_medio_seg":    round(tempo_medio or 0, 1),
+    }
+
+
+@router.get("/api/analytics/produtos")
+async def api_analytics_produtos(dias_parado: int = 30, top: int = 10):
+    """Top produtos mais vendidos + produtos parados (sem venda há X dias)."""
+    with db.get_conn() as conn:
+        mais_vendidos = conn.execute(f"""
+            SELECT
+                COALESCE(NULLIF(sku,''), nome_produto) AS produto,
+                nome_produto,
+                SUM(quantidade) AS qtd_total,
+                SUM(valor_total) AS valor_total,
+                COUNT(DISTINCT mercos_id) AS num_pedidos
+            FROM itens_pedido
+            GROUP BY COALESCE(NULLIF(sku,''), nome_produto)
+            ORDER BY valor_total DESC
+            LIMIT ?
+        """, (top,)).fetchall()
+
+        parados = conn.execute(f"""
+            SELECT
+                COALESCE(NULLIF(sku,''), nome_produto) AS produto,
+                nome_produto,
+                SUM(quantidade) AS qtd_total,
+                MAX(processado_em) AS ultima_venda,
+                CAST(julianday('now') - julianday(MAX(processado_em)) AS INTEGER) AS dias_sem_venda
+            FROM itens_pedido
+            GROUP BY COALESCE(NULLIF(sku,''), nome_produto)
+            HAVING dias_sem_venda >= ?
+            ORDER BY dias_sem_venda DESC
+            LIMIT ?
+        """, (dias_parado, top)).fetchall()
+
+    return {
+        "mais_vendidos": [dict(r) for r in mais_vendidos],
+        "parados":       [dict(r) for r in parados],
+    }
+
+
+@router.get("/api/analytics/clientes")
+async def api_analytics_clientes(top: int = 10):
+    """Top clientes por faturamento total + frequência de compra."""
+    with db.get_conn() as conn:
+        rows = conn.execute(f"""
+            SELECT
+                cliente,
+                COUNT(*) AS num_pedidos,
+                SUM(valor) AS valor_total,
+                MAX(recebido_em) AS ultima_compra,
+                ROUND(SUM(valor)/COUNT(*), 2) AS ticket_medio
+            FROM pedidos_fluxo
+            WHERE status_fluxo NOT IN ('cancelado','erro')
+            GROUP BY cliente
+            ORDER BY valor_total DESC
+            LIMIT ?
+        """, (top,)).fetchall()
+
+        # Alerta de concentração: cliente dominante hoje
+        fat_hoje_total = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) FROM pedidos_fluxo WHERE DATE(recebido_em)=DATE('now') AND status_fluxo NOT IN ('cancelado','erro')"
+        ).fetchone()[0]
+        concentracao = None
+        if fat_hoje_total > 0:
+            top_hoje = conn.execute("""
+                SELECT cliente, SUM(valor) as val
+                FROM pedidos_fluxo
+                WHERE DATE(recebido_em)=DATE('now') AND status_fluxo NOT IN ('cancelado','erro')
+                GROUP BY cliente ORDER BY val DESC LIMIT 1
+            """).fetchone()
+            if top_hoje:
+                pct = round(top_hoje["val"] / fat_hoje_total * 100, 1)
+                if pct >= 60:
+                    concentracao = {"cliente": top_hoje["cliente"], "percentual": pct}
+
+    return {
+        "top_clientes": [dict(r) for r in rows],
+        "alerta_concentracao": concentracao,
+    }
+
+
+@router.get("/api/analytics/score")
+async def api_analytics_score():
+    """Score 0-100 da saúde da operação."""
+    score = 100
+    detalhes = []
+
+    with db.get_conn() as conn:
+        erro_permanente = conn.execute(
+            "SELECT COUNT(*) FROM fila_eventos WHERE status='erro_permanente'"
+        ).fetchone()[0]
+        travados = conn.execute(f"""
+            SELECT COUNT(*) FROM pedidos_fluxo
+            WHERE status_fluxo IN ('recebido','erro')
+              AND recebido_em < datetime('now','-30 minutes')
+        """).fetchone()[0]
+        pedidos_hoje = conn.execute(
+            "SELECT COUNT(*) FROM pedidos_fluxo WHERE DATE(recebido_em)=DATE('now')"
+        ).fetchone()[0]
+        erros_hoje = conn.execute(
+            "SELECT COUNT(*) FROM pedidos_fluxo WHERE DATE(recebido_em)=DATE('now') AND status_fluxo='erro'"
+        ).fetchone()[0]
+        pendentes = conn.execute(
+            "SELECT COUNT(*) FROM fila_eventos WHERE status='pendente'"
+        ).fetchone()[0]
+        buracos_hoje = conn.execute(
+            "SELECT COUNT(*) FROM auditoria_sequencia WHERE DATE(detectado_em)=DATE('now') AND resolvido=0"
+        ).fetchone()[0]
+
+    if erro_permanente > 0:
+        score -= 20
+        detalhes.append(f"-20: {erro_permanente} pedido(s) em erro permanente")
+    desconto_travados = min(travados * 10, 30)
+    if desconto_travados > 0:
+        score -= desconto_travados
+        detalhes.append(f"-{desconto_travados}: {travados} pedido(s) travado(s)")
+    taxa = (erros_hoje / pedidos_hoje * 100) if pedidos_hoje > 0 else 0
+    if taxa > 5:
+        score -= 10
+        detalhes.append(f"-10: taxa de erro hoje {taxa:.1f}%")
+    if pendentes > 10:
+        score -= 5
+        detalhes.append(f"-5: {pendentes} eventos pendentes na fila")
+    if buracos_hoje > 0:
+        score -= 5
+        detalhes.append(f"-5: {buracos_hoje} buraco(s) de sequência hoje")
+
+    score = max(0, score)
+    if score >= 80:
+        cor = "verde"
+    elif score >= 60:
+        cor = "amarelo"
+    else:
+        cor = "vermelho"
+
+    return {"score": score, "cor": cor, "detalhes": detalhes}

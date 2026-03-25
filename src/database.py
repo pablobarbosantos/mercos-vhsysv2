@@ -118,6 +118,22 @@ def init_db():
                 ON fila_eventos(status, proxima_tentativa);
 
             -- ────────────────────────────────────────────────────────
+            -- Itens de pedido (para ranking de produtos e analytics)
+            -- ────────────────────────────────────────────────────────
+            CREATE TABLE IF NOT EXISTS itens_pedido (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                mercos_id     INTEGER NOT NULL,
+                sku           TEXT,
+                nome_produto  TEXT,
+                quantidade    REAL,
+                valor_unit    REAL,
+                valor_total   REAL,
+                processado_em TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_itens_mercos ON itens_pedido(mercos_id);
+            CREATE INDEX IF NOT EXISTS idx_itens_sku ON itens_pedido(sku);
+
+            -- ────────────────────────────────────────────────────────
             -- NOVO: Registro de ações manuais no painel admin
             -- ────────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS admin_acoes (
@@ -451,3 +467,33 @@ def admin_listar_acoes(limit: int = 100) -> list[dict]:
             SELECT * FROM admin_acoes ORDER BY feito_em DESC LIMIT ?
         """, (limit,)).fetchall()
     return [dict(r) for r in rows]
+
+
+# ──────────────────────────────────────────────────────────────
+# Itens de pedido (analytics)
+# ──────────────────────────────────────────────────────────────
+
+def salvar_itens_pedido(mercos_id: int, itens: list[dict]):
+    """
+    Persiste os itens de um pedido para análise posterior.
+    Cada item deve ter: sku, nome_produto, quantidade, valor_unit, valor_total.
+    Usa INSERT OR IGNORE para idempotência — re-processar não duplica.
+    """
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        # Remove itens anteriores deste pedido antes de reinserir (reprocessamento)
+        conn.execute("DELETE FROM itens_pedido WHERE mercos_id = ?", (mercos_id,))
+        for item in itens:
+            conn.execute("""
+                INSERT INTO itens_pedido
+                    (mercos_id, sku, nome_produto, quantidade, valor_unit, valor_total, processado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                mercos_id,
+                item.get("sku") or item.get("codigo"),
+                item.get("nome_produto") or item.get("descricao") or item.get("nome"),
+                item.get("quantidade", 0),
+                item.get("valor_unit") or item.get("preco_unitario") or item.get("valor_unitario", 0),
+                item.get("valor_total") or item.get("total", 0),
+                agora,
+            ))

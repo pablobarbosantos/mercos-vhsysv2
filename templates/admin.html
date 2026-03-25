@@ -304,6 +304,7 @@
   <div class="tab active" onclick="trocarAba('pedidos')">📦 Pedidos</div>
   <div class="tab" onclick="trocarAba('fluxo')" id="tab-fluxo">🔄 Fluxo Operacional</div>
   <div class="tab" onclick="trocarAba('sequencia')" id="tab-seq">🔍 Auditoria de Sequência</div>
+  <div class="tab" onclick="trocarAba('analytics')">📊 Analytics</div>
 </div>
 
 <main>
@@ -471,6 +472,90 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       ABA 4 — ANALYTICS
+  ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="aba-analytics">
+
+    <!-- Score + Cards financeiros -->
+    <div class="stats" style="grid-template-columns: repeat(auto-fit, minmax(180px,1fr))">
+      <div class="stat-card" id="score-card" style="grid-column: span 1">
+        <div class="label">Score da Operação</div>
+        <div class="value" id="an-score" style="font-size:42px">—</div>
+        <div id="an-score-label" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div class="stat-card hoje">
+        <div class="label">Faturamento Hoje</div>
+        <div class="value" id="an-fat-hoje" style="font-size:22px">—</div>
+      </div>
+      <div class="stat-card info">
+        <div class="label">Faturamento Semana</div>
+        <div class="value" id="an-fat-semana" style="font-size:22px">—</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="label">Faturamento Mês</div>
+        <div class="value" id="an-fat-mes" style="font-size:22px">—</div>
+      </div>
+      <div class="stat-card total">
+        <div class="label">Ticket Médio Hoje</div>
+        <div class="value" id="an-ticket" style="font-size:22px">—</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="label">Taxa de Sucesso</div>
+        <div class="value" id="an-taxa" style="font-size:28px">—</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="label">Tempo Médio Process.</div>
+        <div class="value" id="an-tempo" style="font-size:28px">—</div>
+      </div>
+    </div>
+
+    <!-- Score detalhes -->
+    <div id="an-score-detalhes" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--erro)"></div>
+
+    <!-- Alerta concentração -->
+    <div id="an-concentracao" style="display:none;background:#7f1d1d20;border:1px solid #ef444440;border-radius:var(--radius);padding:12px 18px;margin-bottom:20px;font-size:13px;color:var(--erro)"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      <!-- Mais vendidos -->
+      <div>
+        <h3 style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">🏆 Mais Vendidos</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>Qtd</th><th>Faturamento</th><th>Pedidos</th></tr></thead>
+            <tbody id="tbody-mais-vendidos">
+              <tr><td colspan="4" class="empty"><span class="spinner"></span> Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Parados -->
+      <div>
+        <h3 style="font-size:13px;font-weight:700;color:var(--warn);margin-bottom:12px">🧊 Produtos Parados (+30 dias)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>Última Venda</th><th>Dias Parado</th></tr></thead>
+            <tbody id="tbody-parados">
+              <tr><td colspan="3" class="empty"><span class="spinner"></span> Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Clientes -->
+    <h3 style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">👥 Top Clientes</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th>Pedidos</th><th>Faturamento Total</th><th>Ticket Médio</th><th>Última Compra</th></tr></thead>
+        <tbody id="tbody-clientes">
+          <tr><td colspan="5" class="empty"><span class="spinner"></span> Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
   </div>
 
 </main>
@@ -826,9 +911,108 @@
     _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
   }
 
+  // ════════════════════════════════════════════════
+  // ABA 4 — Analytics
+  // ════════════════════════════════════════════════
+  function brl(v) {
+    return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+  }
+
+  async function carregarAnalytics() {
+    try {
+      const [rResumo, rProd, rCli, rScore] = await Promise.all([
+        fetch('/admin/api/analytics/resumo').then(r => r.json()),
+        fetch('/admin/api/analytics/produtos').then(r => r.json()),
+        fetch('/admin/api/analytics/clientes').then(r => r.json()),
+        fetch('/admin/api/analytics/score').then(r => r.json()),
+      ]);
+
+      // Cards financeiros
+      document.getElementById('an-fat-hoje').textContent   = brl(rResumo.faturamento_hoje);
+      document.getElementById('an-fat-semana').textContent = brl(rResumo.faturamento_semana);
+      document.getElementById('an-fat-mes').textContent    = brl(rResumo.faturamento_mes);
+      document.getElementById('an-ticket').textContent     = brl(rResumo.ticket_medio);
+      document.getElementById('an-taxa').textContent       = (rResumo.taxa_sucesso ?? '—') + '%';
+      const tempoSeg = rResumo.tempo_medio_seg || 0;
+      document.getElementById('an-tempo').textContent = tempoSeg < 60
+        ? Math.round(tempoSeg) + 's'
+        : (tempoSeg / 60).toFixed(1) + 'min';
+
+      // Score
+      const score = rScore.score ?? 100;
+      const cor   = rScore.cor || 'verde';
+      const scoreEl = document.getElementById('an-score');
+      scoreEl.textContent = score;
+      scoreEl.style.color = cor === 'verde' ? 'var(--ok)' : cor === 'amarelo' ? 'var(--warn)' : 'var(--erro)';
+      const emoji = cor === 'verde' ? '🟢' : cor === 'amarelo' ? '🟡' : '🔴';
+      document.getElementById('an-score-label').textContent = emoji + ' ' + (cor === 'verde' ? 'Operação saudável' : cor === 'amarelo' ? 'Atenção necessária' : 'Intervenção necessária');
+      const det = document.getElementById('an-score-detalhes');
+      if (rScore.detalhes && rScore.detalhes.length) {
+        det.style.display = 'block';
+        det.innerHTML = '<strong>Pontos perdidos:</strong><br>' + rScore.detalhes.map(d => `• ${escHtml(d)}`).join('<br>');
+      } else {
+        det.style.display = 'none';
+      }
+
+      // Mais vendidos
+      const tbody_mv = document.getElementById('tbody-mais-vendidos');
+      if (!rProd.mais_vendidos || !rProd.mais_vendidos.length) {
+        tbody_mv.innerHTML = `<tr><td colspan="4" class="empty"><div class="icon">📦</div><div>Nenhum dado ainda — processe pedidos para ver o ranking.</div></td></tr>`;
+      } else {
+        tbody_mv.innerHTML = rProd.mais_vendidos.map(p => `<tr>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.nome_produto||p.produto)}">${escHtml(p.nome_produto || p.produto || '—')}</td>
+          <td style="color:var(--info)">${Number(p.qtd_total||0).toFixed(0)}</td>
+          <td style="color:var(--ok)">${brl(p.valor_total)}</td>
+          <td style="color:var(--muted)">${p.num_pedidos}</td>
+        </tr>`).join('');
+      }
+
+      // Produtos parados
+      const tbody_par = document.getElementById('tbody-parados');
+      if (!rProd.parados || !rProd.parados.length) {
+        tbody_par.innerHTML = `<tr><td colspan="3" class="empty"><div class="icon">✅</div><div>Nenhum produto parado há +30 dias.</div></td></tr>`;
+      } else {
+        tbody_par.innerHTML = rProd.parados.map(p => `<tr>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.nome_produto||p.produto)}">${escHtml(p.nome_produto || p.produto || '—')}</td>
+          <td style="color:var(--muted);font-size:12px">${p.ultima_venda ? formatarData(p.ultima_venda) : '—'}</td>
+          <td><span style="color:var(--warn);font-weight:700">${p.dias_sem_venda}d</span></td>
+        </tr>`).join('');
+      }
+
+      // Top clientes
+      const tbody_cli = document.getElementById('tbody-clientes');
+      if (!rCli.top_clientes || !rCli.top_clientes.length) {
+        tbody_cli.innerHTML = `<tr><td colspan="5" class="empty"><div class="icon">👥</div><div>Nenhum dado ainda.</div></td></tr>`;
+      } else {
+        tbody_cli.innerHTML = rCli.top_clientes.map(c => `<tr>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(c.cliente)}">${escHtml(c.cliente||'—')}</td>
+          <td style="color:var(--info)">${c.num_pedidos}</td>
+          <td style="color:var(--ok)">${brl(c.valor_total)}</td>
+          <td style="color:var(--muted)">${brl(c.ticket_medio)}</td>
+          <td style="color:var(--muted);font-size:12px">${c.ultima_compra ? formatarData(c.ultima_compra) : '—'}</td>
+        </tr>`).join('');
+      }
+
+      // Alerta concentração
+      const concEl = document.getElementById('an-concentracao');
+      if (rCli.alerta_concentracao) {
+        const a = rCli.alerta_concentracao;
+        concEl.style.display = 'block';
+        concEl.innerHTML = `⚠️ <strong>Alerta de concentração:</strong> ${escHtml(a.cliente)} representa ${a.percentual}% do faturamento de hoje.`;
+      } else {
+        concEl.style.display = 'none';
+      }
+
+    } catch (e) {
+      toast('Erro ao carregar analytics: ' + e.message, 'erro');
+    }
+  }
+
   // Auto-refresh a cada 30s
   carregarTudo();
+  carregarAnalytics();
   setInterval(carregarTudo, 30000);
+  setInterval(carregarAnalytics, 60000);
 </script>
 
 </body>

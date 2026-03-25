@@ -264,6 +264,54 @@ def fechamento_do_dia():
     return stats
 
 
+# ══════════════════════════════════════════════════════════════
+# 4. BOLETOS VENCIDOS
+# ══════════════════════════════════════════════════════════════
+
+def verificar_boletos_vencidos():
+    """
+    Consulta VHSys por contas a receber em aberto com vencimento vencido.
+    Envia alerta WhatsApp se houver boletos vencidos.
+    Chamado diariamente às 09h pelo APScheduler.
+    """
+    try:
+        from vhsys_service import VhsysService
+        vhsys = VhsysService()
+        boletos = vhsys.buscar_boletos_vencidos()
+    except Exception as e:
+        logger.error(f"[Auditoria/Boletos] Erro ao consultar VHSys: {e}")
+        return []
+
+    if not boletos:
+        logger.info("[Auditoria/Boletos] ✅ Nenhum boleto vencido.")
+        return []
+
+    logger.warning(f"[Auditoria/Boletos] ⚠️ {len(boletos)} boleto(s) vencido(s).")
+
+    try:
+        wa = get_whatsapp()
+        linhas = []
+        for b in boletos[:5]:
+            nome    = b.get("nome_cliente") or b.get("cliente") or "?"
+            venc    = b.get("vencimento_rec") or b.get("vencimento") or "?"
+            valor   = b.get("valor_rec") or b.get("valor") or "?"
+            doc     = b.get("n_documento_rec") or b.get("identificacao") or "?"
+            linhas.append(f"  • {nome} | Doc: {doc} | R$ {valor} | Venc: {venc}")
+        resto = f"\n  ... e mais {len(boletos) - 5}" if len(boletos) > 5 else ""
+        msg = (
+            f"💰 *{len(boletos)} boleto(s) VENCIDO(S)*\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            + "\n".join(linhas) + resto +
+            f"\n\n👉 Verifique o financeiro no VHSys.\n"
+            f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+        wa._enviar(wa.notify_to, msg)
+    except Exception as e:
+        logger.warning(f"[Auditoria/Boletos] Falha no alerta WhatsApp: {e}")
+
+    return boletos
+
+
 # ──────────────────────────────────────────────────────────────
 # Monitor da fila de eventos
 # ──────────────────────────────────────────────────────────────

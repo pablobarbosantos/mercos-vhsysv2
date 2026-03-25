@@ -598,3 +598,46 @@ class VhsysService:
                 pass
 
         return parcelas_criadas
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # BOLETOS VENCIDOS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def buscar_boletos_vencidos(self) -> list[dict]:
+        """
+        Consulta /contas-receber no VHSys e retorna boletos em aberto
+        com vencimento até ontem (ou antes).
+        """
+        from datetime import date, timedelta
+        ate = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+        resultados = []
+        pagina = 1
+
+        while True:
+            resp = self._requisitar_com_retry(
+                "GET",
+                f"{self.base_url}/contas-receber",
+                params={
+                    "liquidado_rec": "Nao",
+                    "vencimento_rec_fim": ate,
+                    "limit": 100,
+                    "offset": (pagina - 1) * 100,
+                },
+                timeout=20,
+            )
+            if resp is None or resp.status_code != 200:
+                logger.warning(f"[Boletos] Falha ao buscar contas-receber: HTTP {resp.status_code if resp else 'sem_resposta'}")
+                break
+
+            data = resp.json()
+            itens = data.get("data", [])
+            if not itens:
+                break
+
+            resultados.extend(itens)
+            if len(itens) < 100:
+                break
+            pagina += 1
+
+        logger.info(f"[Boletos] {len(resultados)} boleto(s) vencido(s) encontrado(s).")
+        return resultados

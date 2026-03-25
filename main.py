@@ -113,6 +113,14 @@ def _job_refresh_cache():
         logger.error(f"[Scheduler/Cache] Erro: {e}", exc_info=True)
 
 
+def _job_boletos_vencidos():
+    try:
+        from src.auditoria import verificar_boletos_vencidos
+        verificar_boletos_vencidos()
+    except Exception as e:
+        logger.error(f"[Scheduler/Boletos] Erro: {e}", exc_info=True)
+
+
 # ── Worker da fila de eventos ──────────────────────────────────────────────
 
 _worker_lock = threading.Lock()
@@ -187,6 +195,11 @@ scheduler.add_job(
     _job_fechamento,
     CronTrigger(hour=int(FECHAMENTO_HORA), minute=0, timezone="America/Sao_Paulo"),
     id="fechamento_dia"
+)
+scheduler.add_job(
+    _job_boletos_vencidos,
+    CronTrigger(hour=9, minute=0, timezone="America/Sao_Paulo"),
+    id="boletos_vencidos"
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
