@@ -97,7 +97,7 @@ async def api_pedidos(limit: int = 200):
 
 
 @router.post("/api/reprocessar/{mercos_id}")
-async def api_reprocessar(mercos_id: int):
+async def api_reprocessar(request: Request, mercos_id: int):
     row = _pedido_payload_raw(mercos_id)
     if not row:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
