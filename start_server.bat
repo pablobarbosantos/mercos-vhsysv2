@@ -16,7 +16,7 @@ if not defined NODE (
     echo [%DATE% %TIME%] ERRO: node nao encontrado no PATH >> "%LOG%"
 ) else (
     echo [%DATE% %TIME%] Node encontrado: %NODE% >> "%LOG%"
-    start "WhatsApp Server" /min cmd /c "%NODE% %DIR%\whatsapp_server\server.js >> %LOG% 2>&1"
+    start "WhatsApp Server" /min cmd /c ""%NODE%" "%DIR%\whatsapp_server\server.js" >> "%DIR%\logs\node.log" 2>&1"
 )
 
 :: Aguarda Node inicializar
@@ -33,7 +33,7 @@ if not defined NGROK (
     echo [%DATE% %TIME%] ERRO: ngrok nao encontrado >> "%LOG%"
 ) else (
     echo [%DATE% %TIME%] ngrok encontrado: %NGROK% >> "%LOG%"
-    start "ngrok" /min cmd /c "%NGROK% http 8000 >> %LOG% 2>&1"
+    start "ngrok" /min cmd /c ""%NGROK%" http 8000 >> "%DIR%\logs\ngrok.log" 2>&1"
 )
 
 :: Aguarda ngrok inicializar
@@ -41,7 +41,8 @@ timeout /t 5 /nobreak >nul
 
 :: --- Python (FastAPI) ---
 echo [%DATE% %TIME%] Iniciando Python/FastAPI >> "%LOG%"
-"%PYTHON%" "%DIR%\main.py" >> "%LOG%" 2>&1
+set PYTHONIOENCODING=utf-8
+"%PYTHON%" "%DIR%\main.py" >> "%DIR%\logs\python.log" 2>&1
 
 echo [%DATE% %TIME%] Python encerrado >> "%LOG%"
 endlocal
