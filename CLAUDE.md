@@ -25,6 +25,10 @@ C:\mercos_vhsys_git\ngrok.exe http 8000
 
 Automated startup on Windows boot is configured via `start_server.bat` in Windows Task Scheduler.
 
+**Não é necessário reiniciar tudo a cada teste.** Apenas o `main.py` precisa ser reiniciado quando houver mudança de código Python. Node e ngrok ficam rodando continuamente.
+
+**ngrok e main.py devem rodar na mesma máquina** — o Mercos envia webhooks para a URL do ngrok, então onde estiver o ngrok precisa estar o `main.py`.
+
 ## Environment Setup
 
 Copy `.env.example` to `.env` and fill in credentials. Required variables:
