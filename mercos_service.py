@@ -61,6 +61,7 @@ class MercosService:
             if not pedido_vhsys:
                 db.salvar_pedido_processado(mercos_id, "erro", status="erro")
                 db.fluxo_marcar_erro(mercos_id)
+                db.registrar_erro("pedidos", str(mercos_id), "Tradução falhou: sem CNPJ ou sem itens válidos (preco/qtd = 0)")
                 return None
 
             resposta = self.vhsys.lancar_pedido_venda(pedido_vhsys)
@@ -119,6 +120,8 @@ class MercosService:
             else:
                 db.salvar_pedido_processado(mercos_id, "erro", status="erro")
                 db.fluxo_marcar_erro(mercos_id)
+                erro_msg = f"VHSys retornou código {resposta.get('code') if resposta else 'None'}: {resposta}"
+                db.registrar_erro("pedidos", str(mercos_id), erro_msg[:500])
                 logger.error(f"[MercosService] Falha ao criar pedido VHSYS para #{numero}")
 
                 # Notificação WhatsApp — alerta de erro

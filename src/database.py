@@ -155,7 +155,7 @@ def init_db():
 def pedido_ja_processado(mercos_id: int) -> bool:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT 1 FROM pedidos_processados WHERE mercos_id = ?", (mercos_id,)
+            "SELECT 1 FROM pedidos_processados WHERE mercos_id = ? AND status = 'ok'", (mercos_id,)
         ).fetchone()
     return row is not None
 
