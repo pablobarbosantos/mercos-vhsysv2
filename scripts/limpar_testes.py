@@ -5,7 +5,7 @@ conn = sqlite3.connect('data/sync.db')
 # Ver erro permanente
 print("=== ERRO PERMANENTE ===")
 rows = conn.execute(
-    "SELECT id, evento_tipo, tentativas, erro_msg FROM fila_eventos WHERE status='erro_permanente'"
+    "SELECT id, evento, mercos_id, tentativas, ultimo_erro FROM fila_eventos WHERE status='erro_permanente'"
 ).fetchall()
 for r in rows:
     print(r)
