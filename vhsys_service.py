@@ -476,16 +476,6 @@ class VhsysService:
             id_vhsys    = pedido_data.get("id_ped", "?")
             logger.info(f"[PEDIDO] ✅ Criado! ID VHSYS: {id_vhsys}")
 
-            valor_total = float(pedido_data.get("valor_total_nota", 0) or 0)
-            self.gerar_parcelas(
-                id_ped=str(id_vhsys),
-                numero_pedido=numero_pedido,
-                id_cliente=id_cliente,
-                nome_cliente=nome_cliente,
-                valor_total=valor_total,
-                data_pedido=dados.get("data", ""),
-                id_condicao=id_condicao,
-            )
             return resultado
         else:
             logger.error(f"[PEDIDO] ❌ HTTP {resp.status_code}: {resp.text[:800]}")

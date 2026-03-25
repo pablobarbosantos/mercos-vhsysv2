@@ -162,6 +162,17 @@ Known issue fixed: `verificar_sequencia()` in `src/auditoria.py` previously iter
 - Use `testes_ps.py` for multi-line Python SQL instead of `python -c` with complex quotes
 - Venv: `.\venv\Scripts\activate` then `python` (not `py`)
 
+## Problemas Conhecidos / Próximos Passos
+
+### Transportadora (pendente)
+Mapeamento em `resolver_frete()` em `vhsys_service.py` está com problemas. Revisar lógica de mapeamento nome → código VHSys e integração com cache de transportadoras. Não enviar campo transportadora até corrigido.
+
+### Módulo Expedição (pendente)
+Implementar fluxo de expedição: quando pedido é marcado como expedido/enviado no VHSys ou no Mercos, registrar no fluxo e notificar. Ainda não existe nenhuma lógica para isso.
+
+### Contas a Receber / Parcelas (desativado)
+`gerar_parcelas()` em `vhsys_service.py` existe mas **não é mais chamada** — o lançamento de boletos/parcelas é feito manualmente no VHSys. Não reativar sem validação.
+
 ## Workflow: Commit After Testing
 
 **After every change that is tested and validated, commit automatically to GitHub.**
