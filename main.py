@@ -2,11 +2,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException
 import logging
 import logging.handlers
 import os
 import sys
+import json
+import threading
 from mercos_service import MercosService
 from src import database as db
 from src.admin_routes import router as admin_router
@@ -53,15 +55,17 @@ logger.info("[Startup] Banco OK.")
 mercos_service = MercosService()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# APScheduler — tarefas periódicas de auditoria
+# APScheduler — tarefas periódicas
 # ──────────────────────────────────────────────────────────────────────────────
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-AUDIT_SEQ_MIN    = int(os.getenv("AUDIT_SEQ_INTERVAL_MIN", 15))
-AUDIT_FLUXO_MIN  = int(os.getenv("AUDIT_FLUXO_INTERVAL_MIN", 30))
-FECHAMENTO_HORA  = os.getenv("AUDIT_FECHAMENTO_HORA", "20")
+AUDIT_SEQ_MIN        = int(os.getenv("AUDIT_SEQ_INTERVAL_MIN", 15))
+AUDIT_FLUXO_MIN      = int(os.getenv("AUDIT_FLUXO_INTERVAL_MIN", 30))
+FECHAMENTO_HORA      = os.getenv("AUDIT_FECHAMENTO_HORA", "20")
+FILA_WORKER_SEG      = int(os.getenv("FILA_WORKER_INTERVAL_SEG", 10))
+CACHE_REFRESH_HORAS  = int(os.getenv("VHSYS_CACHE_TTL_HORAS", 4))
 
 
 def _job_sequencia():
@@ -88,9 +92,91 @@ def _job_fechamento():
         logger.error(f"[Scheduler/Fechamento] Erro: {e}", exc_info=True)
 
 
+def _job_auditoria_fila():
+    try:
+        from src.auditoria import verificar_fila_eventos
+        verificar_fila_eventos()
+    except Exception as e:
+        logger.error(f"[Scheduler/FilaAuditoria] Erro: {e}", exc_info=True)
+
+
+def _job_refresh_cache():
+    try:
+        mercos_service.vhsys.forcar_refresh_cache()
+    except Exception as e:
+        logger.error(f"[Scheduler/Cache] Erro: {e}", exc_info=True)
+
+
+# ── Worker da fila de eventos ──────────────────────────────────────────────
+
+_worker_lock = threading.Lock()
+
+
+def _job_processar_fila():
+    """
+    Worker principal. Processa até 5 eventos pendentes por execução.
+    Lock garante que apenas uma instância roda por vez.
+    """
+    if not _worker_lock.acquire(blocking=False):
+        return
+
+    try:
+        # Limpa locks de pedidos que não estão mais em uso
+        mercos_service.limpar_locks_antigos()
+
+        itens = db.fila_pegar_proximos(limite=5)
+        if not itens:
+            return
+
+        for item in itens:
+            fila_id    = item["id"]
+            evento     = item["evento"]
+            tentativas = item["tentativas"] + 1
+
+            db.fila_marcar_processando(fila_id)
+            logger.info(
+                f"[Fila] Processando fila_id={fila_id} | "
+                f"evento={evento} | tentativa={tentativas}"
+            )
+
+            try:
+                dados     = json.loads(item["payload_json"])
+                mercos_id = dados.get("id")
+
+                # Deduplicação para pedido.faturado (segunda chance)
+                if evento == "pedido.faturado" and db.pedido_ja_processado(mercos_id):
+                    logger.info(
+                        f"[Fila] fila_id={fila_id} pedido {mercos_id} "
+                        f"já processado — descartando."
+                    )
+                    db.fila_marcar_ok(fila_id)
+                    continue
+
+                resposta = mercos_service.processar_para_vhsys(dados)
+
+                if resposta and resposta.get("code") == 200:
+                    db.fila_marcar_ok(fila_id)
+                    logger.info(f"[Fila] fila_id={fila_id} processado com sucesso.")
+                else:
+                    raise RuntimeError(f"VHSys retornou resposta inesperada: {resposta}")
+
+            except Exception as e:
+                logger.error(
+                    f"[Fila] fila_id={fila_id} erro (tentativa {tentativas}): {e}",
+                    exc_info=True,
+                )
+                db.fila_marcar_erro(fila_id, str(e), tentativas)
+
+    finally:
+        _worker_lock.release()
+
+
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
-scheduler.add_job(_job_sequencia, "interval", minutes=AUDIT_SEQ_MIN,   id="auditoria_sequencia")
-scheduler.add_job(_job_fluxo,     "interval", minutes=AUDIT_FLUXO_MIN,  id="auditoria_fluxo")
+scheduler.add_job(_job_sequencia,       "interval", minutes=AUDIT_SEQ_MIN,   id="auditoria_sequencia")
+scheduler.add_job(_job_fluxo,           "interval", minutes=AUDIT_FLUXO_MIN,  id="auditoria_fluxo")
+scheduler.add_job(_job_auditoria_fila,  "interval", minutes=15,               id="auditoria_fila_eventos")
+scheduler.add_job(_job_processar_fila,  "interval", seconds=FILA_WORKER_SEG,  id="worker_fila_eventos", max_instances=1)
+scheduler.add_job(_job_refresh_cache,   "interval", hours=CACHE_REFRESH_HORAS, id="refresh_cache_vhsys")
 scheduler.add_job(
     _job_fechamento,
     CronTrigger(hour=int(FECHAMENTO_HORA), minute=0, timezone="America/Sao_Paulo"),
@@ -107,9 +193,16 @@ app.include_router(admin_router)
 
 @app.on_event("startup")
 async def startup_event():
+    recuperados = db.fila_recuperar_travados()
+    if recuperados:
+        logger.warning(
+            f"[Startup] Fila recuperada — {recuperados} item(s) resetados "
+            f"para reprocessamento (crash anterior detectado)."
+        )
     scheduler.start()
     logger.info(
         f"[Scheduler] Iniciado — "
+        f"Worker fila: a cada {FILA_WORKER_SEG}s | "
         f"Sequência: a cada {AUDIT_SEQ_MIN}min | "
         f"Fluxo: a cada {AUDIT_FLUXO_MIN}min | "
         f"Fechamento: {FECHAMENTO_HORA}h"
@@ -132,7 +225,7 @@ async def root():
 
 
 @app.post("/webhook/mercos")
-async def receive_mercos_order(request: Request, background_tasks: BackgroundTasks):
+async def receive_mercos_order(request: Request):
     try:
         payload = await request.json()
         logger.debug(f"[Webhook] Payload recebido: {payload}")
@@ -144,7 +237,7 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
             dados  = item.get("dados", {})
             logger.info(f"[Webhook] Evento: '{evento}'")
 
-            # ── Pedido novo
+            # ── Pedido novo — persiste na fila antes de qualquer processamento
             if evento == "pedido.gerado":
                 numero    = dados.get("numero")
                 cnpj      = dados.get("cliente_cnpj", "N/A")
@@ -155,6 +248,12 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
                     f"Itens: {len(dados.get('itens', []))}"
                 )
 
+                fila_id = db.fila_enfileirar(
+                    evento=evento,
+                    mercos_id=mercos_id,
+                    payload_json=json.dumps(dados, ensure_ascii=False),
+                )
+
                 if mercos_id:
                     db.fluxo_registrar_recebido(
                         mercos_id=mercos_id,
@@ -163,8 +262,7 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
                         valor=float(dados.get("valor_total", 0) or 0),
                     )
 
-                background_tasks.add_task(mercos_service.processar_para_vhsys, dados)
-                logger.debug(f"[Webhook] Pedido #{numero} enfileirado.")
+                logger.info(f"[Webhook] Pedido #{numero} persistido na fila (id={fila_id}).")
 
             # ── Pedido faturado — segunda chance de importação
             elif evento == "pedido.faturado":
@@ -183,17 +281,20 @@ async def receive_mercos_order(request: Request, background_tasks: BackgroundTas
                 else:
                     logger.warning(
                         f"[Webhook] pedido.faturado #{numero} (id={mercos_id}) "
-                        f"NÃO encontrado no VHSys — criando agora (segunda chance)."
+                        f"NÃO encontrado no VHSys — enfileirando (segunda chance)."
                     )
-                    # Registra no fluxo se ainda não tiver
+                    fila_id = db.fila_enfileirar(
+                        evento=evento,
+                        mercos_id=mercos_id,
+                        payload_json=json.dumps(dados, ensure_ascii=False),
+                    )
                     db.fluxo_registrar_recebido(
                         mercos_id=mercos_id,
                         numero=str(numero),
                         cliente=dados.get("cliente_razao_social", ""),
                         valor=float(dados.get("valor_total", 0) or 0),
                     )
-                    background_tasks.add_task(mercos_service.processar_para_vhsys, dados)
-                    logger.info(f"[Webhook] Pedido #{numero} enfileirado via pedido.faturado.")
+                    logger.info(f"[Webhook] Pedido #{numero} persistido na fila (id={fila_id}).")
 
             # ── Pedido atualizado (status mudou no Mercos)
             elif evento == "pedido.atualizado":

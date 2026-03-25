@@ -106,6 +106,7 @@ async def api_reprocessar(mercos_id: int):
             detail=f"Pedido está com status '{row['status']}' — só pedidos com erro podem ser reprocessados."
         )
     _reprocessar_pedido(mercos_id)
+    db.admin_registrar_acao("reprocessar", mercos_id, ip=request.client.host if request.client else "")
     return {"ok": True, "mensagem": f"Pedido {mercos_id} marcado para reprocessamento."}
 
 
@@ -157,23 +158,25 @@ async def api_verificar_agora():
 
 
 @router.post("/api/auditoria/fluxo/{mercos_id}/separado")
-async def api_marcar_separado(mercos_id: int):
+async def api_marcar_separado(request: Request, mercos_id: int):
     """Marca pedido como separado manualmente via painel."""
     pedido = db.fluxo_get_pedido(mercos_id)
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado no fluxo.")
     db.fluxo_marcar_separado(mercos_id)
+    db.admin_registrar_acao("separado", mercos_id, ip=request.client.host if request.client else "")
     logger.info(f"[Admin] Pedido {mercos_id} marcado como SEPARADO manualmente.")
     return {"ok": True, "mercos_id": mercos_id, "novo_status": "separado"}
 
 
 @router.post("/api/auditoria/fluxo/{mercos_id}/enviado")
-async def api_marcar_enviado(mercos_id: int):
+async def api_marcar_enviado(request: Request, mercos_id: int):
     """Marca pedido como enviado manualmente via painel."""
     pedido = db.fluxo_get_pedido(mercos_id)
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado no fluxo.")
     db.fluxo_marcar_enviado(mercos_id)
+    db.admin_registrar_acao("enviado", mercos_id, ip=request.client.host if request.client else "")
     logger.info(f"[Admin] Pedido {mercos_id} marcado como ENVIADO manualmente.")
     return {"ok": True, "mercos_id": mercos_id, "novo_status": "enviado"}
 
@@ -192,3 +195,16 @@ async def api_fechamento():
     from src.auditoria import fechamento_do_dia
     stats = fechamento_do_dia()
     return stats
+
+
+@router.get("/api/acoes")
+async def api_acoes_admin(limit: int = 100):
+    """Lista ações manuais realizadas no painel admin (audit trail)."""
+    acoes = db.admin_listar_acoes(limit=limit)
+    return {"acoes": acoes, "total": len(acoes)}
+
+
+@router.get("/api/fila")
+async def api_fila_stats():
+    """Retorna estatísticas da fila de eventos."""
+    return {"stats": db.fila_stats()}

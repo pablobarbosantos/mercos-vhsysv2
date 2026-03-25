@@ -13,6 +13,7 @@ Opcional:
 
 import logging
 import os
+import time
 import requests
 from datetime import datetime
 
@@ -36,26 +37,34 @@ class WhatsAppClient:
     # Envio base
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _enviar(self, numero: str, mensagem: str) -> bool:
+    def _enviar(self, numero: str, mensagem: str, max_tentativas: int = 3) -> bool:
         if not self.enabled:
             logger.debug(f"[WhatsApp] (desativado) Para {numero}: {mensagem[:60]}...")
             return False
 
-        try:
-            resp = requests.post(
-                f"{self.base_url}/send",
-                json={"numero": numero, "mensagem": mensagem},
-                timeout=10
-            )
-            if resp.status_code == 200:
-                logger.info(f"[WhatsApp] ✅ Enviado para {numero}")
-                return True
-            else:
-                logger.error(f"[WhatsApp] ❌ HTTP {resp.status_code}: {resp.text[:200]}")
-                return False
-        except Exception as e:
-            logger.error(f"[WhatsApp] Erro ao enviar: {e}")
-            return False
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                resp = requests.post(
+                    f"{self.base_url}/send",
+                    json={"numero": numero, "mensagem": mensagem},
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    logger.info(f"[WhatsApp] ✅ Enviado para {numero} (tentativa {tentativa})")
+                    return True
+                else:
+                    logger.warning(
+                        f"[WhatsApp] HTTP {resp.status_code} "
+                        f"(tentativa {tentativa}/{max_tentativas}): {resp.text[:200]}"
+                    )
+            except Exception as e:
+                logger.warning(f"[WhatsApp] Erro (tentativa {tentativa}/{max_tentativas}): {e}")
+
+            if tentativa < max_tentativas:
+                time.sleep(2 * tentativa)  # 2s, 4s
+
+        logger.error(f"[WhatsApp] Falha definitiva após {max_tentativas} tentativas para {numero}")
+        return False
 
     # ──────────────────────────────────────────────────────────────────────────
     # Pedido OK / Erro

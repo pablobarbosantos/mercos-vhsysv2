@@ -42,8 +42,12 @@ class MercosService:
         numero    = dados_mercos.get("numero", mercos_id)
 
         lock_pedido = self._get_lock_para_pedido(mercos_id)
-        if not lock_pedido.acquire(blocking=False):
-            logger.warning(f"[MercosService] Pedido #{numero} (id={mercos_id}) já está sendo processado.")
+        adquiriu = lock_pedido.acquire(blocking=True, timeout=30)
+        if not adquiriu:
+            logger.warning(
+                f"[MercosService] Pedido #{numero} (id={mercos_id}) "
+                f"ainda em processamento após 30s — abortando duplicata."
+            )
             return None
 
         try:
@@ -168,6 +172,18 @@ class MercosService:
             "cliente_cidade":        dados.get("cliente_cidade", ""),
             "cliente_estado":        dados.get("cliente_estado", ""),
         }
+
+    def limpar_locks_antigos(self):
+        """Remove locks de pedidos que não estão mais em processamento ativo."""
+        with self._pedido_locks_meta:
+            ids_para_remover = [
+                pid for pid, lock in self._pedido_locks.items()
+                if not lock.locked()
+            ]
+            for pid in ids_para_remover:
+                del self._pedido_locks[pid]
+            if ids_para_remover:
+                logger.debug(f"[MercosService] {len(ids_para_remover)} lock(s) liberados.")
 
     def _garantir_cache_produtos(self):
         if self._produtos_carregados:

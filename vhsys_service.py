@@ -11,6 +11,7 @@ VhsysService
 import logging
 import os
 import re
+import time
 
 import requests
 
@@ -47,6 +48,9 @@ class VhsysService:
         "SEM_FRETE":    (9, ""),
     }
 
+    # Statuses HTTP que merecem retry (transitórios)
+    _RETRY_STATUS = {429, 500, 502, 503, 504}
+
     def __init__(self):
         self.access_token = os.getenv("VHSYS_ACCESS_TOKEN")
         self.secret_token = os.getenv("VHSYS_SECRET_TOKEN")
@@ -57,7 +61,8 @@ class VhsysService:
                 "não configuradas. Defina-as no arquivo .env ou no painel do Railway."
             )
 
-        self.base_url = "https://api.vhsys.com.br/v2"
+        self.base_url = os.getenv("VHSYS_BASE_URL", "https://api.vhsys.com.br/v2").rstrip("/")
+        self.id_banco = int(os.getenv("VHSYS_ID_BANCO", "1287072"))
         self.headers  = {
             "access-token":        self.access_token,
             "secret-access-token": self.secret_token,
@@ -67,10 +72,60 @@ class VhsysService:
         self.cache_produtos:        list[dict] = []
         self.cache_condicoes:       list[dict] = []
         self.cache_transportadoras: list[dict] = []
-        self._cache_carregado = False
+        self._cache_carregado    = False
+        self._cache_carregado_em: float = 0.0
+        self._cache_ttl_seg      = int(os.getenv("VHSYS_CACHE_TTL_HORAS", "4")) * 3600
 
         logger.info("[VhsysService] Inicializando...")
         self._carregar_caches()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # RETRY HTTP
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _requisitar_com_retry(
+        self,
+        method: str,
+        url: str,
+        json_body: dict | None = None,
+        params: dict | None = None,
+        max_tentativas: int = 3,
+        timeout: int = 30,
+    ) -> requests.Response | None:
+        """
+        Faz requisição HTTP com retry em erros transitórios.
+        Retorna Response na primeira tentativa bem-sucedida, ou None após esgotar.
+        Não retenta 400/404/422 (erros definitivos da requisição).
+        """
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                if method == "GET":
+                    resp = requests.get(url, headers=self.headers, params=params, timeout=timeout)
+                else:
+                    resp = requests.post(url, headers=self.headers, json=json_body, timeout=timeout)
+
+                if resp.status_code not in self._RETRY_STATUS:
+                    return resp  # sucesso ou erro definitivo
+
+                logger.warning(
+                    f"[HTTP] {method} {url} → HTTP {resp.status_code} "
+                    f"(tentativa {tentativa}/{max_tentativas})"
+                )
+
+            except (requests.Timeout, requests.ConnectionError) as e:
+                logger.warning(
+                    f"[HTTP] {method} {url} → {type(e).__name__} "
+                    f"(tentativa {tentativa}/{max_tentativas}): {e}"
+                )
+                if tentativa == max_tentativas:
+                    return None
+
+            if tentativa < max_tentativas:
+                delay = 2 ** tentativa  # 2s, 4s, 8s
+                logger.info(f"[HTTP] Aguardando {delay}s antes da próxima tentativa...")
+                time.sleep(delay)
+
+        return None
 
     # ──────────────────────────────────────────────────────────────────────────
     # CACHES
@@ -82,40 +137,43 @@ class VhsysService:
         limit     = 250
         pagina    = 1
         while True:
-            url = f"{self.base_url}/{endpoint}?limit={limit}&offset={offset}"
-            try:
-                response = requests.get(url, headers=self.headers, timeout=30)
-                if response.status_code != 200:
-                    logger.error(f"[CACHE {nome_log}] HTTP {response.status_code}: {response.text[:200]}")
-                    break
-                data = response.json().get("data", [])
-                resultado.extend(data)
-                logger.debug(f"[CACHE {nome_log}] Página {pagina}: +{len(data)} | Total: {len(resultado)}")
-                if len(data) < limit:
-                    break
-                offset += limit
-                pagina += 1
-            except Exception as e:
-                logger.error(f"[CACHE {nome_log}] Erro: {e}")
+            url  = f"{self.base_url}/{endpoint}"
+            resp = self._requisitar_com_retry(
+                "GET", url, params={"limit": limit, "offset": offset}, timeout=30
+            )
+            if resp is None or resp.status_code != 200:
+                status = resp.status_code if resp else "sem_resposta"
+                logger.error(f"[CACHE {nome_log}] HTTP {status} — interrompendo paginação.")
                 break
+            data = resp.json().get("data", [])
+            resultado.extend(data)
+            logger.debug(f"[CACHE {nome_log}] Página {pagina}: +{len(data)} | Total: {len(resultado)}")
+            if len(data) < limit:
+                break
+            offset += limit
+            pagina += 1
         return resultado
 
-    def _carregar_caches(self):
-        if self._cache_carregado:
+    def _carregar_caches(self, forcar: bool = False):
+        agora = time.monotonic()
+        if not forcar and self._cache_carregado and (agora - self._cache_carregado_em) < self._cache_ttl_seg:
             return
-        logger.info("[CACHE] Carregando produtos...")
-        self.cache_produtos = self._carregar_paginas("produtos", "PRODUTOS")
-        logger.info(f"[CACHE] {len(self.cache_produtos)} produtos carregados.")
 
-        logger.info("[CACHE] Carregando condições de pagamento...")
-        self.cache_condicoes = self._carregar_paginas("condicoes-pagamento", "CONDICOES")
-        logger.info(f"[CACHE] {len(self.cache_condicoes)} condições carregadas.")
+        logger.info(f"[CACHE] {'Forçando recarga' if forcar else 'Carregando'} caches VHSys...")
+        self.cache_produtos        = self._carregar_paginas("produtos",              "PRODUTOS")
+        self.cache_condicoes       = self._carregar_paginas("condicoes-pagamento",   "CONDICOES")
+        self.cache_transportadoras = self._carregar_paginas("transportadoras",       "TRANSPORTADORAS")
+        self._cache_carregado    = True
+        self._cache_carregado_em = time.monotonic()
+        logger.info(
+            f"[CACHE] Concluído — {len(self.cache_produtos)} produtos | "
+            f"{len(self.cache_condicoes)} condições | "
+            f"{len(self.cache_transportadoras)} transportadoras."
+        )
 
-        logger.info("[CACHE] Carregando transportadoras...")
-        self.cache_transportadoras = self._carregar_paginas("transportadoras", "TRANSPORTADORAS")
-        logger.info(f"[CACHE] {len(self.cache_transportadoras)} transportadoras carregadas.")
-
-        self._cache_carregado = True
+    def forcar_refresh_cache(self):
+        """Chamado pelo APScheduler para renovar cache periodicamente."""
+        self._carregar_caches(forcar=True)
 
     def carregar_todos_produtos(self):
         """Mantido para compatibilidade com MercosService."""
@@ -227,27 +285,27 @@ class VhsysService:
             return None
         cnpj_formatado = _formatar_cnpj(cnpj_normalizado)
         logger.debug(f"[CLIENTE] Buscando CNPJ: {cnpj_formatado}")
-        try:
-            response = requests.get(
-                f"{self.base_url}/clientes",
-                headers=self.headers,
-                params={"cnpj_cliente": cnpj_formatado, "limit": 5},
-                timeout=15,
-            )
-            if response.status_code == 200:
-                data = response.json().get("data", [])
-                for cliente in data:
-                    if _normalizar_cnpj(cliente.get("cnpj_cliente", "")) == cnpj_normalizado:
-                        logger.info(f"[CLIENTE] Encontrado! ID: {cliente['id_cliente']} | Nome: {cliente.get('razao_cliente')}")
-                        return {
-                            "id_cliente":   str(cliente["id_cliente"]),
-                            "razao_social": cliente.get("razao_cliente", ""),
-                        }
-            logger.info(f"[CLIENTE] CNPJ {cnpj_formatado} não encontrado.")
+
+        resp = self._requisitar_com_retry(
+            "GET",
+            f"{self.base_url}/clientes",
+            params={"cnpj_cliente": cnpj_formatado, "limit": 5},
+            timeout=15,
+        )
+        if resp is None:
+            logger.error(f"[CLIENTE] Falha ao buscar CNPJ {cnpj_formatado} após retries.")
             return None
-        except Exception as e:
-            logger.error(f"[CLIENTE] Erro ao buscar: {e}", exc_info=True)
-            return None
+        if resp.status_code == 200:
+            data = resp.json().get("data", [])
+            for cliente in data:
+                if _normalizar_cnpj(cliente.get("cnpj_cliente", "")) == cnpj_normalizado:
+                    logger.info(f"[CLIENTE] Encontrado! ID: {cliente['id_cliente']} | Nome: {cliente.get('razao_cliente')}")
+                    return {
+                        "id_cliente":   str(cliente["id_cliente"]),
+                        "razao_social": cliente.get("razao_cliente", ""),
+                    }
+        logger.info(f"[CLIENTE] CNPJ {cnpj_formatado} não encontrado.")
+        return None
 
     def cadastrar_cliente(self, dados_mercos: dict) -> dict | None:
         cnpj      = dados_mercos.get("cliente_cnpj", "")
@@ -276,23 +334,22 @@ class VhsysService:
         }
 
         logger.info(f"[CLIENTE] Cadastrando: {razao} | CNPJ: {cnpj}")
-        try:
-            response = requests.post(
-                f"{self.base_url}/clientes",
-                json=payload,
-                headers=self.headers,
-                timeout=15,
-            )
-            if response.status_code in (200, 201):
-                data    = response.json().get("data", {})
-                id_novo = data.get("id_cliente")
-                logger.info(f"[CLIENTE] Cadastrado! ID: {id_novo} | Nome: {razao}")
-                return {"id_cliente": str(id_novo), "razao_social": razao}
-            else:
-                logger.error(f"[CLIENTE] Falha HTTP {response.status_code}: {response.text[:400]}")
-                return None
-        except Exception as e:
-            logger.error(f"[CLIENTE] Erro ao cadastrar: {e}", exc_info=True)
+        resp = self._requisitar_com_retry(
+            "POST",
+            f"{self.base_url}/clientes",
+            json_body=payload,
+            timeout=15,
+        )
+        if resp is None:
+            logger.error(f"[CLIENTE] Falha ao cadastrar {razao} após retries.")
+            return None
+        if resp.status_code in (200, 201):
+            data    = resp.json().get("data", {})
+            id_novo = data.get("id_cliente")
+            logger.info(f"[CLIENTE] Cadastrado! ID: {id_novo} | Nome: {razao}")
+            return {"id_cliente": str(id_novo), "razao_social": razao}
+        else:
+            logger.error(f"[CLIENTE] Falha HTTP {resp.status_code}: {resp.text[:400]}")
             return None
 
     def buscar_ou_cadastrar_cliente(self, dados_mercos: dict) -> dict | None:
@@ -397,38 +454,38 @@ class VhsysService:
         logger.debug(f"[PEDIDO] Payload: {payload}")
 
         # ── Envio ─────────────────────────────────────────────────────────────
-        try:
-            response = requests.post(
-                f"{self.base_url}/pedidos",
-                json=payload,
-                headers=self.headers,
-                timeout=30,
+        resp = self._requisitar_com_retry(
+            "POST",
+            f"{self.base_url}/pedidos",
+            json_body=payload,
+            timeout=30,
+        )
+        if resp is None:
+            logger.error("[PEDIDO] Falha ao enviar pedido ao VHSys após retries.")
+            return None
+
+        logger.debug(f"[PEDIDO] HTTP {resp.status_code} | {resp.elapsed.total_seconds():.2f}s")
+        logger.debug(f"[PEDIDO] Resposta: {resp.text}")
+
+        if resp.status_code in (200, 201):
+            resultado   = resp.json()
+            pedido_data = resultado.get("data", [{}])[0]
+            id_vhsys    = pedido_data.get("id_ped", "?")
+            logger.info(f"[PEDIDO] ✅ Criado! ID VHSYS: {id_vhsys}")
+
+            valor_total = float(pedido_data.get("valor_total_nota", 0) or 0)
+            self.gerar_parcelas(
+                id_ped=str(id_vhsys),
+                numero_pedido=numero_pedido,
+                id_cliente=id_cliente,
+                nome_cliente=nome_cliente,
+                valor_total=valor_total,
+                data_pedido=dados.get("data", ""),
+                id_condicao=id_condicao,
             )
-            logger.debug(f"[PEDIDO] HTTP {response.status_code} | {response.elapsed.total_seconds():.2f}s")
-            logger.debug(f"[PEDIDO] Resposta: {response.text}")
-
-            if response.status_code in (200, 201):
-                resultado   = response.json()
-                pedido_data = resultado.get("data", [{}])[0]
-                id_vhsys    = pedido_data.get("id_ped", "?")
-                logger.info(f"[PEDIDO] ✅ Criado! ID VHSYS: {id_vhsys}")
-
-                valor_total = float(pedido_data.get("valor_total_nota", 0) or 0)
-                self.gerar_parcelas(
-                    id_ped=str(id_vhsys),
-                    numero_pedido=numero_pedido,
-                    id_cliente=id_cliente,
-                    nome_cliente=nome_cliente,
-                    valor_total=valor_total,
-                    data_pedido=dados.get("data", ""),
-                    id_condicao=id_condicao,
-                )
-                return resultado
-            else:
-                logger.error(f"[PEDIDO] ❌ HTTP {response.status_code}: {response.text[:800]}")
-                return None
-        except Exception as e:
-            logger.error(f"[PEDIDO] Erro: {e}", exc_info=True)
+            return resultado
+        else:
+            logger.error(f"[PEDIDO] ❌ HTTP {resp.status_code}: {resp.text[:800]}")
             return None
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -442,6 +499,7 @@ class VhsysService:
         Gera as contas a receber (parcelas) para um pedido recém-criado.
         Usa os dados da condição de pagamento do cache para calcular
         vencimentos, quantidade e forma de pagamento.
+        Alerta via WhatsApp se alguma parcela falhar.
         """
         from datetime import datetime, timedelta
 
@@ -473,6 +531,7 @@ class VhsysService:
         valor_ultima  = round(valor_total - valor_parcela * (qtde - 1), 2)
 
         parcelas_criadas = []
+        parcelas_falhas  = []
 
         for i in range(1, qtde + 1):
             dias       = primeira + intervalo * (i - 1)
@@ -482,7 +541,7 @@ class VhsysService:
             payload = {
                 "nome_conta":      f"Pedido {numero_pedido}",
                 "identificacao":   f"Ped_{id_ped}",
-                "id_banco":        1287072,
+                "id_banco":        self.id_banco,
                 "id_cliente":      id_cliente,
                 "nome_cliente":    nome_cliente,
                 "vencimento_rec":  vencimento,
@@ -500,20 +559,39 @@ class VhsysService:
                 f"Forma: {forma_pagamento}"
             )
 
+            resp = self._requisitar_com_retry(
+                "POST",
+                f"{self.base_url}/contas-receber",
+                json_body=payload,
+                timeout=15,
+            )
+            if resp is not None and resp.status_code in (200, 201):
+                id_conta = resp.json().get("data", {}).get("id_conta_rec")
+                logger.info(f"[PARCELAS] ✅ Parcela {i} criada! ID: {id_conta}")
+                parcelas_criadas.append(id_conta)
+            else:
+                status_code = resp.status_code if resp else "sem_resposta"
+                logger.error(f"[PARCELAS] ❌ Parcela {i}/{qtde} falhou: HTTP {status_code}")
+                parcelas_falhas.append(i)
+
+        if parcelas_falhas:
+            from src import database as db_mod
+            msg = (
+                f"Pedido VHSys {id_ped} (Mercos #{numero_pedido}): "
+                f"parcelas {parcelas_falhas} de {qtde} NÃO criadas. "
+                f"Verifique contas-a-receber no VHSys."
+            )
+            db_mod.registrar_erro("parcelas", str(id_ped), msg)
+            logger.error(f"[PARCELAS] {msg}")
             try:
-                response = requests.post(
-                    f"{self.base_url}/contas-receber",
-                    json=payload,
-                    headers=self.headers,
-                    timeout=15,
+                from src.whatsapp import get_whatsapp
+                get_whatsapp().notificar_pedido_erro(
+                    numero_pedido=numero_pedido,
+                    mercos_id=0,
+                    cliente=nome_cliente,
+                    motivo=f"Parcelas {parcelas_falhas}/{qtde} falharam — verificar VHSys",
                 )
-                if response.status_code in (200, 201):
-                    id_conta = response.json().get("data", {}).get("id_conta_rec")
-                    logger.info(f"[PARCELAS] ✅ Parcela {i} criada! ID: {id_conta}")
-                    parcelas_criadas.append(id_conta)
-                else:
-                    logger.error(f"[PARCELAS] ❌ Parcela {i} falhou: {response.text[:300]}")
-            except Exception as e:
-                logger.error(f"[PARCELAS] Erro na parcela {i}: {e}")
+            except Exception:
+                pass
 
         return parcelas_criadas

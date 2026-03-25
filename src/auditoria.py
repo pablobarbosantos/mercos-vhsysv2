@@ -52,20 +52,29 @@ def verificar_sequencia() -> list[dict]:
         logger.debug("[Auditoria/Seq] Menos de 2 pedidos — verificação ignorada.")
         return []
 
-    ids_conhecidos = {r["mercos_id"] for r in rows}
-    id_min = min(ids_conhecidos)
-    id_max = max(ids_conhecidos)
+    ids_ordenados = sorted(r["mercos_id"] for r in rows)
 
-    # Detecta todos os buracos
+    # Detecta buracos comparando IDs consecutivos (O(n) — evita iterar range enorme)
     buracos_novos = []
-    for esperado in range(id_min, id_max + 1):
-        if esperado not in ids_conhecidos:
-            if not _buraco_ja_alertado(esperado):
+    for i in range(len(ids_ordenados) - 1):
+        atual = ids_ordenados[i]
+        proximo = ids_ordenados[i + 1]
+        gap = proximo - atual - 1
+        if gap <= 0:
+            continue
+        # Limita a 50 buracos por gap para não explodir memória/alertas
+        for faltando in range(atual + 1, min(atual + 1 + gap, atual + 51)):
+            if not _buraco_ja_alertado(faltando):
                 buracos_novos.append({
-                    "mercos_id":    esperado,
+                    "mercos_id":     faltando,
                     "classificacao": "nao_recebido",
-                    "descricao":    "Nunca chegou via webhook",
+                    "descricao":     "Nunca chegou via webhook",
                 })
+        if gap > 50:
+            logger.warning(
+                f"[Auditoria/Seq] Gap de {gap} IDs entre {atual} e {proximo} "
+                f"— reportando apenas os primeiros 50."
+            )
 
     if not buracos_novos:
         logger.info("[Auditoria/Seq] ✅ Sequência OK — nenhum buraco novo.")
@@ -249,3 +258,45 @@ def fechamento_do_dia():
         logger.warning(f"[Auditoria] Falha no fechamento do dia: {e}")
 
     return stats
+
+
+# ──────────────────────────────────────────────────────────────
+# Monitor da fila de eventos
+# ──────────────────────────────────────────────────────────────
+
+def verificar_fila_eventos() -> dict:
+    """
+    Alerta se houver eventos em erro_permanente ou fila com backlog alto.
+    Chamado a cada 15 minutos pelo APScheduler.
+    """
+    from src import database as db_mod
+
+    stats   = db_mod.fila_stats()
+    alertas = []
+
+    erro_permanente = stats.get("erro_permanente", 0)
+    pendentes       = stats.get("pendente", 0)
+
+    if erro_permanente > 0:
+        msg = (
+            f"⛔ FILA: {erro_permanente} pedido(s) em ERRO PERMANENTE — "
+            f"intervenção manual necessária. Verifique /admin/api/fila"
+        )
+        logger.error(f"[Auditoria/Fila] {msg}")
+        alertas.append(msg)
+        try:
+            get_whatsapp().notificar_pedido_erro(
+                numero_pedido="FILA",
+                mercos_id=0,
+                cliente="Sistema",
+                motivo=msg,
+            )
+        except Exception as e:
+            logger.warning(f"[Auditoria/Fila] Falha ao enviar alerta WhatsApp: {e}")
+
+    if pendentes > 50:
+        msg = f"⚠️ FILA: {pendentes} eventos pendentes (backlog alto)."
+        logger.warning(f"[Auditoria/Fila] {msg}")
+        alertas.append(msg)
+
+    return {"stats": stats, "alertas": alertas}

@@ -20,8 +20,11 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "sync.db")
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -93,6 +96,37 @@ def init_db():
                 resolvido       INTEGER DEFAULT 0,
                 resolucao       TEXT,
                 resolvido_em    TEXT
+            );
+
+            -- ────────────────────────────────────────────────────────
+            -- NOVO: Fila persistente de eventos (anti-perda de pedidos)
+            -- status: pendente | processando | ok | erro_permanente
+            -- ────────────────────────────────────────────────────────
+            CREATE TABLE IF NOT EXISTS fila_eventos (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                evento            TEXT NOT NULL,
+                mercos_id         INTEGER,
+                payload_json      TEXT NOT NULL,
+                status            TEXT DEFAULT 'pendente',
+                tentativas        INTEGER DEFAULT 0,
+                proxima_tentativa TEXT,
+                ultimo_erro       TEXT,
+                criado_em         TEXT NOT NULL,
+                atualizado_em     TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_fila_status
+                ON fila_eventos(status, proxima_tentativa);
+
+            -- ────────────────────────────────────────────────────────
+            -- NOVO: Registro de ações manuais no painel admin
+            -- ────────────────────────────────────────────────────────
+            CREATE TABLE IF NOT EXISTS admin_acoes (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                acao      TEXT NOT NULL,
+                mercos_id INTEGER,
+                descricao TEXT,
+                ip_origem TEXT,
+                feito_em  TEXT NOT NULL
             );
         """)
     logger.info("[DB] Banco inicializado.")
@@ -301,3 +335,119 @@ def get_vhsys_produto_id(mercos_codigo: str) -> int | None:
             (str(mercos_codigo),)
         ).fetchone()
     return row["vhsys_id"] if row else None
+
+
+# ──────────────────────────────────────────────────────────────
+# Fila persistente de eventos
+# ──────────────────────────────────────────────────────────────
+
+FILA_MAX_TENTATIVAS = int(os.getenv("FILA_MAX_TENTATIVAS", "5"))
+
+
+def fila_enfileirar(evento: str, mercos_id: int | None, payload_json: str) -> int:
+    """Persiste evento na fila antes de qualquer processamento. Retorna o id inserido."""
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO fila_eventos
+                (evento, mercos_id, payload_json, status, criado_em, atualizado_em)
+            VALUES (?, ?, ?, 'pendente', ?, ?)
+        """, (evento, mercos_id, payload_json, agora, agora))
+        return cur.lastrowid
+
+
+def fila_pegar_proximos(limite: int = 5) -> list[dict]:
+    """Retorna itens prontos para processar (pendente + proxima_tentativa <= agora)."""
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT * FROM fila_eventos
+            WHERE status = 'pendente'
+              AND (proxima_tentativa IS NULL OR proxima_tentativa <= ?)
+            ORDER BY id ASC
+            LIMIT ?
+        """, (agora, limite)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def fila_marcar_processando(fila_id: int):
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE fila_eventos SET status = 'processando', atualizado_em = ?
+            WHERE id = ?
+        """, (agora, fila_id))
+
+
+def fila_marcar_ok(fila_id: int):
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE fila_eventos SET status = 'ok', atualizado_em = ?
+            WHERE id = ?
+        """, (agora, fila_id))
+
+
+def fila_marcar_erro(fila_id: int, erro: str, tentativas: int):
+    """Calcula backoff exponencial. Após FILA_MAX_TENTATIVAS → erro_permanente."""
+    from datetime import timedelta
+    agora = datetime.now(timezone.utc)
+    if tentativas >= FILA_MAX_TENTATIVAS:
+        novo_status = "erro_permanente"
+        proxima = None
+    else:
+        novo_status = "pendente"
+        delay_seg = 30 * (4 ** (tentativas - 1))  # 30s, 2min, 8min, 30min, 2h
+        proxima = (agora + timedelta(seconds=delay_seg)).isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE fila_eventos
+            SET status = ?, tentativas = ?, ultimo_erro = ?,
+                proxima_tentativa = ?, atualizado_em = ?
+            WHERE id = ?
+        """, (novo_status, tentativas, str(erro)[:500], proxima, agora.isoformat(), fila_id))
+
+
+def fila_recuperar_travados() -> int:
+    """
+    Chamado no startup. Rows em 'processando' indicam crash durante processamento.
+    Reseta para 'pendente' para reprocessar. Retorna qtd de itens recuperados.
+    """
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute("""
+            UPDATE fila_eventos
+            SET status = 'pendente', ultimo_erro = 'Recuperado após crash do servidor',
+                atualizado_em = ?
+            WHERE status = 'processando'
+        """, (agora,))
+        return cur.rowcount
+
+
+def fila_stats() -> dict:
+    """Retorna contagem de itens por status."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) as qtd FROM fila_eventos GROUP BY status"
+        ).fetchall()
+    return {r["status"]: r["qtd"] for r in rows}
+
+
+# ──────────────────────────────────────────────────────────────
+# Audit trail de ações manuais no admin
+# ──────────────────────────────────────────────────────────────
+
+def admin_registrar_acao(acao: str, mercos_id: int | None, descricao: str = "", ip: str = ""):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO admin_acoes (acao, mercos_id, descricao, ip_origem, feito_em)
+            VALUES (?, ?, ?, ?, ?)
+        """, (acao, mercos_id, descricao, ip, datetime.now(timezone.utc).isoformat()))
+
+
+def admin_listar_acoes(limit: int = 100) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT * FROM admin_acoes ORDER BY feito_em DESC LIMIT ?
+        """, (limit,)).fetchall()
+    return [dict(r) for r in rows]
