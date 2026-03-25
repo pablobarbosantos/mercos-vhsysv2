@@ -654,9 +654,10 @@ class VhsysService:
         if resp.status_code != 200:
             logger.warning(f"[Expedicao] /expedicoes retornou HTTP {resp.status_code}.")
             return None
-        data = resp.json().get("data", [])
+        raw = resp.json()
+        data = raw.get("data", [])
         logger.info(f"[Expedicao] {len(data)} expedição(ões) encontrada(s) via /expedicoes.")
-        logger.debug(f"[Expedicao] Amostra payload: {data[:1]}")
+        logger.debug(f"[Expedicao] Response completo: {raw}")
         return data
 
     def buscar_situacao_pedido(self, vhsys_id: str) -> str | None:

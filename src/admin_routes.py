@@ -5,6 +5,7 @@ Inclui endpoints de Auditoria de Sequência e Fluxo.
 """
 
 import logging
+import threading
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
@@ -159,10 +160,10 @@ async def api_verificar_agora():
 
 @router.post("/api/expedicao/verificar-agora")
 async def api_expedicao_verificar_agora():
-    """Força execução imediata do job de sync de expedição (útil para testes)."""
-    from main import _job_sync_expedicao
-    _job_sync_expedicao()
-    return {"ok": True}
+    """Dispara o job de sync de expedição em background (não bloqueia a resposta)."""
+    from src.expedicao import job_sync_expedicao
+    threading.Thread(target=job_sync_expedicao, daemon=True).start()
+    return {"ok": True, "mensagem": "Job iniciado em background — verifique os logs."}
 
 
 @router.post("/api/auditoria/fluxo/{mercos_id}/separado")
