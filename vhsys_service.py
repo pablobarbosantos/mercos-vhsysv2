@@ -243,7 +243,7 @@ class VhsysService:
 
     def resolver_frete(self, nome: str) -> tuple:
         """
-        Retorna (frete_por_pedido, transportadora_pedido).
+        Retorna (frete_por_pedido, transportadora_pedido, id_transportadora).
 
         frete_por_pedido:
           0 = Remetente (FOB)
@@ -251,28 +251,32 @@ class VhsysService:
           2 = Terceiros
           9 = Sem Frete
 
-        transportadora_pedido: nome como texto livre para exibição no VHSYS.
+        transportadora_pedido: nome para exibição no VHSys.
+        id_transportadora: ID do cadastro no VHSys (0 se não encontrado).
         """
         if not nome:
-            return 9, ""
+            return 9, "", 0
 
         nome_upper = nome.upper().strip()
 
-        if nome_upper in self._MODALIDADE_FRETE:
-            codigo, nome_transp = self._MODALIDADE_FRETE[nome_upper]
-            logger.info(f"[FRETE] '{nome}' → modalidade={codigo} | transportadora='{nome_transp}'")
-            return codigo, nome_transp
-
+        # Busca primeiro no cache pelo nome — retorna o ID cadastrado
         for t in self.cache_transportadoras:
             desc     = str(t.get("desc_transportadora", "")).upper()
             fantasia = str(t.get("fantasia_transportadora") or "").upper()
-            if nome_upper in desc or desc in nome_upper or nome_upper in fantasia:
+            if nome_upper == desc or nome_upper == fantasia or nome_upper in desc or nome_upper in fantasia:
+                id_transp = int(t.get("id_transportadora", 0) or 0)
                 nome_real = t.get("desc_transportadora", nome)
-                logger.info(f"[FRETE] '{nome}' → transportadora cadastrada: '{nome_real}'")
-                return 0, nome_real
+                logger.info(f"[FRETE] '{nome}' → transportadora cadastrada: '{nome_real}' (id={id_transp})")
+                return 0, nome_real, id_transp
+
+        # Fallback para mapa de modalidades (FOB/CIF/etc.)
+        if nome_upper in self._MODALIDADE_FRETE:
+            codigo, nome_transp = self._MODALIDADE_FRETE[nome_upper]
+            logger.info(f"[FRETE] '{nome}' → modalidade={codigo} | nome='{nome_transp}'")
+            return codigo, nome_transp, 0
 
         logger.warning(f"[FRETE] '{nome}' não reconhecida — usando como texto livre com Remetente.")
-        return 0, nome
+        return 0, nome, 0
 
     # ──────────────────────────────────────────────────────────────────────────
     # CLIENTE
@@ -381,10 +385,8 @@ class VhsysService:
         id_condicao   = self.buscar_id_condicao(nome_condicao)
 
         # ── Frete ─────────────────────────────────────────────────────────────
-        # Regra fixa: Remetente (FOB) — modalidade 0
-        frete_codigo = 0
-        frete_nome   = "FOB"
-        logger.info("[FRETE] Fixo: Remetente/FOB (modalidade=0)")
+        nome_transportadora = dados.get("transportadora_nome", "FOB")
+        frete_codigo, frete_nome, frete_id = self.resolver_frete(nome_transportadora)
 
         # ── Itens ─────────────────────────────────────────────────────────────
         numero_pedido = dados.get("numero") or dados.get("id", "?")
@@ -440,6 +442,7 @@ class VhsysService:
             "obs_pedido":            f"Origem Mercos - Pedido #{numero_pedido} | Cond: {nome_condicao}",
             "frete_por_pedido":      frete_codigo,
             "transportadora_pedido": frete_nome,
+            "id_transportadora":     frete_id,
             "produtos":              itens_payload,
         }
 

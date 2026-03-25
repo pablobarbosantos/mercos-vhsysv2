@@ -41,6 +41,12 @@ _console_handler.setLevel(NIVEL_LOG)
 
 logging.basicConfig(level=logging.DEBUG, handlers=[_file_handler, _console_handler])
 
+# Silencia loggers externos verbosos
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("asyncio").setLevel(logging.WARNING)
+logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
+logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 logger.info(f"[Startup] Ambiente: {AMBIENTE.upper()} | Nível: {logging.getLevelName(NIVEL_LOG)}")
 

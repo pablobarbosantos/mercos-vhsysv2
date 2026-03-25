@@ -135,9 +135,13 @@ class MercosService:
             quantidade     = float(item.get("quantidade", 0))
             valor_unitario = float(item.get("preco_liquido", 0))
 
-            if not sku or quantidade <= 0 or valor_unitario <= 0:
+            if quantidade <= 0 or valor_unitario <= 0:
                 logger.warning(f"[MercosService] Item inválido: SKU={sku}, qtd={quantidade}, valor={valor_unitario}")
                 continue
+
+            if not sku:
+                nome = item.get("produto_nome", "").strip()
+                logger.warning(f"[MercosService] Item sem SKU: '{nome}' — será buscado por nome no VHSys.")
 
             itens.append({
                 "codigo_referencia": sku,
