@@ -39,26 +39,30 @@ COOLDOWN_ALERTA_HORAS = int(os.getenv("AUDIT_COOLDOWN_HORAS", 4))
 
 def verificar_sequencia() -> list[dict]:
     """
-    Detecta buracos entre o menor e o maior mercos_id já recebido.
-    Classifica cada buraco e evita alertas repetidos (cooldown).
+    Detecta buracos na sequência de NÚMEROS de pedido da empresa (campo 'numero'
+    em pedidos_fluxo, ex: 2876). Ignora mercos_id que é global entre todas as
+    empresas Mercos e gera falsos positivos.
     Retorna lista de buracos novos (não alertados recentemente).
     """
     with db.get_conn() as conn:
         rows = conn.execute(
-            "SELECT mercos_id FROM pedidos_processados ORDER BY mercos_id"
+            """SELECT CAST(numero AS INTEGER) as num
+               FROM pedidos_fluxo
+               WHERE numero IS NOT NULL AND numero != ''
+               ORDER BY CAST(numero AS INTEGER)"""
         ).fetchall()
 
     if len(rows) < 2:
         logger.debug("[Auditoria/Seq] Menos de 2 pedidos — verificação ignorada.")
         return []
 
-    ids_ordenados = sorted(r["mercos_id"] for r in rows)
+    nums_ordenados = sorted(r["num"] for r in rows if r["num"])
 
-    # Detecta buracos comparando IDs consecutivos (O(n) — evita iterar range enorme)
+    # Detecta buracos comparando números consecutivos (O(n))
     buracos_novos = []
-    for i in range(len(ids_ordenados) - 1):
-        atual = ids_ordenados[i]
-        proximo = ids_ordenados[i + 1]
+    for i in range(len(nums_ordenados) - 1):
+        atual = nums_ordenados[i]
+        proximo = nums_ordenados[i + 1]
         gap = proximo - atual - 1
         if gap <= 0:
             continue
@@ -66,13 +70,13 @@ def verificar_sequencia() -> list[dict]:
         for faltando in range(atual + 1, min(atual + 1 + gap, atual + 51)):
             if not _buraco_ja_alertado(faltando):
                 buracos_novos.append({
-                    "mercos_id":     faltando,
+                    "mercos_id":     faltando,  # armazena numero do pedido
                     "classificacao": "nao_recebido",
                     "descricao":     "Nunca chegou via webhook",
                 })
         if gap > 50:
             logger.warning(
-                f"[Auditoria/Seq] Gap de {gap} IDs entre {atual} e {proximo} "
+                f"[Auditoria/Seq] Gap de {gap} pedidos entre #{atual} e #{proximo} "
                 f"— reportando apenas os primeiros 50."
             )
 

@@ -126,15 +126,15 @@ class WhatsAppClient:
     def alertar_sequencia_quebrada(self, buracos: list[dict]):
         ids = [str(b["mercos_id"]) for b in buracos]
         titulo = f"⚠️ *{len(ids)} pedido(s) faltando na sequência!*"
-        lista = "\n".join(f"  • #{i}" for i in ids[:10])
+        lista = "\n".join(f"  • Pedido #{i}" for i in ids[:10])
         if len(ids) > 10:
             lista += f"\n  ... e mais {len(ids) - 10}"
         msg = (
             f"{titulo}\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"*IDs não recebidos:*\n"
+            f"*Números não recebidos:*\n"
             f"{lista}\n\n"
-            f"🔍 Pode ser: cancelamento, falha de rede ou erro de integração.\n\n"
+            f"🔍 Pode ser: pedido cancelado antes de confirmar ou falha de rede.\n\n"
             f"👉 http://localhost:8000/admin\n"
             f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )

@@ -199,6 +199,15 @@ app.include_router(admin_router)
 
 @app.on_event("startup")
 async def startup_event():
+    # Limpa falsos positivos de auditoria gerados com mercos_id global (bug antigo)
+    # IDs globais Mercos são muito maiores que números de pedido (~9 dígitos vs ~4)
+    with db.get_conn() as conn:
+        removidos = conn.execute(
+            "DELETE FROM auditoria_sequencia WHERE mercos_id > 9999999"
+        ).rowcount
+    if removidos:
+        logger.info(f"[Startup] {removidos} falso(s) positivo(s) de auditoria removidos (IDs globais Mercos).")
+
     recuperados = db.fila_recuperar_travados()
     if recuperados:
         logger.warning(
