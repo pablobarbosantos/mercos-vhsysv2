@@ -209,8 +209,10 @@ scheduler.add_job(
     CronTrigger(hour=9, minute=0, timezone="America/Sao_Paulo"),
     id="boletos_vencidos"
 )
-scheduler.add_job(_job_sync_expedicao, "interval", minutes=EXPEDICAO_POLL_MIN,
-                  id="job_sync_expedicao", max_instances=1)
+# job_sync_expedicao desativado — API VHSys não expõe módulo Expedição
+# Marcar separado/enviado manualmente via painel admin ou POST /admin/api/expedicao/verificar-agora
+# scheduler.add_job(_job_sync_expedicao, "interval", minutes=EXPEDICAO_POLL_MIN,
+#                   id="job_sync_expedicao", max_instances=1)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI
@@ -245,7 +247,6 @@ async def startup_event():
         f"Worker fila: a cada {FILA_WORKER_SEG}s | "
         f"Sequência: a cada {AUDIT_SEQ_MIN}min | "
         f"Fluxo: a cada {AUDIT_FLUXO_MIN}min | "
-        f"Expedição: a cada {EXPEDICAO_POLL_MIN}min | "
         f"Fechamento: {FECHAMENTO_HORA}h"
     )
 

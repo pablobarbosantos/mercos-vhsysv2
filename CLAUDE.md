@@ -167,16 +167,12 @@ Known issue fixed: `verificar_sequencia()` in `src/auditoria.py` previously iter
 ### Transportadora (pendente)
 Mapeamento em `resolver_frete()` em `vhsys_service.py` está com problemas. Revisar lógica de mapeamento nome → código VHSys e integração com cache de transportadoras. Não enviar campo transportadora até corrigido.
 
-### Módulo Expedição (implementado — pendente de validação em produção)
-Job `job_sync_expedicao` adicionado em `main.py` — roda a cada `EXPEDICAO_POLL_INTERVAL_MIN` minutos (padrão: 5min).
+### Módulo Expedição (desativado — API VHSys não expõe o módulo)
+Testado em 25/03/2026. A API VHSys não tem endpoint `/expedicoes` (retorna HTTP 200 com `code:404` no corpo) e o campo `situacao_pedido` do pedido não muda quando uma expedição é criada ou concluída.
 
-**Estratégia primária:** `GET /expedicoes` — correlaciona expedições com pedidos pelo campo `id_pedido`/`id_ped`. Mapeamento: Pendente → `separado`, Concluído → `enviado`.
+O código de suporte existe em `src/expedicao.py` e `vhsys_service.py` mas o job está comentado em `main.py`. Marcar `separado`/`enviado` manualmente via painel admin.
 
-**Fallback automático (se 404):** `GET /pedidos/{id}` individual. Mapeamento: `situacao_pedido = "Atendido"` → `enviado`.
-
-**Pendente de validação:** Confirmar o nome exato do campo de correlação expedição→pedido no payload real da API (provavelmente `id_pedido`). Ajustar em `sincronizar_expedicao()` em `vhsys_service.py` após confirmar nos logs de debug.
-
-**Trigger manual para testes:** `POST /admin/api/expedicao/verificar-agora`
+**Trigger manual disponível:** `POST /admin/api/expedicao/verificar-agora` (aciona fallback GET /pedidos/{id})
 
 ### Contas a Receber / Parcelas (desativado)
 `gerar_parcelas()` em `vhsys_service.py` existe mas **não é mais chamada** — o lançamento de boletos/parcelas é feito manualmente no VHSys. Não reativar sem validação.
