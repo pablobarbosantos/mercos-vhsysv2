@@ -16,7 +16,7 @@ if not defined NODE (
     echo [%DATE% %TIME%] ERRO: node nao encontrado no PATH >> "%LOG%"
 ) else (
     echo [%DATE% %TIME%] Node encontrado: %NODE% >> "%LOG%"
-    start "WhatsApp Server" /min cmd /c ""%NODE%" "%DIR%\whatsapp_server\server.js" >> "%DIR%\logs\node.log" 2>&1"
+    start "WhatsApp Server" /min /d "%DIR%\whatsapp_server" cmd /c ""%NODE%" server.js >> "%DIR%\logs\node.log" 2>&1"
 )
 
 :: Aguarda Node inicializar
