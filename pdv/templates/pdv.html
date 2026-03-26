@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDV — Vendas Balcão</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #1a1d23;
+    --surface: #22262f;
+    --border:  #2e3340;
+    --accent:  #2563eb;
+    --accent2: #1d4ed8;
+    --ok:      #16a34a;
+    --warn:    #d97706;
+    --erro:    #dc2626;
+    --text:    #e2e8f0;
+    --muted:   #94a3b8;
+    --input:   #0f1117;
+    --row-hover: #2a2f3c;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; overflow: hidden; }
+
+  /* ── Layout principal ──────────────────────────────────────────── */
+  #app { display: grid; grid-template-rows: 1fr 56px; height: 100vh; }
+
+  #main { display: grid; grid-template-columns: 420px 1fr; gap: 0; overflow: hidden; }
+
+  /* ── Painel esquerdo ────────────────────────────────────────────── */
+  #painel-esq {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  .campo-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: .5px; text-transform: uppercase; }
+
+  #busca-wrap { position: relative; }
+  #busca {
+    width: 100%; padding: 10px 12px;
+    background: var(--input); border: 1px solid var(--border);
+    color: var(--text); font-size: 16px; border-radius: 6px;
+    outline: none; transition: border-color .15s;
+  }
+  #busca:focus { border-color: var(--accent); }
+
+  #dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    background: var(--surface); border: 1px solid var(--accent);
+    border-top: none; border-radius: 0 0 6px 6px;
+    max-height: 260px; overflow-y: auto;
+  }
+  .dd-item {
+    padding: 10px 12px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .dd-item:hover, .dd-item.ativo { background: var(--row-hover); }
+  .dd-item .nome { font-weight: 500; }
+  .dd-item .cod  { font-size: 11px; color: var(--muted); }
+  .dd-item .preco { color: #34d399; font-weight: 600; white-space: nowrap; margin-left: 8px; }
+
+  .row-num { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  input[type=number], input[type=text] {
+    width: 100%; padding: 9px 10px;
+    background: var(--input); border: 1px solid var(--border);
+    color: var(--text); font-size: 14px; border-radius: 6px;
+    outline: none; transition: border-color .15s;
+  }
+  input[type=number]:focus, input[type=text]:focus { border-color: var(--accent); }
+
+  textarea {
+    width: 100%; padding: 9px 10px; resize: vertical;
+    background: var(--input); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; border-radius: 6px;
+    outline: none; min-height: 64px;
+  }
+
+  #btn-incluir {
+    width: 100%; padding: 12px;
+    background: var(--accent); color: #fff;
+    font-size: 15px; font-weight: 700; letter-spacing: .5px;
+    border: none; border-radius: 6px; cursor: pointer;
+    transition: background .15s;
+  }
+  #btn-incluir:hover { background: var(--accent2); }
+
+  /* formas de pagamento ativas */
+  #forma-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-forma {
+    flex: 1; min-width: 80px; padding: 8px 4px;
+    background: var(--border); border: 2px solid transparent;
+    color: var(--text); font-size: 13px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; transition: all .15s; text-align: center;
+  }
+  .btn-forma.ativo { background: #1e3a5f; border-color: var(--accent); color: #60a5fa; }
+  .btn-forma:hover:not(.ativo) { background: var(--row-hover); }
+
+  /* ── Painel direito ─────────────────────────────────────────────── */
+  #painel-dir {
+    display: flex; flex-direction: column;
+    background: var(--bg);
+  }
+
+  #lista-header {
+    padding: 12px 16px 8px;
+    font-size: 12px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: 1fr 80px 100px 90px 40px;
+    gap: 8px;
+  }
+
+  #lista-itens { flex: 1; overflow-y: auto; }
+
+  .item-row {
+    display: grid; grid-template-columns: 1fr 80px 100px 90px 40px;
+    gap: 8px; align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background .1s;
+  }
+  .item-row:hover { background: var(--row-hover); }
+  .item-row.selecionado { background: #1e3050; }
+
+  .item-nome { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item-qtd  { text-align: center; }
+  .item-unit { text-align: right; color: var(--muted); }
+  .item-total{ text-align: right; font-weight: 600; color: #34d399; }
+  .item-del  { text-align: center; }
+  .btn-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .btn-del:hover { color: var(--erro); background: #2d1a1a; }
+
+  /* editar qtd inline */
+  .item-qtd input {
+    width: 60px; text-align: center; padding: 4px;
+    font-size: 13px;
+  }
+
+  /* estado vazio */
+  #empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--muted); gap: 12px; padding: 40px;
+  }
+  #empty-state svg { opacity: .3; }
+  #empty-state p { font-size: 16px; }
+
+  /* totalizador */
+  #totalizador {
+    border-top: 2px solid var(--border);
+    padding: 12px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #total-display {
+    font-size: 28px; font-weight: 800; color: #34d399;
+    letter-spacing: -1px;
+  }
+  #sync-status { font-size: 12px; }
+  .sync-pendente { color: var(--warn); }
+  .sync-ok       { color: var(--ok); }
+  .sync-erro     { color: var(--erro); }
+
+  /* ── Barra inferior ─────────────────────────────────────────────── */
+  #barra-inf {
+    background: #0f1117;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px;
+  }
+  .btn-bar {
+    padding: 0 18px; height: 56px;
+    font-size: 13px; font-weight: 700; letter-spacing: .3px;
+    border: none; cursor: pointer; border-radius: 0;
+    white-space: nowrap; transition: opacity .15s;
+  }
+  .btn-bar:hover { opacity: .85; }
+  .btn-bar.cancelar { background: var(--erro); color: #fff; }
+  .btn-bar.aguardar { background: #2563eb; color: #fff; }
+  .btn-bar.pagar    { background: var(--ok); color: #fff; font-size: 15px; margin-left: auto; }
+  .btn-bar.precos   { background: #7c3aed; color: #fff; }
+  .btn-bar.sync     { background: #0369a1; color: #fff; }
+  .btn-bar.hist     { background: #374151; color: #fff; }
+
+  #info-produtos { color: var(--muted); font-size: 12px; padding: 0 8px; }
+
+  /* ── Modais ─────────────────────────────────────────────────────── */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.7); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .overlay.aberto { display: flex; }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px;
+    width: min(96vw, 640px); max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal.large { width: min(96vw, 900px); }
+  .modal h2 { margin-bottom: 16px; font-size: 18px; }
+
+  /* modal pagamento */
+  #mod-total-display { font-size: 36px; font-weight: 800; color: #34d399; margin-bottom: 20px; }
+
+  .pag-linha {
+    display: grid; grid-template-columns: 160px 1fr 36px;
+    gap: 8px; align-items: center; margin-bottom: 8px;
+  }
+  select {
+    padding: 8px 10px; background: var(--input);
+    border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; font-size: 13px;
+  }
+  #btn-add-pag {
+    background: none; border: 1px dashed var(--border);
+    color: var(--muted); padding: 8px; border-radius: 6px;
+    cursor: pointer; width: 100%; margin: 4px 0 12px;
+    font-size: 13px; transition: all .15s;
+  }
+  #btn-add-pag:hover { border-color: var(--accent); color: var(--accent); }
+
+  #troco-area { color: #60a5fa; font-size: 14px; margin-bottom: 12px; min-height: 20px; }
+  #resto-area  { color: var(--erro); font-size: 13px; min-height: 18px; }
+
+  .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .btn-modal { padding: 10px 22px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-cancel-modal { background: var(--border); color: var(--text); }
+  .btn-confirm-modal { background: var(--ok); color: #fff; }
+  .btn-confirm-modal:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* modal preços */
+  #tbl-precos { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #tbl-precos th { background: var(--border); padding: 8px 10px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+  #tbl-precos td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  #tbl-precos input { padding: 5px 8px; font-size: 13px; }
+  #filtro-preco { width: 100%; margin-bottom: 12px; }
+
+  /* modal histórico */
+  #tbl-hist { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #tbl-hist th { background: var(--border); padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+  #tbl-hist td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge.ok       { background: #14532d; color: #4ade80; }
+  .badge.pendente { background: #451a03; color: #fbbf24; }
+  .badge.erro     { background: #450a0a; color: #f87171; }
+
+  /* toast */
+  #toast {
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; border: 1px solid var(--border);
+    color: var(--text); padding: 10px 20px; border-radius: 8px;
+    font-size: 14px; z-index: 999; opacity: 0; transition: opacity .3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+  #toast.ok   { border-color: var(--ok);   color: #4ade80; }
+  #toast.erro { border-color: var(--erro); color: #f87171; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ── MAIN ───────────────────────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- Painel esquerdo -->
+    <div id="painel-esq">
+
+      <div>
+        <div class="campo-label">Cód. / Produto (Ctrl+P)</div>
+        <div id="busca-wrap">
+          <input id="busca" type="text" placeholder="Digite o produto ou use  2x milho…" autocomplete="off" />
+          <div id="dropdown"></div>
+        </div>
+      </div>
+
+      <div class="row-num">
+        <div>
+          <div class="campo-label">Quantidade</div>
+          <input id="inp-qty" type="number" value="1" min="0.001" step="any" />
+        </div>
+        <div>
+          <div class="campo-label">Valor Unitário</div>
+          <input id="inp-unit" type="number" value="0.00" step="0.01" />
+        </div>
+        <div>
+          <div class="campo-label">Valor Total</div>
+          <input id="inp-total" type="number" value="0.00" step="0.01" readonly />
+        </div>
+      </div>
+
+      <button id="btn-incluir">INCLUIR (ENTER)</button>
+
+      <div>
+        <div class="campo-label">Forma de Pagamento Ativa</div>
+        <div id="forma-wrap">
+          <button class="btn-forma ativo" data-forma="dinheiro">💵 Dinheiro</button>
+          <button class="btn-forma" data-forma="pix">📱 Pix</button>
+          <button class="btn-forma" data-forma="credito">💳 Crédito</button>
+          <button class="btn-forma" data-forma="debito">💳 Débito</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="campo-label">Observações (Ctrl+O)</div>
+        <textarea id="obs" rows="3"></textarea>
+      </div>
+
+    </div>
+
+    <!-- Painel direito -->
+    <div id="painel-dir">
+
+      <div id="lista-header">
+        <span>Produto</span>
+        <span style="text-align:center">Qtd</span>
+        <span style="text-align:right">Unit.</span>
+        <span style="text-align:right">Total</span>
+        <span></span>
+      </div>
+
+      <div id="lista-itens">
+        <div id="empty-state">
+          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+          </svg>
+          <p>Seu caixa está <strong style="color:#34d399">livre</strong> no momento!</p>
+          <p style="font-size:12px">Busque um produto acima para começar</p>
+        </div>
+      </div>
+
+      <div id="totalizador">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:2px">TOTAL DA VENDA</div>
+          <div id="total-display">R$ 0,00</div>
+        </div>
+        <div id="sync-status"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── BARRA INFERIOR ─────────────────────────────────────────── -->
+  <div id="barra-inf">
+    <button class="btn-bar sync"    onclick="sincronizarProdutos()">🔄 SYNC (Ctrl+S)</button>
+    <button class="btn-bar precos"  onclick="abrirPrecos()">💲 PREÇOS (F5)</button>
+    <button class="btn-bar hist"    onclick="abrirHistorico()">📋 HISTÓRICO</button>
+    <div id="info-produtos">— produtos —</div>
+    <button class="btn-bar cancelar" onclick="cancelarVenda()">✕ CANCELAR (F9)</button>
+    <button class="btn-bar aguardar" onclick="aguardarVenda()">⏸ AGUARDAR (F7)</button>
+    <button class="btn-bar pagar"   onclick="abrirPagamento()">💰 PAGAMENTO (F6)</button>
+  </div>
+</div>
+
+<!-- ── MODAL PAGAMENTO ──────────────────────────────────────────── -->
+<div id="overlay-pag" class="overlay">
+  <div class="modal">
+    <h2>Finalizar Venda</h2>
+    <div id="mod-total-display">R$ 0,00</div>
+
+    <div id="pag-linhas"></div>
+    <button id="btn-add-pag" onclick="addLinhaPag()">+ Adicionar outra forma</button>
+
+    <div id="troco-area"></div>
+    <div id="resto-area"></div>
+
+    <div class="modal-btns">
+      <button class="btn-modal btn-cancel-modal" onclick="fecharModal('overlay-pag')">Cancelar</button>
+      <button class="btn-modal btn-confirm-modal" id="btn-finalizar" onclick="finalizarVenda()">✔ Finalizar Venda</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL PREÇOS ─────────────────────────────────────────────── -->
+<div id="overlay-precos" class="overlay">
+  <div class="modal large">
+    <h2>Gerenciar Preços por Forma de Pagamento</h2>
+    <input id="filtro-preco" type="text" placeholder="Filtrar produto…" oninput="filtrarTabelaPrecos(this.value)" />
+    <table id="tbl-precos">
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Base (VHSys)</th>
+          <th>Dinheiro</th>
+          <th>Pix</th>
+          <th>Crédito</th>
+          <th>Débito</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-precos"></tbody>
+    </table>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn-modal btn-cancel-modal" onclick="fecharModal('overlay-precos')">Fechar</button>
+      <button class="btn-modal btn-confirm-modal" onclick="salvarTodosPrecos()">💾 Salvar Tudo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL HISTÓRICO ──────────────────────────────────────────── -->
+<div id="overlay-hist" class="overlay">
+  <div class="modal large">
+    <h2>Últimas Vendas</h2>
+    <table id="tbl-hist">
+      <thead>
+        <tr>
+          <th>#</th><th>Data</th><th>Total</th><th>Pagamentos</th><th>VHSys</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-hist"></tbody>
+    </table>
+    <div class="modal-btns">
+      <button class="btn-modal btn-cancel-modal" onclick="fecharModal('overlay-hist')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// ESTADO
+// ════════════════════════════════════════════════════════════════
+let carrinho       = [];      // [{produto_id, nome, quantidade, preco_unitario}]
+let formaSelecionada = 'dinheiro';
+let produtoAtivo   = null;    // produto do dropdown selecionado
+let ddIdx          = -1;      // índice selecionado no dropdown
+let debounceTimer  = null;
+let produtosCache  = [];      // lista completa carregada na memória
+let precosPendentes = {};     // {produto_id: {dinheiro, pix, credito, debito}}
+
+const FORMA_CAMPO = {dinheiro:'preco_dinheiro', pix:'preco_pix', credito:'preco_credito', debito:'preco_debito'};
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  await carregarProdutosCache();
+  document.getElementById('busca').focus();
+  atualizarInfoProdutos();
+});
+
+async function carregarProdutosCache() {
+  try {
+    const r = await fetch('/pdv/api/produtos/todos');
+    const d = await r.json();
+    produtosCache = d.produtos || [];
+  } catch {}
+}
+
+function atualizarInfoProdutos() {
+  document.getElementById('info-produtos').textContent =
+    produtosCache.length > 0 ? `${produtosCache.length} produtos` : '0 produtos — sincronize';
+}
+
+// ════════════════════════════════════════════════════════════════
+// BUSCA E DROPDOWN
+// ════════════════════════════════════════════════════════════════
+const buscaEl  = document.getElementById('busca');
+const dropEl   = document.getElementById('dropdown');
+const inpQty   = document.getElementById('inp-qty');
+const inpUnit  = document.getElementById('inp-unit');
+const inpTotal = document.getElementById('inp-total');
+
+buscaEl.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(handleBusca, 280);
+});
+
+buscaEl.addEventListener('keydown', (e) => {
+  const items = dropEl.querySelectorAll('.dd-item');
+  if (e.key === 'ArrowDown') { e.preventDefault(); ddIdx = Math.min(ddIdx+1, items.length-1); marcaDdItem(items); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); ddIdx = Math.max(ddIdx-1, 0); marcaDdItem(items); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    // Força busca imediata se debounce ainda pendente
+    clearTimeout(debounceTimer);
+    handleBusca();
+    // Pequeno delay para garantir que handleBusca terminou (é síncrono)
+    setTimeout(() => handleEnter(dropEl.querySelectorAll('.dd-item')), 10);
+  }
+  else if (e.key === 'Escape') { fecharDropdown(); }
+});
+
+function marcaDdItem(items) {
+  items.forEach((el, i) => el.classList.toggle('ativo', i === ddIdx));
+  if (items[ddIdx]) items[ddIdx].scrollIntoView({block:'nearest'});
+}
+
+function handleBusca() {
+  const raw = buscaEl.value.trim();
+  if (!raw) { fecharDropdown(); limparSelecaoProduto(); return; }
+
+  const {qty, termo} = parseBusca(raw);
+  if (qty !== null) inpQty.value = qty;
+
+  const resultados = buscarLocal(termo);
+
+  if (resultados.length === 0) {
+    dropEl.innerHTML = `<div class="dd-item" style="color:var(--warn)">
+      Produto não encontrado — <strong>Enter</strong> para adicionar como rascunho
+    </div>`;
+    produtoAtivo = null;
+    return;
+  }
+  if (resultados.length === 1) {
+    selecionarProduto(resultados[0]);
+    fecharDropdown();
+    return;
+  }
+
+  ddIdx = 0;
+  dropEl.innerHTML = resultados.slice(0, 15).map((p, i) => `
+    <div class="dd-item ${i===0?'ativo':''}" data-idx="${i}" onclick="selecionarProduto(produtosCache.find(x=>x.id===${p.id})); fecharDropdown()">
+      <span><span class="nome">${p.nome}</span><br><span class="cod">${p.codigo||''}</span></span>
+      <span class="preco">R$ ${fmt(precoAtual(p))}</span>
+    </div>`).join('');
+}
+
+function parseBusca(raw) {
+  const m = raw.match(/^(\d+(?:[.,]\d+)?)\s*[x*×]\s*(.+)/i);
+  if (m) return {qty: parseFloat(m[1].replace(',','.')), termo: m[2].trim()};
+  return {qty: null, termo: raw};
+}
+
+function buscarLocal(termo) {
+  const t = termo.toLowerCase();
+  return produtosCache.filter(p =>
+    p.nome.toLowerCase().includes(t) ||
+    (p.codigo && p.codigo === termo) ||
+    (p.codigo_barras && p.codigo_barras === termo)
+  );
+}
+
+function selecionarProduto(p) {
+  if (!p) return;
+  produtoAtivo = p;
+  const preco = precoAtual(p);
+  inpUnit.value  = preco.toFixed(2);
+  atualizarTotal();
+  // não limpa o campo busca para o usuário ver o que selecionou
+}
+
+function limparSelecaoProduto() {
+  produtoAtivo = null;
+  inpUnit.value  = '0.00';
+  inpTotal.value = '0.00';
+}
+
+function fecharDropdown() {
+  dropEl.innerHTML = '';
+  ddIdx = -1;
+}
+
+function handleEnter(items) {
+  if (items.length > 0 && ddIdx >= 0) {
+    // seleção pelo teclado no dropdown
+    const p = produtosCache.find(x => x.id === parseInt(items[ddIdx]?.dataset?.idx ?? -1));
+    // Reparse via click simulado
+    items[ddIdx]?.click();
+    return;
+  }
+  // se produto ativo, incluir no carrinho
+  if (produtoAtivo) {
+    incluirNoCarrinho();
+    return;
+  }
+  // produto não encontrado — rascunho
+  const {termo} = parseBusca(buscaEl.value.trim());
+  if (termo) adicionarRascunho(termo);
+}
+
+// ════════════════════════════════════════════════════════════════
+// PREÇOS POR FORMA
+// ════════════════════════════════════════════════════════════════
+function precoAtual(p) {
+  // prioriza preco_pendente (editado mas não salvo ainda)
+  const pend = precosPendentes[p.id];
+  if (pend && pend[formaSelecionada] != null) return pend[formaSelecionada];
+  const campo = FORMA_CAMPO[formaSelecionada];
+  const val = p[campo];
+  return (val && val > 0) ? val : p.preco_base;
+}
+
+document.querySelectorAll('.btn-forma').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.btn-forma').forEach(b => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    formaSelecionada = btn.dataset.forma;
+    if (produtoAtivo) {
+      inpUnit.value = precoAtual(produtoAtivo).toFixed(2);
+      atualizarTotal();
+    }
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// CARRINHO
+// ════════════════════════════════════════════════════════════════
+inpQty.addEventListener('input', atualizarTotal);
+inpUnit.addEventListener('input', atualizarTotal);
+
+function atualizarTotal() {
+  const q = parseFloat(inpQty.value) || 0;
+  const u = parseFloat(inpUnit.value) || 0;
+  inpTotal.value = (q * u).toFixed(2);
+}
+
+document.getElementById('btn-incluir').addEventListener('click', incluirNoCarrinho);
+
+function incluirNoCarrinho() {
+  if (!produtoAtivo) { toast('Selecione um produto antes de incluir', 'erro'); return; }
+  const qty   = parseFloat(inpQty.value) || 1;
+  const unit  = parseFloat(inpUnit.value) || 0;
+  const obs      = document.getElementById('obs').value.trim();
+  const nomeProd = produtoAtivo.nome;
+
+  // agrupa se mesmo produto já no carrinho
+  const existing = carrinho.find(i => i.produto_id === produtoAtivo.id);
+  if (existing) {
+    existing.quantidade += qty;
+  } else {
+    carrinho.push({
+      produto_id:    produtoAtivo.id,
+      nome:          nomeProd + (obs ? ` (${obs})` : ''),
+      quantidade:    qty,
+      preco_unitario: unit,
+    });
+  }
+
+  renderCarrinho();
+  // reset
+  buscaEl.value  = '';
+  inpQty.value   = '1';
+  inpUnit.value  = '0.00';
+  inpTotal.value = '0.00';
+  produtoAtivo   = null;
+  fecharDropdown();
+  document.getElementById('obs').value = '';
+  buscaEl.focus();
+  toast(`${nomeProd} adicionado`, 'ok');
+}
+
+function adicionarRascunho(nome) {
+  if (!nome) return;
+  fetch('/pdv/api/pendentes', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome})
+  });
+  // Adiciona ao carrinho sem preço definido
+  carrinho.push({ produto_id: null, nome: `[RASCUNHO] ${nome}`, quantidade: 1, preco_unitario: 0 });
+  renderCarrinho();
+  buscaEl.value = ''; fecharDropdown(); buscaEl.focus();
+  toast(`"${nome}" adicionado como rascunho — preencha o preço`, 'warn');
+}
+
+function removerItem(idx) {
+  carrinho.splice(idx, 1);
+  renderCarrinho();
+}
+
+function renderCarrinho() {
+  const el = document.getElementById('lista-itens');
+  if (carrinho.length === 0) {
+    el.innerHTML = `<div id="empty-state">
+      <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+      </svg>
+      <p>Seu caixa está <strong style="color:#34d399">livre</strong> no momento!</p>
+    </div>`;
+    document.getElementById('total-display').textContent = 'R$ 0,00';
+    return;
+  }
+
+  let totalVenda = 0;
+  el.innerHTML = carrinho.map((item, i) => {
+    const subtotal = item.quantidade * item.preco_unitario;
+    totalVenda += subtotal;
+    return `<div class="item-row" data-idx="${i}">
+      <span class="item-nome" title="${item.nome}">${item.nome}</span>
+      <span class="item-qtd">
+        <input type="number" value="${item.quantidade}" min="0.001" step="any"
+          onchange="atualizarQtdItem(${i}, this.value)" style="width:60px;text-align:center;padding:4px;font-size:13px;background:var(--input);border:1px solid var(--border);color:var(--text);border-radius:4px">
+      </span>
+      <span class="item-unit">R$ ${fmt(item.preco_unitario)}</span>
+      <span class="item-total">R$ ${fmt(subtotal)}</span>
+      <span class="item-del"><button class="btn-del" onclick="removerItem(${i})">✕</button></span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('total-display').textContent = `R$ ${fmt(totalVenda)}`;
+}
+
+function atualizarQtdItem(idx, val) {
+  const q = parseFloat(val);
+  if (q <= 0) { removerItem(idx); return; }
+  carrinho[idx].quantidade = q;
+  renderCarrinho();
+}
+
+function totalCarrinho() {
+  return carrinho.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
+}
+
+// ════════════════════════════════════════════════════════════════
+// MODAL PAGAMENTO
+// ════════════════════════════════════════════════════════════════
+let linhasPag = [];
+
+function abrirPagamento() {
+  if (carrinho.length === 0) { toast('Carrinho vazio', 'erro'); return; }
+  const total = totalCarrinho();
+  document.getElementById('mod-total-display').textContent = `R$ ${fmt(total)}`;
+  linhasPag = [{ tipo: formaSelecionada, valor: total }];
+  renderLinhasPag();
+  document.getElementById('overlay-pag').classList.add('aberto');
+}
+
+function renderLinhasPag() {
+  const wrap = document.getElementById('pag-linhas');
+  wrap.innerHTML = linhasPag.map((l, i) => `
+    <div class="pag-linha">
+      <select onchange="linhasPag[${i}].tipo=this.value; calcTroco()">
+        ${['dinheiro','pix','credito','debito'].map(f =>
+          `<option value="${f}" ${f===l.tipo?'selected':''}>${f.charAt(0).toUpperCase()+f.slice(1)}</option>`
+        ).join('')}
+      </select>
+      <input type="number" value="${l.valor.toFixed(2)}" step="0.01"
+        oninput="linhasPag[${i}].valor=parseFloat(this.value)||0; calcTroco()" />
+      <button onclick="removerLinhaPag(${i})" style="background:none;border:none;color:var(--erro);font-size:18px;cursor:pointer">✕</button>
+    </div>`).join('');
+  calcTroco();
+}
+
+function addLinhaPag() {
+  linhasPag.push({ tipo: 'dinheiro', valor: 0 });
+  renderLinhasPag();
+}
+
+function removerLinhaPag(i) {
+  if (linhasPag.length <= 1) return;
+  linhasPag.splice(i, 1);
+  renderLinhasPag();
+}
+
+function calcTroco() {
+  const total = totalCarrinho();
+  const pago  = linhasPag.reduce((s, l) => s + (l.valor || 0), 0);
+  const btn   = document.getElementById('btn-finalizar');
+  const troco = pago - total;
+  const temDinheiro = linhasPag.some(l => l.tipo === 'dinheiro');
+
+  if (troco >= -0.005) {
+    document.getElementById('resto-area').textContent = '';
+    document.getElementById('troco-area').textContent =
+      (temDinheiro && troco > 0.005) ? `Troco: R$ ${fmt(troco)}` : '';
+    btn.disabled = false;
+  } else {
+    document.getElementById('troco-area').textContent = '';
+    document.getElementById('resto-area').textContent = `Faltam R$ ${fmt(Math.abs(troco))}`;
+    btn.disabled = true;
+  }
+}
+
+async function finalizarVenda() {
+  const btn = document.getElementById('btn-finalizar');
+  btn.disabled = true;
+  btn.textContent = 'Processando…';
+
+  const total = totalCarrinho();
+  try {
+    const r = await fetch('/pdv/api/vendas', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        itens: carrinho,
+        pagamentos: linhasPag,
+        desconto: 0,
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erro');
+
+    fecharModal('overlay-pag');
+    carrinho = [];
+    renderCarrinho();
+    toast(`Venda #${d.id} finalizada — R$ ${fmt(d.total)}`, 'ok');
+    document.getElementById('sync-status').innerHTML =
+      `<span class="badge pendente">Sync VHSys…</span>`;
+  } catch(e) {
+    toast('Erro ao finalizar: ' + e.message, 'erro');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✔ Finalizar Venda';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// MODAL PREÇOS
+// ════════════════════════════════════════════════════════════════
+function abrirPrecos() {
+  const tbody = document.getElementById('tbody-precos');
+  tbody.innerHTML = produtosCache.map(p => {
+    const pend = precosPendentes[p.id] || {};
+    const d = pend.dinheiro ?? p.preco_dinheiro ?? p.preco_base;
+    const pi= pend.pix      ?? p.preco_pix      ?? p.preco_base;
+    const cr= pend.credito  ?? p.preco_credito  ?? p.preco_base;
+    const db= pend.debito   ?? p.preco_debito   ?? p.preco_base;
+    return `<tr data-nome="${p.nome.toLowerCase()}" data-id="${p.id}">
+      <td>${p.nome}</td>
+      <td style="color:var(--muted)">R$ ${fmt(p.preco_base)}</td>
+      <td><input type="number" step="0.01" value="${d.toFixed(2)}" data-campo="dinheiro" /></td>
+      <td><input type="number" step="0.01" value="${pi.toFixed(2)}" data-campo="pix" /></td>
+      <td><input type="number" step="0.01" value="${cr.toFixed(2)}" data-campo="credito" /></td>
+      <td><input type="number" step="0.01" value="${db.toFixed(2)}" data-campo="debito" /></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('filtro-preco').value = '';
+  document.getElementById('overlay-precos').classList.add('aberto');
+}
+
+function filtrarTabelaPrecos(q) {
+  document.querySelectorAll('#tbody-precos tr').forEach(tr => {
+    tr.style.display = tr.dataset.nome.includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+async function salvarTodosPrecos() {
+  const rows = document.querySelectorAll('#tbody-precos tr');
+  const promises = [];
+  rows.forEach(tr => {
+    const id = parseInt(tr.dataset.id);
+    const vals = {};
+    tr.querySelectorAll('input[data-campo]').forEach(inp => {
+      vals[inp.dataset.campo] = parseFloat(inp.value) || 0;
+    });
+    precosPendentes[id] = vals;
+    promises.push(
+      fetch(`/pdv/api/produtos/${id}/precos`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(vals)
+      })
+    );
+    // Atualiza cache local
+    const p = produtosCache.find(x => x.id === id);
+    if (p) Object.assign(p, {
+      preco_dinheiro: vals.dinheiro, preco_pix: vals.pix,
+      preco_credito: vals.credito, preco_debito: vals.debito
+    });
+  });
+  await Promise.all(promises);
+  fecharModal('overlay-precos');
+  toast('Preços salvos com sucesso!', 'ok');
+}
+
+// ════════════════════════════════════════════════════════════════
+// MODAL HISTÓRICO
+// ════════════════════════════════════════════════════════════════
+async function abrirHistorico() {
+  const r = await fetch('/pdv/api/vendas');
+  const d = await r.json();
+  const tbody = document.getElementById('tbody-hist');
+  tbody.innerHTML = (d.vendas || []).map(v => `
+    <tr>
+      <td>#${v.id}</td>
+      <td>${v.data}</td>
+      <td style="color:#34d399;font-weight:600">R$ ${fmt(v.total)}</td>
+      <td style="font-size:12px;color:var(--muted)">${formataPagamentos(v.pagamentos)}</td>
+      <td><span class="badge ${v.vhsys_sync}">${v.vhsys_sync}</span></td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Nenhuma venda</td></tr>';
+  document.getElementById('overlay-hist').classList.add('aberto');
+}
+
+function formataPagamentos(str) {
+  if (!str) return '—';
+  return str.split('|').map(p => {
+    const [tipo, val] = p.split(':');
+    return `${tipo}: R$ ${fmt(parseFloat(val)||0)}`;
+  }).join(' + ');
+}
+
+// ════════════════════════════════════════════════════════════════
+// SYNC PRODUTOS
+// ════════════════════════════════════════════════════════════════
+async function sincronizarProdutos() {
+  toast('Sincronizando produtos do VHSys…');
+  try {
+    const r = await fetch('/pdv/api/produtos/sync', {method:'POST'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail);
+    await carregarProdutosCache();
+    atualizarInfoProdutos();
+    toast(`${d.importados} produtos sincronizados!`, 'ok');
+  } catch(e) {
+    toast('Erro no sync: ' + e.message, 'erro');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// AÇÕES GERAIS
+// ════════════════════════════════════════════════════════════════
+function cancelarVenda() {
+  if (carrinho.length === 0) return;
+  if (!confirm('Cancelar a venda atual?')) return;
+  carrinho = [];
+  renderCarrinho();
+  buscaEl.focus();
+}
+
+function aguardarVenda() {
+  toast('Venda colocada em espera (F7)', 'ok');
+  // TODO: implementar múltiplas vendas em espera
+}
+
+// ════════════════════════════════════════════════════════════════
+// UTILITÁRIOS
+// ════════════════════════════════════════════════════════════════
+function fmt(n) {
+  return (parseFloat(n)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function fecharModal(id) {
+  document.getElementById(id).classList.remove('aberto');
+  buscaEl.focus();
+}
+
+let toastTimer;
+function toast(msg, tipo='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + tipo;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// ════════════════════════════════════════════════════════════════
+// ATALHOS DE TECLADO
+// ════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  // Não interceptar quando estiver em input/textarea não é a busca
+  const tag = document.activeElement.tagName;
+  const inModal = document.querySelector('.overlay.aberto');
+
+  if (e.key === 'F6') { e.preventDefault(); abrirPagamento(); }
+  else if (e.key === 'F9') { e.preventDefault(); cancelarVenda(); }
+  else if (e.key === 'F7') { e.preventDefault(); aguardarVenda(); }
+  else if (e.key === 'F5') { e.preventDefault(); abrirPrecos(); }
+  else if (e.ctrlKey && e.key === 'p') { e.preventDefault(); buscaEl.focus(); buscaEl.select(); }
+  else if (e.ctrlKey && e.key === 's') { e.preventDefault(); sincronizarProdutos(); }
+  else if (e.ctrlKey && e.key === 'o') { e.preventDefault(); document.getElementById('obs').focus(); }
+  else if (e.key === 'Delete' && !inModal && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+    // Remove último item
+    if (carrinho.length > 0) { carrinho.pop(); renderCarrinho(); }
+  }
+  else if (e.key === 'Escape' && inModal) {
+    inModal.classList.remove('aberto');
+    buscaEl.focus();
+  }
+});
+
+// Clique fora fecha dropdown
+document.addEventListener('click', e => {
+  if (!document.getElementById('busca-wrap').contains(e.target)) fecharDropdown();
+});
+</script>
+</body>
+</html>
