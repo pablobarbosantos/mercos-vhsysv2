@@ -119,8 +119,7 @@ def sincronizar_produtos() -> dict:
             })
             total_importados += 1
 
-        paging = data.get("paging", {})
-        if offset + limit >= int(paging.get("total_count", 0)):
+        if len(items) < limit:
             break
         offset += limit
 

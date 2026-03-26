@@ -4,6 +4,7 @@ PDV — servidor FastAPI.
 
 import os
 import sys
+import time
 import threading
 import logging
 from fastapi import FastAPI, HTTPException
@@ -29,10 +30,29 @@ _PDV_HTML = os.path.join(_TPL_DIR, "pdv.html")
 
 app = FastAPI(title="PDV")
 
+def _sync_periodico(intervalo_seg: int = 1800):
+    """Thread daemon: sincroniza produtos na inicialização e a cada 30min."""
+    # Aguarda o servidor subir antes da 1ª sincronização
+    time.sleep(3)
+    while True:
+        try:
+            from pdv.vhsys import sincronizar_produtos
+            resultado = sincronizar_produtos()
+            if resultado["erro"]:
+                logger.warning(f"[PDV auto-sync] {resultado['erro']}")
+            else:
+                logger.info(f"[PDV auto-sync] {resultado['importados']} produtos sincronizados")
+        except Exception as e:
+            logger.error(f"[PDV auto-sync] erro: {e}", exc_info=True)
+        time.sleep(intervalo_seg)
+
+
 @app.on_event("startup")
 def _startup():
     init_pdv_tables()
     logger.info("[PDV] Tabelas inicializadas.")
+    threading.Thread(target=_sync_periodico, daemon=True, name="pdv-sync").start()
+    logger.info("[PDV] Auto-sync agendado (startup + 30min).")
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
