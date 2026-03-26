@@ -267,9 +267,31 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* botões de janela */
+  #win-ctrl {
+    position: fixed; top: 0; right: 0; z-index: 1000;
+    display: flex; gap: 1px;
+  }
+  .win-btn {
+    width: 42px; height: 32px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+    background: transparent; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s, color .15s;
+    -webkit-app-region: no-drag;
+  }
+  .win-btn:hover       { background: var(--border); color: var(--text); }
+  .win-btn.fechar:hover { background: var(--erro); color: #fff; }
 </style>
 </head>
 <body>
+
+<!-- botões minimizar / fechar (cantos superiores — só visível no pywebview) -->
+<div id="win-ctrl">
+  <button class="win-btn" title="Minimizar" onclick="minimizarJanela()">&#8722;</button>
+  <button class="win-btn fechar" title="Fechar" onclick="fecharPDV()">&#10005;</button>
+</div>
 
 <div id="app">
   <!-- ── MAIN ───────────────────────────────────────────────────────── -->
@@ -944,6 +966,18 @@ function toast(msg, tipo='') {
   el.className = 'show ' + tipo;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// ════════════════════════════════════════════════════════════════
+// CONTROLE DE JANELA (pywebview)
+// ════════════════════════════════════════════════════════════════
+async function minimizarJanela() {
+  try { await window.pywebview.api.minimize(); } catch(e) {}
+}
+
+async function fecharPDV() {
+  if (!confirm('Fechar o PDV?')) return;
+  try { await window.pywebview.api.close_window(); } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════════════════

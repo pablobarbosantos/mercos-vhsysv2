@@ -54,13 +54,27 @@ def main():
     # Abre janela nativa
     try:
         import webview
+
+        class _WindowApi:
+            def __init__(self):
+                self._win = None
+            def minimize(self):
+                if self._win:
+                    self._win.minimize()
+            def close_window(self):
+                if self._win:
+                    self._win.destroy()
+
+        _api = _WindowApi()
         window = webview.create_window(
             title="PDV — Vendas Balcão",
             url=f"http://127.0.0.1:{PORT}/pdv/",
             fullscreen=True,
             confirm_close=True,
             background_color="#1a1d23",
+            js_api=_api,
         )
+        _api._win = window
         webview.start(debug=False)
     except ImportError:
         # pywebview não instalado — fallback para browser
