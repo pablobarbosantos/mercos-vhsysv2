@@ -268,6 +268,29 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+  /* recibo */
+  #recibo-preview {
+    font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.55;
+    background: var(--input); padding: 14px 16px; border-radius: 6px;
+    max-height: 380px; overflow-y: auto; white-space: pre; color: var(--text);
+  }
+  #recibo-preview .sep  { color: var(--border); }
+  #recibo-preview .dest { color: #34d399; font-weight: 700; }
+  #recibo-preview .tit  { text-align: center; color: var(--text); font-weight: 700; }
+
+  /* área de impressão — oculta na tela, visível só no print */
+  #print-area { display: none; }
+
+  @media print {
+    body > *:not(#print-area) { display: none !important; }
+    #print-area {
+      display: block !important;
+      font-family: 'Courier New', monospace; font-size: 11pt;
+      line-height: 1.5; white-space: pre; color: #000; background: #fff;
+      padding: 0; margin: 0;
+    }
+  }
+
   /* botões de janela */
   #win-ctrl {
     position: fixed; top: 0; right: 0; z-index: 1000;
@@ -449,6 +472,21 @@
   </div>
 </div>
 
+<!-- ── MODAL RECIBO ──────────────────────────────────────────────── -->
+<div id="overlay-recibo" class="overlay">
+  <div class="modal" style="max-width:460px">
+    <h2 style="margin-bottom:14px">✔ Venda Finalizada</h2>
+    <div id="recibo-preview"></div>
+    <div class="modal-btns">
+      <button class="btn-modal btn-cancel-modal" onclick="fecharModal('overlay-recibo')">Fechar</button>
+      <button class="btn-modal btn-confirm-modal" onclick="imprimirRecibo()">🖨 Imprimir Recibo</button>
+    </div>
+  </div>
+</div>
+
+<!-- área usada apenas no window.print() -->
+<div id="print-area"></div>
+
 <div id="toast"></div>
 
 <script>
@@ -587,14 +625,14 @@ function fecharDropdown() {
 }
 
 function handleEnter(items) {
-  if (items.length > 0 && ddIdx >= 0) {
-    // seleção pelo teclado no dropdown
-    const p = produtosCache.find(x => x.id === parseInt(items[ddIdx]?.dataset?.idx ?? -1));
-    // Reparse via click simulado
-    items[ddIdx]?.click();
+  if (items.length > 0) {
+    // seleciona item destacado (ou primeiro) e já inclui no carrinho
+    const idx = ddIdx >= 0 ? ddIdx : 0;
+    items[idx]?.click(); // define produtoAtivo sincronamente
+    if (produtoAtivo) { incluirNoCarrinho(); }
     return;
   }
-  // se produto ativo, incluir no carrinho
+  // produto já selecionado (1 resultado direto) — inclui no carrinho
   if (produtoAtivo) {
     incluirNoCarrinho();
     return;
@@ -802,16 +840,15 @@ async function finalizarVenda() {
   btn.disabled = true;
   btn.textContent = 'Processando…';
 
-  const total = totalCarrinho();
+  // captura antes de limpar
+  const itensCopy = carrinho.map(i => ({...i}));
+  const pagsCopy  = linhasPag.map(p => ({...p}));
+
   try {
     const r = await fetch('/pdv/api/vendas', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        itens: carrinho,
-        pagamentos: linhasPag,
-        desconto: 0,
-      })
+      body: JSON.stringify({ itens: carrinho, pagamentos: linhasPag, desconto: 0 })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Erro');
@@ -819,15 +856,71 @@ async function finalizarVenda() {
     fecharModal('overlay-pag');
     carrinho = [];
     renderCarrinho();
-    toast(`Venda #${d.id} finalizada — R$ ${fmt(d.total)}`, 'ok');
     document.getElementById('sync-status').innerHTML =
       `<span class="badge pendente">Sync VHSys…</span>`;
+
+    mostrarRecibo({ id: d.id, total: d.total, itens: itensCopy, pagamentos: pagsCopy });
   } catch(e) {
     toast('Erro ao finalizar: ' + e.message, 'erro');
-  } finally {
     btn.disabled = false;
     btn.textContent = '✔ Finalizar Venda';
   }
+}
+
+// ════════════════════════════════════════════════════════════════
+// RECIBO
+// ════════════════════════════════════════════════════════════════
+function mostrarRecibo(venda) {
+  const pagoTotal = venda.pagamentos.reduce((s, p) => s + (p.valor || 0), 0);
+  const troco     = pagoTotal - venda.total;
+  const temDinheiro = venda.pagamentos.some(p => p.tipo === 'dinheiro');
+  const agora = new Date().toLocaleString('pt-BR');
+
+  const SEP  = '────────────────────────────────';
+  const SEP2 = '════════════════════════════════';
+
+  const linhas = [
+    SEP2,
+    '        PDV — Vendas Balcão',
+    SEP2,
+    `Data : ${agora}`,
+    `Venda: #${venda.id}`,
+    SEP,
+    ...venda.itens.map(i => {
+      const tot  = i.quantidade * i.preco_unitario;
+      const nome = i.nome.length > 20 ? i.nome.slice(0, 18) + '..' : i.nome.padEnd(20);
+      const qty  = String(i.quantidade % 1 === 0 ? i.quantidade : i.quantidade.toFixed(3)).padStart(5);
+      return `${qty} ${nome} R$${fmt(tot).padStart(8)}`;
+    }),
+    SEP,
+    `TOTAL:              R$${fmt(venda.total).padStart(8)}`,
+    SEP,
+    ...venda.pagamentos.map(p => {
+      const tipo = p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
+      return `  ${tipo.padEnd(14)}: R$${fmt(p.valor).padStart(8)}`;
+    }),
+    ...(temDinheiro && troco > 0.005 ? [`  Troco          : R$${fmt(troco).padStart(8)}`] : []),
+    SEP2,
+    '       Obrigado pela compra!',
+    SEP2,
+  ];
+
+  // Preview no modal (com marcação HTML)
+  document.getElementById('recibo-preview').innerHTML = linhas.map((l, i) => {
+    const cls = (l.startsWith('═') || l.startsWith('─')) ? 'sep'
+              : (i === 1 || i === linhas.length - 2)      ? 'tit'
+              : l.startsWith('TOTAL')                     ? 'dest' : '';
+    return `<span class="${cls}">${l}\n</span>`;
+  }).join('');
+
+  // Área de impressão
+  document.getElementById('print-area').textContent = linhas.join('\n');
+
+  document.getElementById('overlay-recibo').classList.add('aberto');
+}
+
+function imprimirRecibo() {
+  window.print();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -956,6 +1049,9 @@ function fmt(n) {
 
 function fecharModal(id) {
   document.getElementById(id).classList.remove('aberto');
+  // Reabilita botão finalizar caso venha do modal de pagamento ou recibo
+  const btn = document.getElementById('btn-finalizar');
+  if (btn) { btn.disabled = false; btn.textContent = '✔ Finalizar Venda'; }
   buscaEl.focus();
 }
 

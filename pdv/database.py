@@ -177,7 +177,7 @@ def contar_produtos() -> int:
         return conn.execute("SELECT COUNT(*) FROM pdv_produtos WHERE ativo=1").fetchone()[0]
 
 
-def listar_todos_produtos(limit: int = 500) -> list[dict]:
+def listar_todos_produtos(limit: int = 9999) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT id, vhsys_id, codigo, codigo_barras, nome, unidade,
