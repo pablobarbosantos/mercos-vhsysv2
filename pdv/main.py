@@ -51,6 +51,19 @@ def main():
         except Exception:
             time.sleep(0.3)
 
+    # Sync inicial de produtos antes de abrir a janela
+    _log = logging.getLogger(__name__)
+    _log.info("[PDV] Sincronizando produtos do VHSys...")
+    try:
+        from pdv.vhsys import sincronizar_produtos
+        r = sincronizar_produtos()
+        if r["erro"]:
+            _log.warning(f"[PDV] Sync falhou: {r['erro']} — abrindo com dados locais")
+        else:
+            _log.info(f"[PDV] {r['importados']} produtos prontos.")
+    except Exception as e:
+        _log.warning(f"[PDV] Sync erro: {e} — abrindo com dados locais")
+
     # Abre janela nativa
     try:
         import webview
