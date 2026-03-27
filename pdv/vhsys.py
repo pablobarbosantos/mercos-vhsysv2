@@ -249,6 +249,7 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         "id_vendedor":          int(VHSYS_OPERADOR_ID) if VHSYS_OPERADOR_ID else 0,
         "contas_pedido":        1,
         "estoque_pedido":       1,
+        "status_pedido":        "Atendido",
         "obs_pedido":           f"PDV Venda #{venda_id}",
     }
 
@@ -265,12 +266,6 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         resp_prod = _post(f"vendas-balcao/{id_frente}/produtos", produto)
         if not resp_prod or resp_prod.get("code") != 200:
             logger.warning(f"[PDV/VB venda {venda_id}] erro ao adicionar produto {produto.get('id_produto')}: {resp_prod}")
-
-    # Passo 3: finaliza a venda via PUT (dispara processamento de estoque e contas)
-    # POST /fechar retorna 404 — a API exige PUT com contas_pedido + estoque_pedido
-    resp_fechar = _put(f"vendas-balcao/{id_frente}", {"contas_pedido": 1, "estoque_pedido": 1})
-    if not resp_fechar or resp_fechar.get("code") != 200:
-        logger.warning(f"[PDV/VB venda {venda_id}] finalizar (PUT) retornou: {resp_fechar}")
 
     return id_frente, None
 
