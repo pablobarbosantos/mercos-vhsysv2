@@ -32,6 +32,7 @@ VHSYS_BASE_URL    = os.getenv("VHSYS_BASE_URL", "https://api.vhsys.com.br/v2")
 VHSYS_ACCESS      = os.getenv("VHSYS_ACCESS_TOKEN", "")
 VHSYS_SECRET      = os.getenv("VHSYS_SECRET_TOKEN", "")
 VHSYS_ID_BANCO    = os.getenv("VHSYS_ID_BANCO", "")
+VHSYS_OPERADOR_ID = os.getenv("VHSYS_OPERADOR_ID", "")
 # PDV_SYNC_RECEITA=false desativa o lançamento em contas-receber (faça manualmente no VHSys)
 PDV_SYNC_RECEITA  = os.getenv("PDV_SYNC_RECEITA", "true").lower() != "false"
 
@@ -68,7 +69,7 @@ def _post(endpoint: str, body: dict) -> dict | None:
     body_str = _json.dumps(body, ensure_ascii=False)
     for tentativa in range(3):
         try:
-            r = requests.post(url, headers=_HEADERS, json=body, timeout=30)
+            r = requests.post(url, headers=_HEADERS, data=body_str.encode('utf-8'), timeout=30)
             if r.status_code in _RETRY_STATUS:
                 import time; time.sleep(2 ** tentativa)
                 continue
@@ -149,8 +150,8 @@ def sincronizar_produtos() -> dict:
 _FORMA_PDV_MAP = {
     "dinheiro": "Dinheiro",
     "pix":      "Pix",
-    "credito":  "Cartao de Credito",
-    "debito":   "Cartao de Debito",
+    "credito":  "Cartão de Crédito",
+    "debito":   "Cartão de Débito",
 }
 
 
@@ -184,9 +185,10 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         qty   = float(item["quantidade"])
         price = float(item["preco_unitario"])
         produtos_body.append({
-            "id_produto":         prod["vhsys_id"],
-            "qtde_produto":       str(qty),
-            "valor_unit_produto": f"{price:.2f}",
+            "id_produto":          prod["vhsys_id"],
+            "desc_produto":        prod["nome"],
+            "qtde_produto":        str(qty),
+            "valor_unit_produto":  f"{price:.2f}",
             "valor_total_produto": f"{qty * price:.2f}",
         })
 
@@ -196,9 +198,10 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
     if not produtos_body:
         return None, "Nenhum item com vhsys_id — venda não enviada ao VHSys"
 
+    # Passo 1: cria cabeçalho da venda (sem produtos — VHSys exige endpoint separado)
     body = {
         "id_cliente":           0,
-        "valor_total_produtos": f"{total:.2f}",
+        "valor_total_produtos": f"{total + desconto:.2f}",
         "desconto_pedido":      f"{desconto:.2f}",
         "acrescimo_pedido":     "0.00",
         "valor_total_nota":     f"{total:.2f}",
@@ -207,8 +210,11 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         "valor_recebido":       f"{pago_total:.2f}",
         "troco_pedido":         f"{troco:.2f}",
         "condicao_pagamento":   1,
+        "id_banco":             int(VHSYS_ID_BANCO) if VHSYS_ID_BANCO else 0,
+        "id_vendedor":          int(VHSYS_OPERADOR_ID) if VHSYS_OPERADOR_ID else 0,
+        "contas_pedido":        1,
+        "estoque_pedido":       1,
         "obs_pedido":           f"PDV Venda #{venda_id}",
-        "produtos":             produtos_body,
     }
 
     resp = _post("vendas-balcao", body)
@@ -216,6 +222,20 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         return None, f"Erro ao criar venda balcao: {resp}"
 
     id_frente = (resp.get("data") or {}).get("id_frente")
+    if not id_frente:
+        return None, f"id_frente ausente na resposta: {resp}"
+
+    # Passo 2: adiciona produtos via endpoint dedicado
+    for produto in produtos_body:
+        resp_prod = _post(f"vendas-balcao/{id_frente}/produtos", produto)
+        if not resp_prod or resp_prod.get("code") != 200:
+            logger.warning(f"[PDV/VB venda {venda_id}] erro ao adicionar produto {produto.get('id_produto')}: {resp_prod}")
+
+    # Passo 3: fecha a venda (dispara processamento de estoque e contas)
+    resp_fechar = _post(f"vendas-balcao/{id_frente}/fechar", {})
+    if not resp_fechar or resp_fechar.get("code") != 200:
+        logger.warning(f"[PDV/VB venda {venda_id}] fechar retornou: {resp_fechar}")
+
     return id_frente, None
 
 
