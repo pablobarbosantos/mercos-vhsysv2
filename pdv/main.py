@@ -30,6 +30,63 @@ if _ROOT not in sys.path:
 
 PORT = 8080
 
+# Caminho da logo para splash (funciona em script e em .exe)
+def _logo_path():
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(__file__)
+    return os.path.join(base, "assets", "logo.png")
+
+
+# ── Splash screen (Tkinter) ───────────────────────────────────────────────────
+
+def _mostrar_splash():
+    """Exibe janela de splash centralizada enquanto o sistema carrega."""
+    try:
+        import tkinter as tk
+        from PIL import Image, ImageTk  # Pillow
+
+        root = tk.Tk()
+        root.overrideredirect(True)          # sem barra de título
+        root.configure(bg="#0d1117")
+        root.attributes("-topmost", True)
+
+        img_path = _logo_path()
+        if os.path.exists(img_path):
+            img = Image.open(img_path)
+            # Redimensiona mantendo proporção — máx 480x480
+            img.thumbnail((480, 480), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            lbl_img = tk.Label(root, image=photo, bg="#0d1117")
+            lbl_img.image = photo
+            lbl_img.pack(padx=40, pady=(40, 8))
+
+        lbl = tk.Label(root, text="Carregando PDV…",
+                       font=("Segoe UI", 13), fg="#8b9cb3", bg="#0d1117")
+        lbl.pack(pady=(0, 36))
+
+        # Centraliza na tela
+        root.update_idletasks()
+        w, h = root.winfo_width(), root.winfo_height()
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+
+        return root
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"[Splash] {e}")
+        return None
+
+
+def _fechar_splash(root):
+    try:
+        if root:
+            root.destroy()
+    except Exception:
+        pass
+
+
+# ── Servidor FastAPI ──────────────────────────────────────────────────────────
 
 def _start_server():
     import uvicorn
@@ -37,7 +94,14 @@ def _start_server():
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
 
 
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 def main():
+    _log = logging.getLogger(__name__)
+
+    # Mostra splash
+    splash = _mostrar_splash()
+
     # Inicia servidor em background
     t = threading.Thread(target=_start_server, daemon=True)
     t.start()
@@ -50,12 +114,15 @@ def main():
             break
         except Exception:
             time.sleep(0.3)
+        if splash:
+            splash.update()
 
-    # Sync inicial de produtos antes de abrir a janela
-    _log = logging.getLogger(__name__)
+    # Sync inicial de produtos
     _log.info("[PDV] Sincronizando produtos do VHSys...")
     try:
         from pdv.vhsys import sincronizar_produtos
+        if splash:
+            splash.update()
         r = sincronizar_produtos()
         if r["erro"]:
             _log.warning(f"[PDV] Sync falhou: {r['erro']} — abrindo com dados locais")
@@ -64,7 +131,9 @@ def main():
     except Exception as e:
         _log.warning(f"[PDV] Sync erro: {e} — abrindo com dados locais")
 
-    # Abre janela nativa
+    # Fecha splash e abre janela principal
+    _fechar_splash(splash)
+
     try:
         import webview
 
@@ -83,17 +152,16 @@ def main():
             title="PDV — Vendas Balcão",
             url=f"http://127.0.0.1:{PORT}/pdv/",
             fullscreen=True,
-            confirm_close=True,
+            confirm_close=False,
             background_color="#1a1d23",
             js_api=_api,
         )
         _api._win = window
         webview.start(debug=False)
     except ImportError:
-        # pywebview não instalado — fallback para browser
         import webbrowser
         webbrowser.open(f"http://127.0.0.1:{PORT}/pdv/")
-        logging.getLogger(__name__).warning(
+        _log.warning(
             "pywebview não encontrado. Abrindo no navegador padrão. "
             "Instale com: pip install pywebview"
         )
