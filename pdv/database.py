@@ -82,6 +82,13 @@ def init_pdv_tables():
                 status TEXT DEFAULT 'pendente_cadastro'
             );
         """)
+        # Migração: adiciona coluna sync_erro se ainda não existir
+        try:
+            conn.execute("ALTER TABLE pdv_vendas ADD COLUMN sync_erro TEXT")
+        except Exception:
+            pass  # coluna já existe
+
+
 
 
 # ── Produtos ─────────────────────────────────────────────────────────────────
@@ -177,6 +184,29 @@ def contar_produtos() -> int:
         return conn.execute("SELECT COUNT(*) FROM pdv_produtos WHERE ativo=1").fetchone()[0]
 
 
+def buscar_produtos_debug(q: str, limit: int = 50) -> list[dict]:
+    """Busca em TODOS os produtos (incluindo inativos) para diagnóstico."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, vhsys_id, codigo, codigo_barras, nome, unidade,
+                   preco_base, preco_dinheiro, preco_pix, preco_credito, preco_debito, ativo, atualizado_em
+            FROM pdv_produtos
+            WHERE LOWER(nome) LIKE LOWER(?) OR codigo = ? OR codigo_barras = ?
+            ORDER BY ativo DESC, nome
+            LIMIT ?
+            """,
+            (f"%{q}%", q, q, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def reativar_produto(produto_id: int):
+    """Força ativo=1 localmente (sem mexer no VHSys)."""
+    with get_conn() as conn:
+        conn.execute("UPDATE pdv_produtos SET ativo = 1 WHERE id = ?", (produto_id,))
+
+
 def listar_todos_produtos(limit: int = 9999) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
@@ -220,7 +250,7 @@ def criar_venda(total: float, desconto: float, itens: list[dict], pagamentos: li
 def listar_vendas(limit: int = 50) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT v.id, v.data, v.total, v.desconto, v.status, v.vhsys_sync, v.criado_em,
+            """SELECT v.id, v.data, v.total, v.desconto, v.status, v.vhsys_sync, v.sync_erro, v.criado_em,
                       GROUP_CONCAT(p.tipo || ':' || p.valor, '|') AS pagamentos
                FROM pdv_vendas v
                LEFT JOIN pdv_pagamentos p ON p.venda_id = v.id
@@ -232,11 +262,11 @@ def listar_vendas(limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def atualizar_sync_venda(venda_id: int, status: str):
+def atualizar_sync_venda(venda_id: int, status: str, erro: str | None = None):
     with get_conn() as conn:
         conn.execute(
-            "UPDATE pdv_vendas SET vhsys_sync = ? WHERE id = ?",
-            (status, venda_id),
+            "UPDATE pdv_vendas SET vhsys_sync = ?, sync_erro = ? WHERE id = ?",
+            (status, erro, venda_id),
         )
 
 

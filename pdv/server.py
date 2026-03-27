@@ -14,8 +14,9 @@ from pydantic import BaseModel
 from pdv.database import (
     init_pdv_tables,
     buscar_produtos, get_produto, salvar_precos, listar_todos_produtos, contar_produtos,
-    criar_venda, listar_vendas,
+    criar_venda, listar_vendas, atualizar_sync_venda,
     salvar_pendente, listar_pendentes,
+    buscar_produtos_debug, reativar_produto,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,23 @@ async def api_buscar_produtos(q: str = ""):
 @app.get("/pdv/api/produtos/todos")
 async def api_todos_produtos():
     return {"produtos": listar_todos_produtos()}
+
+
+@app.get("/pdv/api/debug/produto")
+async def api_debug_produto(q: str = ""):
+    """Diagnóstico: busca produto em TODOS (ativo=0 incluído). Útil para entender por que um produto não aparece."""
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Informe ?q=nome ou código")
+    resultados = buscar_produtos_debug(q.strip())
+    return {"total": len(resultados), "produtos": resultados}
+
+
+@app.post("/pdv/api/produtos/{produto_id}/reativar")
+async def api_reativar_produto(produto_id: int):
+    """Força ativo=1 localmente. Útil quando o produto está inativo no VHSys mas precisa ser vendido."""
+    p = get_produto(produto_id) or buscar_produtos_debug(str(produto_id))
+    reativar_produto(produto_id)
+    return {"ok": True, "mensagem": f"Produto {produto_id} reativado localmente."}
 
 
 @app.post("/pdv/api/produtos/sync")
@@ -169,6 +187,22 @@ async def api_criar_venda(payload: VendaPayload):
 @app.get("/pdv/api/vendas")
 async def api_listar_vendas():
     return {"vendas": listar_vendas()}
+
+
+@app.post("/pdv/api/vendas/{venda_id}/retentar-sync")
+async def api_retentar_sync(venda_id: int):
+    """Retenta sincronização de uma venda com erro."""
+    atualizar_sync_venda(venda_id, "pendente", None)
+
+    def _sync():
+        try:
+            from pdv.vhsys import sincronizar_venda
+            sincronizar_venda(venda_id)
+        except Exception as e:
+            logger.error(f"[PDV retentar sync venda {venda_id}] {e}", exc_info=True)
+
+    threading.Thread(target=_sync, daemon=True).start()
+    return {"ok": True, "mensagem": f"Retentando sync da venda {venda_id}…"}
 
 
 # ── Pendentes ─────────────────────────────────────────────────────────────────

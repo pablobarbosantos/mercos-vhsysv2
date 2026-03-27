@@ -60,7 +60,9 @@ def _get(endpoint: str, params: dict | None = None) -> dict | None:
 
 
 def _post(endpoint: str, body: dict) -> dict | None:
+    import json as _json
     url = f"{VHSYS_BASE_URL}/{endpoint.lstrip('/')}"
+    body_str = _json.dumps(body, ensure_ascii=False)
     for tentativa in range(3):
         try:
             r = requests.post(url, headers=_HEADERS, json=body, timeout=30)
@@ -68,13 +70,25 @@ def _post(endpoint: str, body: dict) -> dict | None:
                 import time; time.sleep(2 ** tentativa)
                 continue
             if r.status_code in (400, 404, 422):
-                logger.error(f"[VHSYS POST] {endpoint} erro {r.status_code}: {r.text[:200]}")
+                logger.error(
+                    f"[VHSYS POST] {endpoint} erro {r.status_code}\n"
+                    f"  BODY: {body_str}\n"
+                    f"  RESP: {r.text}"
+                )
                 return None
             r.raise_for_status()
-            return r.json()
+            resp = r.json()
+            if resp.get("code") != 200:
+                logger.warning(
+                    f"[VHSYS POST] {endpoint} code={resp.get('code')}\n"
+                    f"  BODY: {body_str}\n"
+                    f"  RESP: {r.text}"
+                )
+            return resp
         except Exception as e:
             logger.warning(f"[VHSYS POST] tentativa {tentativa+1} erro: {e}")
             import time; time.sleep(2 ** tentativa)
+    logger.error(f"[VHSYS POST] {endpoint} falhou após 3 tentativas\n  BODY: {body_str}")
     return None
 
 
@@ -217,8 +231,14 @@ def sincronizar_venda(venda_id: int):
     erro_receita  = registrar_receita(venda_id, sum(p["valor"] for p in pagamentos), pagamentos)
 
     if erros_estoque or erro_receita:
-        logger.warning(f"[PDV/Sync venda {venda_id}] erros: estoque={erros_estoque} receita={erro_receita}")
-        atualizar_sync_venda(venda_id, "erro")
+        partes = []
+        if erros_estoque:
+            partes.append("estoque: " + "; ".join(erros_estoque))
+        if erro_receita:
+            partes.append("receita: " + erro_receita)
+        detalhe = " | ".join(partes)
+        logger.warning(f"[PDV/Sync venda {venda_id}] {detalhe}")
+        atualizar_sync_venda(venda_id, "erro", detalhe)
     else:
         logger.info(f"[PDV/Sync venda {venda_id}] OK")
         atualizar_sync_venda(venda_id, "ok")

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PDV — Vendas Balcão</title>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -273,6 +274,7 @@
     font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.55;
     background: var(--input); padding: 14px 16px; border-radius: 6px;
     max-height: 380px; overflow-y: auto; white-space: pre; color: var(--text);
+    max-width: 320px; margin: 0 auto;
   }
   #recibo-preview .sep  { color: var(--border); }
   #recibo-preview .dest { color: #34d399; font-weight: 700; }
@@ -285,9 +287,10 @@
     body > *:not(#print-area) { display: none !important; }
     #print-area {
       display: block !important;
-      font-family: 'Courier New', monospace; font-size: 11pt;
+      font-family: 'Courier New', monospace; font-size: 9pt;
       line-height: 1.5; white-space: pre; color: #000; background: #fff;
-      padding: 0; margin: 0;
+      padding: 0; margin: 0 auto;
+      width: 80mm;
     }
   }
 
@@ -500,6 +503,7 @@ let ddIdx          = -1;      // índice selecionado no dropdown
 let debounceTimer  = null;
 let produtosCache  = [];      // lista completa carregada na memória
 let precosPendentes = {};     // {produto_id: {dinheiro, pix, credito, debito}}
+let fuse           = null;    // instância Fuse.js (busca fuzzy)
 
 const FORMA_CAMPO = {dinheiro:'preco_dinheiro', pix:'preco_pix', credito:'preco_credito', debito:'preco_debito'};
 
@@ -512,11 +516,22 @@ window.addEventListener('DOMContentLoaded', async () => {
   atualizarInfoProdutos();
 });
 
+function inicializarFuse() {
+  if (typeof Fuse === 'undefined' || produtosCache.length === 0) return;
+  fuse = new Fuse(produtosCache, {
+    keys: ['nome'],
+    threshold: 0.4,
+    minMatchCharLength: 2,
+    ignoreLocation: true,
+  });
+}
+
 async function carregarProdutosCache() {
   try {
     const r = await fetch('/pdv/api/produtos/todos');
     const d = await r.json();
     produtosCache = d.produtos || [];
+    inicializarFuse();
   } catch {}
 }
 
@@ -536,7 +551,7 @@ const inpTotal = document.getElementById('inp-total');
 
 buscaEl.addEventListener('input', () => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(handleBusca, 280);
+  debounceTimer = setTimeout(handleBusca, 120);
 });
 
 buscaEl.addEventListener('keydown', (e) => {
@@ -560,7 +575,7 @@ function marcaDdItem(items) {
 }
 
 function handleBusca() {
-  const raw = buscaEl.value.trim();
+  const raw = buscaEl.value.replace(/[\t\r\n]/g, '').trim();
   if (!raw) { fecharDropdown(); limparSelecaoProduto(); return; }
 
   const {qty, termo} = parseBusca(raw);
@@ -595,13 +610,23 @@ function parseBusca(raw) {
   return {qty: null, termo: raw};
 }
 
-function buscarLocal(termo) {
+function buscarLocal(termoRaw) {
+  // Limpa caracteres que alguns scanners enviam como sufixo
+  const termo = termoRaw.replace(/[\t\r\n]/g, '').trim();
+  if (!termo) return [];
+
+  // 1. Código de barras exato — scanners nunca usam fuzzy
+  const bc = produtosCache.filter(p => p.codigo_barras && p.codigo_barras === termo);
+  if (bc.length > 0) return bc;
+
+  // 2. Código interno exato
+  const cod = produtosCache.filter(p => p.codigo && p.codigo === termo);
+  if (cod.length > 0) return cod;
+
+  // 3. Busca fuzzy por nome (Fuse.js) ou fallback substring
+  if (fuse && termo.length >= 2) return fuse.search(termo).map(r => r.item);
   const t = termo.toLowerCase();
-  return produtosCache.filter(p =>
-    p.nome.toLowerCase().includes(t) ||
-    (p.codigo && p.codigo === termo) ||
-    (p.codigo_barras && p.codigo_barras === termo)
-  );
+  return produtosCache.filter(p => p.nome.toLowerCase().includes(t));
 }
 
 function selecionarProduto(p) {
