@@ -632,10 +632,10 @@ function buscarLocal(termoRaw) {
 function selecionarProduto(p) {
   if (!p) return;
   produtoAtivo = p;
+  buscaEl.value  = p.nome;
   const preco = precoAtual(p);
   inpUnit.value  = preco.toFixed(2);
   atualizarTotal();
-  // não limpa o campo busca para o usuário ver o que selecionou
 }
 
 function limparSelecaoProduto() {
