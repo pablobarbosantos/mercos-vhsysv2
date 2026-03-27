@@ -63,6 +63,39 @@ def _get(endpoint: str, params: dict | None = None) -> dict | None:
     return None
 
 
+def _put(endpoint: str, body: dict) -> dict | None:
+    import json as _json
+    url = f"{VHSYS_BASE_URL}/{endpoint.lstrip('/')}"
+    body_str = _json.dumps(body, ensure_ascii=False)
+    for tentativa in range(3):
+        try:
+            r = requests.put(url, headers=_HEADERS, data=body_str.encode('utf-8'), timeout=30)
+            if r.status_code in _RETRY_STATUS:
+                import time; time.sleep(2 ** tentativa)
+                continue
+            if r.status_code in _PERMANENT_FAIL:
+                logger.error(
+                    f"[VHSYS PUT] {endpoint} erro {r.status_code}\n"
+                    f"  BODY: {body_str}\n"
+                    f"  RESP: {r.text}"
+                )
+                return None
+            r.raise_for_status()
+            resp = r.json()
+            if resp.get("code") != 200:
+                logger.warning(
+                    f"[VHSYS PUT] {endpoint} code={resp.get('code')}\n"
+                    f"  BODY: {body_str}\n"
+                    f"  RESP: {r.text}"
+                )
+            return resp
+        except Exception as e:
+            logger.warning(f"[VHSYS PUT] tentativa {tentativa+1} erro: {e}")
+            import time; time.sleep(2 ** tentativa)
+    logger.error(f"[VHSYS PUT] {endpoint} falhou após 3 tentativas\n  BODY: {body_str}")
+    return None
+
+
 def _post(endpoint: str, body: dict) -> dict | None:
     import json as _json
     url = f"{VHSYS_BASE_URL}/{endpoint.lstrip('/')}"
@@ -149,7 +182,7 @@ def sincronizar_produtos() -> dict:
 
 _FORMA_PDV_MAP = {
     "dinheiro": "Dinheiro",
-    "pix":      "Pix",
+    "pix":      "PIX",
     "credito":  "Cartão de Crédito",
     "debito":   "Cartão de Débito",
 }
@@ -199,6 +232,8 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         return None, "Nenhum item com vhsys_id — venda não enviada ao VHSys"
 
     # Passo 1: cria cabeçalho da venda (sem produtos — VHSys exige endpoint separado)
+    # Pix: id_banco deve ser 0 — o banco Sicoob (boleto) é rejeitado com 403 para Pix
+    id_banco_uso = 0 if forma_raw == "pix" else (int(VHSYS_ID_BANCO) if VHSYS_ID_BANCO else 0)
     body = {
         "id_cliente":           0,
         "valor_total_produtos": f"{total + desconto:.2f}",
@@ -210,7 +245,7 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         "valor_recebido":       f"{pago_total:.2f}",
         "troco_pedido":         f"{troco:.2f}",
         "condicao_pagamento":   1,
-        "id_banco":             int(VHSYS_ID_BANCO) if VHSYS_ID_BANCO else 0,
+        "id_banco":             id_banco_uso,
         "id_vendedor":          int(VHSYS_OPERADOR_ID) if VHSYS_OPERADOR_ID else 0,
         "contas_pedido":        1,
         "estoque_pedido":       1,
@@ -231,10 +266,11 @@ def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
         if not resp_prod or resp_prod.get("code") != 200:
             logger.warning(f"[PDV/VB venda {venda_id}] erro ao adicionar produto {produto.get('id_produto')}: {resp_prod}")
 
-    # Passo 3: fecha a venda (dispara processamento de estoque e contas)
-    resp_fechar = _post(f"vendas-balcao/{id_frente}/fechar", {})
+    # Passo 3: finaliza a venda via PUT (dispara processamento de estoque e contas)
+    # POST /fechar retorna 404 — a API exige PUT com contas_pedido + estoque_pedido
+    resp_fechar = _put(f"vendas-balcao/{id_frente}", {"contas_pedido": 1, "estoque_pedido": 1})
     if not resp_fechar or resp_fechar.get("code") != 200:
-        logger.warning(f"[PDV/VB venda {venda_id}] fechar retornou: {resp_fechar}")
+        logger.warning(f"[PDV/VB venda {venda_id}] finalizar (PUT) retornou: {resp_fechar}")
 
     return id_frente, None
 
