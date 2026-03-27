@@ -9,6 +9,7 @@ import threading
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from pdv.database import (
@@ -30,6 +31,12 @@ else:
 _PDV_HTML = os.path.join(_TPL_DIR, "pdv.html")
 
 app = FastAPI(title="PDV")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def _sync_periodico(intervalo_seg: int = 1800):
     """Thread daemon: sincroniza produtos a cada 30min (sync inicial feito pelo main.py)."""
