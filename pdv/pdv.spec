@@ -1,21 +1,28 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""
-PyInstaller spec para PDV Pablo Agro.
-Gerar: pyinstaller pdv/pdv.spec  (rodar da raiz do projeto)
-"""
+# Gerar (da raiz do projeto):
+#   .\venv\Scripts\pyinstaller.exe pdv\pdv.spec --distpath pdv --workpath pdv\build
+# Executavel: pdv\PDV_PabloAgro\PDV_PabloAgro.exe
 
 import os
 block_cipher = None
 
+# Assets opcionais (logo.png/logo.ico podem nao existir ainda)
+_assets_dir = os.path.join(os.path.dirname(SPEC), 'assets')
+_datas = [
+    ('templates',  'templates'),
+    ('../.env',    '.'),
+]
+if os.path.isdir(_assets_dir):
+    _datas.append(('assets', 'assets'))
+
+_icon = os.path.join(_assets_dir, 'logo.ico')
+_icon = _icon if os.path.exists(_icon) else None
+
 a = Analysis(
-    ['pdv/main.py'],
-    pathex=['.'],
+    ['main.py'],
+    pathex=['..'],
     binaries=[],
-    datas=[
-        ('pdv/templates',  'pdv/templates'),
-        ('pdv/assets',     'assets'),          # logo.png fica ao lado do .exe
-        ('.env',           '.'),               # credenciais ao lado do .exe
-    ],
+    datas=_datas,
     hiddenimports=[
         'pdv.server', 'pdv.vhsys', 'pdv.database',
         'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
@@ -52,8 +59,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,                         # sem janela de console
-    icon='pdv/assets/logo.ico',            # ícone do .exe (opcional)
+    console=False,
+    icon=_icon,
 )
 
 coll = COLLECT(

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Resolve .env: ao lado do executável (.exe) ou na raiz do projeto (script)
 def _carregar_env():
     if getattr(sys, "frozen", False):
-        base = os.path.dirname(sys.executable)
+        base = sys._MEIPASS  # .env bundled in _internal/
     else:
         base = os.path.join(os.path.dirname(__file__), "..")
     env_path = os.path.join(base, ".env")
