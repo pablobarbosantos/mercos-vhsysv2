@@ -96,6 +96,12 @@ def _fechar_splash(root):
 
 def _start_server():
     try:
+        # console=False no exe torna sys.stdout/stderr None;
+        # uvicorn chama isatty() e crasha — redireciona para devnull
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, "w")
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, "w")
         import uvicorn
         from pdv.server import app
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
