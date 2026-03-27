@@ -12,10 +12,16 @@ import time
 import logging
 import threading
 
+_log_handlers = [logging.StreamHandler()]
+if getattr(sys, "frozen", False):
+    _log_file = os.path.join(os.path.dirname(sys.executable), "pdv.log")
+    _log_handlers.append(logging.FileHandler(_log_file, encoding="utf-8"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
+    handlers=_log_handlers,
 )
 
 # Garante que o diretório pai (raiz do projeto) esteja no sys.path quando
@@ -89,9 +95,12 @@ def _fechar_splash(root):
 # ── Servidor FastAPI ──────────────────────────────────────────────────────────
 
 def _start_server():
-    import uvicorn
-    from pdv.server import app
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    try:
+        import uvicorn
+        from pdv.server import app
+        uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    except Exception as e:
+        logging.getLogger(__name__).error(f"[Servidor] falhou ao iniciar: {e}", exc_info=True)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
