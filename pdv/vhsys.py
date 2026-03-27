@@ -3,15 +3,15 @@ PDV — integração VHSys.
 
 Funções:
   - sincronizar_produtos()   : importa catálogo via GET /produtos
-  - baixar_estoque_venda()   : POST /produtos/{id}/estoque (Saida) por item
-  - registrar_receita()      : POST /contas-receber para a venda
+  - criar_venda_balcao()     : POST /vendas-balcao (estoque + contas geridos pelo VHSys)
+  - sincronizar_venda()      : orquestra criar_venda_balcao e atualiza status local
 """
 
 import os
 import sys
 import logging
 import requests
-from datetime import datetime, date
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,8 @@ VHSYS_BASE_URL    = os.getenv("VHSYS_BASE_URL", "https://api.vhsys.com.br/v2")
 VHSYS_ACCESS      = os.getenv("VHSYS_ACCESS_TOKEN", "")
 VHSYS_SECRET      = os.getenv("VHSYS_SECRET_TOKEN", "")
 VHSYS_ID_BANCO    = os.getenv("VHSYS_ID_BANCO", "")
+# PDV_SYNC_RECEITA=false desativa o lançamento em contas-receber (faça manualmente no VHSys)
+PDV_SYNC_RECEITA  = os.getenv("PDV_SYNC_RECEITA", "true").lower() != "false"
 
 _HEADERS = {
     "access-token":        VHSYS_ACCESS,
@@ -40,7 +42,8 @@ _HEADERS = {
     "Content-Type":        "application/json",
 }
 
-_RETRY_STATUS = {429, 500, 502, 503, 504}
+_RETRY_STATUS   = {429, 500, 502, 503, 504}
+_PERMANENT_FAIL = {400, 401, 403, 404, 422}  # não retenta — erro definitivo
 
 
 def _get(endpoint: str, params: dict | None = None) -> dict | None:
@@ -69,7 +72,7 @@ def _post(endpoint: str, body: dict) -> dict | None:
             if r.status_code in _RETRY_STATUS:
                 import time; time.sleep(2 ** tentativa)
                 continue
-            if r.status_code in (400, 404, 422):
+            if r.status_code in _PERMANENT_FAIL:
                 logger.error(
                     f"[VHSYS POST] {endpoint} erro {r.status_code}\n"
                     f"  BODY: {body_str}\n"
@@ -141,78 +144,79 @@ def sincronizar_produtos() -> dict:
     return {"importados": total_importados, "erro": None}
 
 
-# ── Baixar estoque ────────────────────────────────────────────────────────────
+# ── Criar Venda Balcão ────────────────────────────────────────────────────────
 
-def baixar_estoque_venda(venda_id: int, itens: list[dict]) -> list[str]:
-    """
-    Para cada item com vhsys_id, lança saída de estoque.
-    Retorna lista de erros (vazia = sucesso total).
-    """
-    erros = []
-    for item in itens:
-        vid = item.get("produto_id")
-        if not vid:
-            continue  # produto rascunho, sem vhsys_id
-
-        # Precisamos do vhsys_id real, não o id local
-        from pdv.database import get_produto
-        prod = get_produto(vid)
-        if not prod or not prod.get("vhsys_id"):
-            continue
-
-        body = {
-            "tipo_estoque":  "Saida",
-            "qtde_estoque":  str(float(item["quantidade"])),
-            "valor_estoque": str(float(item["preco_unitario"])),
-            "obs_estoque":   f"PDV Venda #{venda_id}",
-            "identificacao": f"PDV_{venda_id}",
-        }
-        resp = _post(f"produtos/{prod['vhsys_id']}/estoque", body)
-        if not resp or resp.get("code") != 200:
-            erros.append(f"Estoque produto {prod['nome']}: {resp}")
-
-    return erros
-
-
-# ── Registrar receita ─────────────────────────────────────────────────────────
-
-_FORMA_MAP = {
+_FORMA_PDV_MAP = {
     "dinheiro": "Dinheiro",
     "pix":      "Pix",
-    "credito":  "Cartão de Crédito",
-    "debito":   "Cartão de Débito",
+    "credito":  "Cartao de Credito",
+    "debito":   "Cartao de Debito",
 }
 
 
-def registrar_receita(venda_id: int, total: float, pagamentos: list[dict]) -> str | None:
+def criar_venda_balcao(venda_id: int, itens: list[dict], pagamentos: list[dict],
+                       total: float, desconto: float) -> tuple[int | None, str | None]:
     """
-    Lança receita em /contas-receber para a venda.
-    Retorna None em sucesso, ou mensagem de erro.
+    Cria uma Venda Balcão no VHSys via POST /vendas-balcao.
+    O VHSys cuida automaticamente de estoque e contas a receber.
+    Retorna (id_frente, None) em sucesso ou (None, mensagem_erro) em falha.
     """
-    # Forma predominante = maior valor
-    forma_raw = max(pagamentos, key=lambda x: x["valor"])["tipo"] if pagamentos else "dinheiro"
-    forma_vhsys = _FORMA_MAP.get(forma_raw, "Dinheiro")
-    hoje = date.today().isoformat()
+    from pdv.database import get_produto
 
-    body: dict = {
-        "nome_conta":     f"PDV Venda #{venda_id}",
-        "vencimento_rec": hoje,
-        "data_emissao":   hoje,
-        "valor_rec":      f"{total:.2f}",
-        "valor_pago":     f"{total:.2f}",
-        "liquidado_rec":  "Sim",
-        "data_pagamento": hoje,
-        "forma_pagamento": forma_vhsys,
-        "tipo_conta":     forma_vhsys,
-        "observacoes_rec": f"Venda PDV #{venda_id} — {', '.join(p['tipo'] for p in pagamentos)}",
+    # Forma predominante = maior valor pago
+    forma_raw   = max(pagamentos, key=lambda x: x["valor"])["tipo"] if pagamentos else "dinheiro"
+    forma_vhsys = _FORMA_PDV_MAP.get(forma_raw, "Dinheiro")
+    pago_total  = sum(p["valor"] for p in pagamentos)
+    troco       = max(0.0, round(pago_total - total, 2))
+
+    # Monta lista de produtos com vhsys_id resolvido
+    produtos_body = []
+    itens_sem_vhsys = []
+    for item in itens:
+        vid = item.get("produto_id")
+        if not vid:
+            itens_sem_vhsys.append(item.get("nome", "?"))
+            continue
+        prod = get_produto(vid)
+        if not prod or not prod.get("vhsys_id"):
+            itens_sem_vhsys.append(item.get("nome", f"id={vid}"))
+            continue
+        qty   = float(item["quantidade"])
+        price = float(item["preco_unitario"])
+        produtos_body.append({
+            "id_produto":         prod["vhsys_id"],
+            "qtde_produto":       str(qty),
+            "valor_unit_produto": f"{price:.2f}",
+            "valor_total_produto": f"{qty * price:.2f}",
+        })
+
+    if itens_sem_vhsys:
+        logger.warning(f"[PDV/VB venda {venda_id}] itens sem vhsys_id ignorados: {itens_sem_vhsys}")
+
+    if not produtos_body:
+        return None, "Nenhum item com vhsys_id — venda não enviada ao VHSys"
+
+    body = {
+        "id_cliente":           0,
+        "valor_total_produtos": f"{total:.2f}",
+        "desconto_pedido":      f"{desconto:.2f}",
+        "acrescimo_pedido":     "0.00",
+        "valor_total_nota":     f"{total:.2f}",
+        "tipo_pagamento":       1,
+        "forma_pagamento":      forma_vhsys,
+        "valor_recebido":       f"{pago_total:.2f}",
+        "troco_pedido":         f"{troco:.2f}",
+        "condicao_pagamento":   1,
+        "obs_pedido":           f"PDV Venda #{venda_id}",
+        "produtos":             produtos_body,
     }
-    if VHSYS_ID_BANCO:
-        body["id_banco"] = int(VHSYS_ID_BANCO)
 
-    resp = _post("contas-receber", body)
+    resp = _post("vendas-balcao", body)
     if not resp or resp.get("code") != 200:
-        return f"Erro ao registrar receita: {resp}"
-    return None
+        return None, f"Erro ao criar venda balcao: {resp}"
+
+    id_frente = (resp.get("data") or {}).get("id_frente")
+    return id_frente, None
 
 
 # ── Sync completo pós-venda ───────────────────────────────────────────────────
@@ -220,25 +224,24 @@ def registrar_receita(venda_id: int, total: float, pagamentos: list[dict]) -> st
 def sincronizar_venda(venda_id: int):
     """
     Chamado em background thread após criar a venda.
-    Baixa estoque + registra receita + atualiza status sync.
+    Cria Venda Balcão no VHSys — estoque e contas a receber são geridos automaticamente pelo VHSys.
     """
-    from pdv.database import get_itens_venda, get_pagamentos_venda, atualizar_sync_venda
+    from pdv.database import get_itens_venda, get_pagamentos_venda, atualizar_sync_venda, get_conn
 
     itens      = get_itens_venda(venda_id)
     pagamentos = get_pagamentos_venda(venda_id)
 
-    erros_estoque = baixar_estoque_venda(venda_id, itens)
-    erro_receita  = registrar_receita(venda_id, sum(p["valor"] for p in pagamentos), pagamentos)
+    # Recupera desconto da venda
+    with get_conn() as conn:
+        row = conn.execute("SELECT desconto, total FROM pdv_vendas WHERE id = ?", (venda_id,)).fetchone()
+    desconto = float(row["desconto"]) if row else 0.0
+    total    = float(row["total"])    if row else sum(p["valor"] for p in pagamentos)
 
-    if erros_estoque or erro_receita:
-        partes = []
-        if erros_estoque:
-            partes.append("estoque: " + "; ".join(erros_estoque))
-        if erro_receita:
-            partes.append("receita: " + erro_receita)
-        detalhe = " | ".join(partes)
-        logger.warning(f"[PDV/Sync venda {venda_id}] {detalhe}")
-        atualizar_sync_venda(venda_id, "erro", detalhe)
+    id_frente, erro = criar_venda_balcao(venda_id, itens, pagamentos, total, desconto)
+
+    if erro:
+        logger.warning(f"[PDV/Sync venda {venda_id}] {erro}")
+        atualizar_sync_venda(venda_id, "erro", erro)
     else:
-        logger.info(f"[PDV/Sync venda {venda_id}] OK")
+        logger.info(f"[PDV/Sync venda {venda_id}] OK — id_frente={id_frente}")
         atualizar_sync_venda(venda_id, "ok")
