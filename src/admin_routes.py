@@ -517,14 +517,21 @@ async def api_corrigir_pedidos(request: Request):
                     via_vhsys += 1
                     if not conn.execute("SELECT 1 FROM itens_pedido WHERE mercos_id=? LIMIT 1", (mercos_id,)).fetchone():
                         ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
+                        # Tenta GET /pedidos/{id}/itens primeiro, depois extrai do body
+                        itens_raw = vhsys.buscar_itens_pedido(vhsys_id)
+                        if not itens_raw:
+                            itens_raw = dados.get("itens", dados.get("produtos", [])) or []
                         salvou = False
-                        for it in dados.get("itens", dados.get("produtos", [])) or []:
+                        for it in itens_raw:
                             qtd   = float(it.get("qtde_produto") or it.get("quantidade") or 0)
-                            preco = float(it.get("preco_unitario") or it.get("valor_unit") or 0)
-                            nome  = it.get("descricao_produto") or it.get("nome_produto") or it.get("descricao") or ""
-                            sku   = str(it.get("codigo_produto") or it.get("sku") or "").strip()
+                            preco = float(it.get("preco_unitario") or it.get("valor_unit") or it.get("preco_liquido") or 0)
+                            nome  = (it.get("descricao_produto") or it.get("nome_produto")
+                                     or it.get("descricao") or it.get("produto_nome") or "")
+                            sku   = str(it.get("codigo_produto") or it.get("sku") or it.get("produto_codigo") or "").strip()
+                            if not nome and not sku:
+                                continue
                             conn.execute(
-                                "INSERT INTO itens_pedido (mercos_id,sku,nome_produto,quantidade,valor_unit,valor_total,processado_em) VALUES (?,?,?,?,?,?,?)",
+                                "INSERT OR IGNORE INTO itens_pedido (mercos_id,sku,nome_produto,quantidade,valor_unit,valor_total,processado_em) VALUES (?,?,?,?,?,?,?)",
                                 (mercos_id, sku, nome, qtd, preco, qtd*preco, ts)
                             )
                             salvou = True

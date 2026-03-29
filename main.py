@@ -8,6 +8,7 @@ import logging.handlers
 import os
 import sys
 import json
+import asyncio
 import threading
 from mercos_service import MercosService
 from src import database as db
@@ -221,6 +222,142 @@ def _job_processar_compras():
         logger.error(f"[Compras/Worker] Erro: {e}", exc_info=True)
 
 
+# ── Recuperação automática de histórico ──────────────────────────────────────
+
+def _recuperar_historico_sync():
+    """
+    Roda uma vez no startup em background thread.
+    Popula pedidos_fluxo.valor e itens_pedido para pedidos históricos (antes da fila).
+    Três estratégias em ordem: lista VHSys → GET individual → GET /itens.
+    """
+    import time as _time
+    from datetime import datetime, timezone as _tz
+
+    vhsys = mercos_service.vhsys
+    corrigidos = 0
+    itens_preenchidos = 0
+
+    # Estratégia 1: GET /pedidos (últimos 30 dias) — batch, rápido
+    try:
+        pedidos_vhsys = vhsys.buscar_pedidos_recentes(dias=30)
+        if pedidos_vhsys:
+            with db.get_conn() as conn:
+                for p in pedidos_vhsys:
+                    vid = str(p.get("id_pedido") or p.get("id") or "").strip()
+                    if not vid:
+                        continue
+                    row = conn.execute(
+                        "SELECT mercos_id FROM pedidos_processados WHERE vhsys_id=?", (vid,)
+                    ).fetchone()
+                    if not row:
+                        continue
+                    mercos_id = row["mercos_id"]
+                    valor = float(p.get("valor_total_nota") or p.get("valor_total") or 0)
+                    if valor > 0:
+                        conn.execute(
+                            "UPDATE pedidos_fluxo SET valor=? WHERE mercos_id=? AND (valor=0 OR valor IS NULL)",
+                            (valor, mercos_id),
+                        )
+                        corrigidos += 1
+    except Exception as e:
+        logger.warning(f"[HistoricoRecuperacao] Estratégia 1 (lista): {e}")
+
+    # Estratégia 2: pedidos ainda com valor=0 → GET /pedidos/{id} individual
+    with db.get_conn() as conn:
+        pares = conn.execute("""
+            SELECT f.mercos_id, p.vhsys_id, f.recebido_em
+            FROM pedidos_fluxo f
+            JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
+            WHERE (f.valor = 0 OR f.valor IS NULL)
+              AND p.status = 'ok'
+              AND p.vhsys_id NOT IN ('', 'erro')
+              AND p.vhsys_id IS NOT NULL
+        """).fetchall()
+
+    for par in pares:
+        mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
+        try:
+            resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
+            if resp and resp.status_code == 200:
+                dados = resp.json().get("data", {})
+                if isinstance(dados, list):
+                    dados = dados[0] if dados else {}
+                valor = float(dados.get("valor_total_nota") or dados.get("valor_total") or 0)
+                with db.get_conn() as conn2:
+                    conn2.execute(
+                        "UPDATE pedidos_fluxo SET valor=? WHERE mercos_id=? AND (valor=0 OR valor IS NULL)",
+                        (valor, mercos_id),
+                    )
+                if valor > 0:
+                    corrigidos += 1
+        except Exception as e:
+            logger.debug(f"[HistoricoRecuperacao] valor mercos={mercos_id}: {e}")
+        _time.sleep(0.3)
+
+    # Estratégia 3: pedidos sem itens → GET /pedidos/{id}/itens (com fallback GET /pedidos/{id})
+    with db.get_conn() as conn:
+        sem_itens = conn.execute("""
+            SELECT f.mercos_id, p.vhsys_id, f.recebido_em
+            FROM pedidos_fluxo f
+            JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
+            WHERE p.status = 'ok'
+              AND p.vhsys_id NOT IN ('', 'erro')
+              AND p.vhsys_id IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM itens_pedido i WHERE i.mercos_id = f.mercos_id)
+        """).fetchall()
+
+    for par in sem_itens:
+        mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
+        ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
+        try:
+            itens_raw = vhsys.buscar_itens_pedido(vhsys_id)
+            if not itens_raw:
+                resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
+                if resp and resp.status_code == 200:
+                    dados = resp.json().get("data", {})
+                    if isinstance(dados, list):
+                        dados = dados[0] if dados else {}
+                    itens_raw = dados.get("itens", dados.get("produtos", [])) or []
+            if itens_raw:
+                with db.get_conn() as conn2:
+                    salvou = False
+                    for it in itens_raw:
+                        qtd   = float(it.get("qtde_produto") or it.get("quantidade") or 0)
+                        preco = float(it.get("preco_unitario") or it.get("valor_unit") or it.get("preco_liquido") or 0)
+                        nome  = (it.get("descricao_produto") or it.get("nome_produto")
+                                 or it.get("descricao") or it.get("produto_nome") or "")
+                        sku   = str(it.get("codigo_produto") or it.get("sku") or it.get("produto_codigo") or "").strip()
+                        if not nome and not sku:
+                            continue
+                        conn2.execute(
+                            "INSERT OR IGNORE INTO itens_pedido "
+                            "(mercos_id,sku,nome_produto,quantidade,valor_unit,valor_total,processado_em) "
+                            "VALUES (?,?,?,?,?,?,?)",
+                            (mercos_id, sku, nome, qtd, preco, qtd * preco, ts),
+                        )
+                        salvou = True
+                    if salvou:
+                        itens_preenchidos += 1
+        except Exception as e:
+            logger.debug(f"[HistoricoRecuperacao] itens mercos={mercos_id}: {e}")
+        _time.sleep(0.3)
+
+    logger.info(
+        f"[HistoricoRecuperacao] Concluído — "
+        f"{corrigidos} valores corrigidos | {itens_preenchidos} pedidos com itens populados."
+    )
+
+
+async def _job_recuperar_historico():
+    """Wrapper async — aguarda caches carregarem, depois executa recuperação em thread pool."""
+    await asyncio.sleep(10)  # aguarda VHSys cache terminar (~8s)
+    loop = asyncio.get_event_loop()
+    try:
+        await loop.run_in_executor(None, _recuperar_historico_sync)
+    except Exception as e:
+        logger.error(f"[HistoricoRecuperacao] Erro inesperado: {e}", exc_info=True)
+
+
 # ── Expedição VHSys ───────────────────────────────────────────────────────────
 
 from src.expedicao import init_expedicao, job_sync_expedicao as _job_sync_expedicao
@@ -302,6 +439,9 @@ async def startup_event():
         f"Fluxo: a cada {AUDIT_FLUXO_MIN}min | "
         f"Fechamento: {FECHAMENTO_HORA}h"
     )
+
+    asyncio.create_task(_job_recuperar_historico())
+    logger.info("[HistoricoRecuperacao] Agendado para rodar após caches carregarem.")
 
 
 @app.on_event("shutdown")

@@ -682,6 +682,57 @@ class VhsysService:
         logger.debug(f"[Expedicao] Pedido VHSys {vhsys_id} → situacao='{situacao}'")
         return situacao
 
+    def buscar_pedidos_recentes(self, dias: int = 30) -> list[dict]:
+        """
+        GET /pedidos com filtro de data — retorna pedidos dos últimos N dias.
+        Retorna lista vazia se o endpoint não suportar filtro ou falhar.
+        """
+        from datetime import date, timedelta
+        data_ini = (date.today() - timedelta(days=dias)).strftime("%Y-%m-%d")
+        resultado = []
+        offset = 0
+        limit = 100
+        pagina = 1
+        while True:
+            url = f"{self.base_url}/pedidos"
+            resp = self._requisitar_com_retry(
+                "GET", url,
+                params={"limit": limit, "offset": offset, "data_pedido_inicio": data_ini},
+                timeout=30,
+            )
+            if resp is None or resp.status_code != 200:
+                status = resp.status_code if resp else "sem_resposta"
+                logger.warning(f"[VHSys/PedidosRecentes] HTTP {status} na página {pagina} — abortando.")
+                break
+            body = resp.json()
+            data = body.get("data", [])
+            if isinstance(data, dict):
+                data = [data]
+            if not isinstance(data, list):
+                break
+            resultado.extend(data)
+            logger.debug(f"[VHSys/PedidosRecentes] Página {pagina}: +{len(data)} | Total: {len(resultado)}")
+            if len(data) < limit:
+                break
+            offset += limit
+            pagina += 1
+        return resultado
+
+    def buscar_itens_pedido(self, vhsys_id: str) -> list[dict]:
+        """
+        GET /pedidos/{id}/itens — retorna itens do pedido.
+        Retorna [] se endpoint não disponível ou erro.
+        """
+        url = f"{self.base_url}/pedidos/{vhsys_id}/itens"
+        resp = self._requisitar_com_retry("GET", url, timeout=15)
+        if resp is None or resp.status_code != 200:
+            return []
+        body = resp.json()
+        data = body.get("data", [])
+        if isinstance(data, dict):
+            data = [data]
+        return data if isinstance(data, list) else []
+
     def sincronizar_expedicao(
         self,
         pedidos_para_sync: list[dict],
