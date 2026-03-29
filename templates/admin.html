@@ -1094,8 +1094,9 @@
       <button class="sep-subtab active" id="antab-resumo" onclick="anAba('resumo')">📊 Resumo</button>
       <button class="sep-subtab" id="antab-filtrado" onclick="anAba('filtrado')">🔍 Análise Filtrada</button>
       <button class="sep-subtab" id="antab-abc" onclick="anAba('abc')">🏅 Relatório ABC</button>
-      <div style="margin-left:auto">
-        <button class="btn-action" onclick="corrigirValores()" style="background:var(--warn);color:#000">⚙️ Corrigir Dados Históricos</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn-action" onclick="corrigirValores()" style="background:var(--warn);color:#000">⚙️ Corrigir (fila)</button>
+        <button class="btn-action" onclick="recuperarDoVhsys()" style="background:var(--purple);color:#000">🔄 Recuperar do VHSys</button>
       </div>
     </div>
 
@@ -1930,6 +1931,20 @@
   // ════════════════════════════════════════════════
   // Corrigir Dados Históricos
   // ════════════════════════════════════════════════
+  async function recuperarDoVhsys() {
+    if (!confirm('Buscar valores e itens diretamente do VHSys para todos os pedidos com valor=0?\n\nPode demorar ~1 minuto (uma chamada por pedido). Aguarde o resultado.')) return;
+    toast('Consultando VHSys… aguarde (~1 min)', 'info');
+    try {
+      const res  = await fetch('/admin/api/dados/recuperar-do-vhsys', { method: 'POST' });
+      const data = await res.json();
+      toast(`VHSys: ${data.atualizados} valores · ${data.itens_preenchidos} com itens · ${data.erros} erros`, data.erros > data.atualizados ? 'erro' : 'ok');
+      await carregarAnalytics();
+      await carregarSeparacao();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+    }
+  }
+
   async function corrigirValores() {
     if (!confirm('Corrigir valores/cidade/bairro de pedidos históricos?\nIsso lê o payload original de cada pedido e atualiza os campos zerados.\nPode demorar alguns segundos.')) return;
     toast('Corrigindo dados históricos…', 'info');

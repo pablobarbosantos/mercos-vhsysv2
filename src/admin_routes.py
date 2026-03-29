@@ -539,6 +539,94 @@ async def api_corrigir_valores(request: Request):
     return {"ok": True, "atualizados": atualizados, "itens_preenchidos": itens_preenchidos}
 
 
+@router.post("/api/dados/recuperar-do-vhsys")
+async def api_recuperar_do_vhsys(request: Request):
+    """
+    Para cada pedido com valor=0 que tem vhsys_id válido,
+    busca GET /pedidos/{vhsys_id} no VHSys e atualiza valor + itens_pedido.
+    Roda de forma síncrona — pode demorar ~30-60s para 30+ pedidos.
+    """
+    import time as _time
+    from datetime import datetime, timezone as _tz
+    from vhsys_service import VhsysService
+
+    ip = request.client.host if request.client else ""
+    vhsys = VhsysService()
+    atualizados = 0
+    itens_preenchidos = 0
+    erros = 0
+
+    with db.get_conn() as conn:
+        # Pedidos com valor=0 que têm vhsys_id válido
+        pares = conn.execute("""
+            SELECT f.mercos_id, p.vhsys_id, f.recebido_em
+            FROM pedidos_fluxo f
+            JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
+            WHERE (f.valor = 0 OR f.valor IS NULL)
+              AND p.status = 'ok'
+              AND p.vhsys_id IS NOT NULL
+              AND p.vhsys_id != ''
+              AND p.vhsys_id != 'erro'
+        """).fetchall()
+
+        for par in pares:
+            mercos_id = par["mercos_id"]
+            vhsys_id  = par["vhsys_id"]
+            try:
+                resp = vhsys._requisitar_com_retry(
+                    "GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15
+                )
+                if resp is None or resp.status_code != 200:
+                    erros += 1
+                    continue
+
+                raw   = resp.json()
+                dados = raw.get("data", raw)
+                if isinstance(dados, list):
+                    dados = dados[0] if dados else {}
+
+                valor = float(dados.get("valor_total_nota", 0) or
+                              dados.get("valor_total", 0) or 0)
+
+                conn.execute(
+                    "UPDATE pedidos_fluxo SET valor = ? WHERE mercos_id = ? AND (valor = 0 OR valor IS NULL)",
+                    (valor, mercos_id)
+                )
+                atualizados += 1
+
+                # Tenta extrair itens do response VHSys
+                tem_itens = conn.execute(
+                    "SELECT 1 FROM itens_pedido WHERE mercos_id = ? LIMIT 1", (mercos_id,)
+                ).fetchone()
+                if not tem_itens:
+                    itens_raw = dados.get("itens", dados.get("produtos", []))
+                    ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
+                    inseridos = 0
+                    for it in (itens_raw or []):
+                        qtd   = float(it.get("qtde_produto", it.get("quantidade", 0)) or 0)
+                        preco = float(it.get("preco_unitario", it.get("valor_unit", 0)) or 0)
+                        nome  = (it.get("descricao_produto") or it.get("nome_produto") or
+                                 it.get("descricao") or "")
+                        sku   = str(it.get("codigo_produto") or it.get("sku") or "").strip()
+                        conn.execute("""
+                            INSERT INTO itens_pedido
+                                (mercos_id, sku, nome_produto, quantidade, valor_unit, valor_total, processado_em)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (mercos_id, sku, nome, qtd, preco, qtd * preco, ts))
+                        inseridos += 1
+                    if inseridos:
+                        itens_preenchidos += 1
+
+                _time.sleep(0.3)  # respeita rate limit VHSys
+            except Exception as e:
+                logger.warning(f"[RecuperarVHSys] Pedido mercos={mercos_id} vhsys={vhsys_id}: {e}")
+                erros += 1
+
+    db.admin_registrar_acao("recuperar_vhsys", None,
+                            f"{atualizados} valores, {itens_preenchidos} itens, {erros} erros", ip)
+    return {"ok": True, "atualizados": atualizados, "itens_preenchidos": itens_preenchidos, "erros": erros}
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Auditoria — resolver todos os buracos
 # ──────────────────────────────────────────────────────────────────────────────
