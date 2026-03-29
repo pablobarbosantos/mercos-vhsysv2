@@ -228,7 +228,7 @@ def _recuperar_historico_sync():
     """
     Roda uma vez no startup em background thread.
     Popula pedidos_fluxo.valor e itens_pedido para pedidos históricos (antes da fila).
-    Três estratégias em ordem: lista VHSys → GET individual → GET /itens.
+    Estratégias: lista VHSys (valor) → GET individual (valor fallback) → API Mercos (itens).
     """
     import time as _time
     from datetime import datetime, timezone as _tz
@@ -263,6 +263,7 @@ def _recuperar_historico_sync():
         logger.warning(f"[HistoricoRecuperacao] Estratégia 1 (lista): {e}")
 
     # Estratégia 2: pedidos ainda com valor=0 → GET /pedidos/{id} individual
+    # Filtra mercos_id > 9999999 para evitar IDs globais Mercos (garbage data)
     with db.get_conn() as conn:
         pares = conn.execute("""
             SELECT f.mercos_id, p.vhsys_id, f.recebido_em
@@ -272,6 +273,7 @@ def _recuperar_historico_sync():
               AND p.status = 'ok'
               AND p.vhsys_id NOT IN ('', 'erro')
               AND p.vhsys_id IS NOT NULL
+              AND f.mercos_id <= 9999999
         """).fetchall()
 
     for par in pares:
@@ -279,10 +281,12 @@ def _recuperar_historico_sync():
         try:
             resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
             if resp and resp.status_code == 200:
-                dados = resp.json().get("data", {})
-                if isinstance(dados, list):
-                    dados = dados[0] if dados else {}
-                valor = float(dados.get("valor_total_nota") or dados.get("valor_total") or 0)
+                raw = resp.json().get("data", {})
+                if isinstance(raw, list):
+                    raw = raw[0] if raw else {}
+                if not isinstance(raw, dict):
+                    continue
+                valor = float(raw.get("valor_total_nota") or raw.get("valor_total") or 0)
                 with db.get_conn() as conn2:
                     conn2.execute(
                         "UPDATE pedidos_fluxo SET valor=? WHERE mercos_id=? AND (valor=0 OR valor IS NULL)",
@@ -294,7 +298,9 @@ def _recuperar_historico_sync():
             logger.debug(f"[HistoricoRecuperacao] valor mercos={mercos_id}: {e}")
         _time.sleep(0.3)
 
-    # Estratégia 3: pedidos sem itens → GET /pedidos/{id}/itens (com fallback GET /pedidos/{id})
+    # Estratégia 3: pedidos sem itens → tenta endpoints alternativos VHSys
+    # VHSys não retorna itens em GET /pedidos/{id} nem em /pedidos/{id}/itens.
+    # Tenta: GET /itenspedido?id_ped={id_ped} e GET /pedidos/{id_ped}/produtos
     with db.get_conn() as conn:
         sem_itens = conn.execute("""
             SELECT f.mercos_id, p.vhsys_id, f.recebido_em
@@ -303,6 +309,7 @@ def _recuperar_historico_sync():
             WHERE p.status = 'ok'
               AND p.vhsys_id NOT IN ('', 'erro')
               AND p.vhsys_id IS NOT NULL
+              AND f.mercos_id <= 9999999
               AND NOT EXISTS (SELECT 1 FROM itens_pedido i WHERE i.mercos_id = f.mercos_id)
         """).fetchall()
 
@@ -310,14 +317,25 @@ def _recuperar_historico_sync():
         mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
         ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
         try:
-            itens_raw = vhsys.buscar_itens_pedido(vhsys_id)
+            itens_raw = []
+            # Tenta GET /itenspedido?id_ped={id_ped}
+            resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/itenspedido",
+                                               params={"id_ped": vhsys_id}, timeout=15)
+            if resp and resp.status_code == 200:
+                body = resp.json()
+                if body.get("code") != 404:
+                    data = body.get("data", [])
+                    itens_raw = data if isinstance(data, list) else []
+
             if not itens_raw:
-                resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
-                if resp and resp.status_code == 200:
-                    dados = resp.json().get("data", {})
-                    if isinstance(dados, list):
-                        dados = dados[0] if dados else {}
-                    itens_raw = dados.get("itens", dados.get("produtos", [])) or []
+                # Tenta GET /pedidos/{id_ped}/produtos
+                resp2 = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}/produtos", timeout=15)
+                if resp2 and resp2.status_code == 200:
+                    body2 = resp2.json()
+                    if body2.get("code") != 404:
+                        data2 = body2.get("data", [])
+                        itens_raw = data2 if isinstance(data2, list) else []
+
             if itens_raw:
                 with db.get_conn() as conn2:
                     salvou = False
@@ -338,6 +356,8 @@ def _recuperar_historico_sync():
                         salvou = True
                     if salvou:
                         itens_preenchidos += 1
+            else:
+                logger.debug(f"[HistoricoRecuperacao] sem itens VHSys para mercos={mercos_id} vhsys={vhsys_id}")
         except Exception as e:
             logger.debug(f"[HistoricoRecuperacao] itens mercos={mercos_id}: {e}")
         _time.sleep(0.3)

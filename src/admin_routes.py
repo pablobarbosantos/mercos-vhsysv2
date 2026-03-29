@@ -550,6 +550,49 @@ async def api_corrigir_pedidos(request: Request):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Diagnóstico: inspeciona resposta bruta do VHSys para um pedido
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/dados/diagnostico-vhsys/{vhsys_id}")
+async def api_diagnostico_vhsys(vhsys_id: str):
+    """Retorna a resposta bruta do VHSys para GET /pedidos/{id} e GET /pedidos/{id}/itens."""
+    from vhsys_service import VhsysService
+    try:
+        vhsys = VhsysService()
+    except Exception as e:
+        return {"erro": str(e)}
+
+    resultado = {}
+
+    resp1 = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
+    resultado["pedido"] = {
+        "status": resp1.status_code if resp1 else None,
+        "body": resp1.json() if resp1 and resp1.status_code == 200 else (resp1.text[:500] if resp1 else None),
+    }
+
+    resp2 = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}/itens", timeout=15)
+    resultado["itens_endpoint"] = {
+        "status": resp2.status_code if resp2 else None,
+        "body": resp2.json() if resp2 and resp2.status_code == 200 else (resp2.text[:500] if resp2 else None),
+    }
+
+    resp3 = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/itenspedido",
+                                         params={"id_ped": vhsys_id}, timeout=15)
+    resultado["itenspedido_param"] = {
+        "status": resp3.status_code if resp3 else None,
+        "body": resp3.json() if resp3 and resp3.status_code == 200 else (resp3.text[:300] if resp3 else None),
+    }
+
+    resp4 = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}/produtos", timeout=15)
+    resultado["produtos_endpoint"] = {
+        "status": resp4.status_code if resp4 else None,
+        "body": resp4.json() if resp4 and resp4.status_code == 200 else (resp4.text[:300] if resp4 else None),
+    }
+
+    return resultado
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Auditoria — resolver todos os buracos
 # ──────────────────────────────────────────────────────────────────────────────
 
