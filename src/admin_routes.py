@@ -517,17 +517,14 @@ async def api_corrigir_pedidos(request: Request):
                     via_vhsys += 1
                     if not conn.execute("SELECT 1 FROM itens_pedido WHERE mercos_id=? LIMIT 1", (mercos_id,)).fetchone():
                         ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
-                        # Tenta GET /pedidos/{id}/itens primeiro, depois extrai do body
+                        # GET /pedidos/{id}/produtos — endpoint confirmado como funcional
                         itens_raw = vhsys.buscar_itens_pedido(vhsys_id)
-                        if not itens_raw:
-                            itens_raw = dados.get("itens", dados.get("produtos", [])) or []
                         salvou = False
                         for it in itens_raw:
-                            qtd   = float(it.get("qtde_produto") or it.get("quantidade") or 0)
-                            preco = float(it.get("preco_unitario") or it.get("valor_unit") or it.get("preco_liquido") or 0)
-                            nome  = (it.get("descricao_produto") or it.get("nome_produto")
-                                     or it.get("descricao") or it.get("produto_nome") or "")
-                            sku   = str(it.get("codigo_produto") or it.get("sku") or it.get("produto_codigo") or "").strip()
+                            qtd   = float(it.get("qtde_produto") or 0)
+                            preco = float(it.get("valor_unit_produto") or 0)
+                            nome  = it.get("desc_produto") or ""
+                            sku   = str(it.get("id_produto") or "").strip()
                             if not nome and not sku:
                                 continue
                             conn.execute(

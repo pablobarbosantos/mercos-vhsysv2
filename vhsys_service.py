@@ -720,14 +720,17 @@ class VhsysService:
 
     def buscar_itens_pedido(self, vhsys_id: str) -> list[dict]:
         """
-        GET /pedidos/{id}/itens — retorna itens do pedido.
+        GET /pedidos/{id}/produtos — retorna itens do pedido.
         Retorna [] se endpoint não disponível ou erro.
+        Campos relevantes: desc_produto, qtde_produto, valor_unit_produto, id_produto.
         """
-        url = f"{self.base_url}/pedidos/{vhsys_id}/itens"
+        url = f"{self.base_url}/pedidos/{vhsys_id}/produtos"
         resp = self._requisitar_com_retry("GET", url, timeout=15)
         if resp is None or resp.status_code != 200:
             return []
         body = resp.json()
+        if body.get("code") == 404:
+            return []
         data = body.get("data", [])
         if isinstance(data, dict):
             data = [data]

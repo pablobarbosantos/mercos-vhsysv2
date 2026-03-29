@@ -317,34 +317,17 @@ def _recuperar_historico_sync():
         mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
         ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
         try:
-            itens_raw = []
-            # Tenta GET /itenspedido?id_ped={id_ped}
-            resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/itenspedido",
-                                               params={"id_ped": vhsys_id}, timeout=15)
-            if resp and resp.status_code == 200:
-                body = resp.json()
-                if body.get("code") != 404:
-                    data = body.get("data", [])
-                    itens_raw = data if isinstance(data, list) else []
-
-            if not itens_raw:
-                # Tenta GET /pedidos/{id_ped}/produtos
-                resp2 = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}/produtos", timeout=15)
-                if resp2 and resp2.status_code == 200:
-                    body2 = resp2.json()
-                    if body2.get("code") != 404:
-                        data2 = body2.get("data", [])
-                        itens_raw = data2 if isinstance(data2, list) else []
+            # GET /pedidos/{id}/produtos — endpoint confirmado como funcional
+            itens_raw = vhsys.buscar_itens_pedido(vhsys_id)
 
             if itens_raw:
                 with db.get_conn() as conn2:
                     salvou = False
                     for it in itens_raw:
-                        qtd   = float(it.get("qtde_produto") or it.get("quantidade") or 0)
-                        preco = float(it.get("preco_unitario") or it.get("valor_unit") or it.get("preco_liquido") or 0)
-                        nome  = (it.get("descricao_produto") or it.get("nome_produto")
-                                 or it.get("descricao") or it.get("produto_nome") or "")
-                        sku   = str(it.get("codigo_produto") or it.get("sku") or it.get("produto_codigo") or "").strip()
+                        qtd   = float(it.get("qtde_produto") or 0)
+                        preco = float(it.get("valor_unit_produto") or 0)
+                        nome  = it.get("desc_produto") or ""
+                        sku   = str(it.get("id_produto") or "").strip()
                         if not nome and not sku:
                             continue
                         conn2.execute(
