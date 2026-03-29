@@ -1936,8 +1936,9 @@
     try {
       const res  = await fetch('/admin/api/dados/corrigir-valores', { method: 'POST' });
       const data = await res.json();
-      toast(`${data.atualizados} pedido(s) corrigidos`, 'ok');
+      toast(`${data.atualizados} pedido(s) corrigidos · ${data.itens_preenchidos} com itens restaurados`, 'ok');
       await carregarAnalytics();
+      await carregarSeparacao();
     } catch(e) {
       toast('Erro: ' + e.message, 'erro');
     }

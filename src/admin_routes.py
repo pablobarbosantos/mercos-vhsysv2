@@ -412,26 +412,34 @@ async def api_analytics_score():
 @router.post("/api/dados/corrigir-valores")
 async def api_corrigir_valores(request: Request):
     """
-    Retroativamente atualiza pedidos_fluxo.valor, cidade e bairro lendo o
-    payload_json da fila_eventos (pedido.gerado) onde valor=0 ou cidade=NULL.
+    Retroativamente:
+    - Atualiza pedidos_fluxo.valor, cidade e bairro lendo o payload_json da fila
+    - Popula itens_pedido para pedidos que ainda não têm itens registrados
     """
     import json as _json
+    from datetime import datetime, timezone as _tz
+
     ip = request.client.host if request.client else ""
     atualizados = 0
+    itens_preenchidos = 0
+
     with db.get_conn() as conn:
+        # Busca todos os pedidos.gerado da fila (independente de valor/cidade)
         rows = conn.execute("""
-            SELECT fe.mercos_id, fe.payload_json
+            SELECT fe.mercos_id, fe.payload_json, fe.criado_em
             FROM fila_eventos fe
-            JOIN pedidos_fluxo pf ON pf.mercos_id = fe.mercos_id
             WHERE fe.evento = 'pedido.gerado'
-              AND (pf.valor = 0 OR pf.valor IS NULL OR pf.cidade IS NULL OR pf.cidade = '')
+              AND fe.mercos_id IS NOT NULL
         """).fetchall()
+
         for row in rows:
             try:
-                dados = _json.loads(row["payload_json"])
+                dados  = _json.loads(row["payload_json"])
                 valor  = float(dados.get("valor_total", 0) or 0)
                 cidade = dados.get("cliente_cidade", "") or ""
                 bairro = dados.get("cliente_bairro", "") or ""
+
+                # Atualiza fluxo
                 conn.execute("""
                     UPDATE pedidos_fluxo
                     SET valor  = CASE WHEN ? > 0 THEN ? ELSE valor END,
@@ -439,12 +447,39 @@ async def api_corrigir_valores(request: Request):
                         bairro = CASE WHEN ? != '' THEN ? ELSE bairro END
                     WHERE mercos_id = ?
                 """, (valor, valor, cidade, cidade, bairro, bairro, row["mercos_id"]))
+
                 atualizados += 1
+
+                # Popula itens se ainda não existem
+                tem_itens = conn.execute(
+                    "SELECT 1 FROM itens_pedido WHERE mercos_id = ? LIMIT 1", (row["mercos_id"],)
+                ).fetchone()
+                if not tem_itens:
+                    itens_raw = dados.get("itens", [])
+                    ts = row["criado_em"] or datetime.now(_tz.utc).isoformat()
+                    for it in itens_raw:
+                        if it.get("excluido"):
+                            continue
+                        qtd   = float(it.get("quantidade", 0) or 0)
+                        preco = float(it.get("preco_liquido", 0) or 0)
+                        conn.execute("""
+                            INSERT INTO itens_pedido
+                                (mercos_id, sku, nome_produto, quantidade, valor_unit, valor_total, processado_em)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            row["mercos_id"],
+                            str(it.get("produto_codigo", "") or "").strip(),
+                            it.get("produto_nome", ""),
+                            qtd, preco, qtd * preco, ts,
+                        ))
+                    if itens_raw:
+                        itens_preenchidos += 1
             except Exception:
                 pass
+
     db.admin_registrar_acao("corrigir_valores", None,
-                            f"{atualizados} pedidos corrigidos", ip)
-    return {"ok": True, "atualizados": atualizados}
+                            f"{atualizados} pedidos corrigidos, {itens_preenchidos} com itens restaurados", ip)
+    return {"ok": True, "atualizados": atualizados, "itens_preenchidos": itens_preenchidos}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
