@@ -409,67 +409,31 @@ async def api_analytics_score():
 # Diagnóstico e Correção de dados históricos
 # ──────────────────────────────────────────────────────────────────────────────
 
-@router.get("/api/dados/diagnostico")
-async def api_diagnostico():
-    """Retorna estado do banco para entender por que analytics mostra zero."""
-    with db.get_conn() as conn:
-        fila_total = conn.execute("SELECT COUNT(*) FROM fila_eventos").fetchone()[0]
-        fila_por_evento = conn.execute(
-            "SELECT evento, COUNT(*) AS qtd FROM fila_eventos GROUP BY evento"
-        ).fetchall()
-        fluxo_total = conn.execute("SELECT COUNT(*) FROM pedidos_fluxo").fetchone()[0]
-        fluxo_valor_zero = conn.execute(
-            "SELECT COUNT(*) FROM pedidos_fluxo WHERE valor = 0 OR valor IS NULL"
-        ).fetchone()[0]
-        fluxo_com_valor = conn.execute(
-            "SELECT COUNT(*) FROM pedidos_fluxo WHERE valor > 0"
-        ).fetchone()[0]
-        processados_total = conn.execute("SELECT COUNT(*) FROM pedidos_processados").fetchone()[0]
-        itens_total = conn.execute("SELECT COUNT(*) FROM itens_pedido").fetchone()[0]
-        sample_fluxo = conn.execute(
-            "SELECT mercos_id, numero, cliente, valor, cidade, status_fluxo FROM pedidos_fluxo ORDER BY recebido_em DESC LIMIT 5"
-        ).fetchall()
-        sample_fila = conn.execute(
-            "SELECT id, evento, mercos_id, status, SUBSTR(payload_json,1,100) as payload_preview FROM fila_eventos ORDER BY id DESC LIMIT 5"
-        ).fetchall()
-    return {
-        "fila_eventos": {
-            "total": fila_total,
-            "por_evento": {r["evento"]: r["qtd"] for r in fila_por_evento},
-        },
-        "pedidos_fluxo": {
-            "total": fluxo_total,
-            "com_valor_zero": fluxo_valor_zero,
-            "com_valor_preenchido": fluxo_com_valor,
-        },
-        "pedidos_processados": {"total": processados_total},
-        "itens_pedido": {"total": itens_total},
-        "sample_fluxo_recentes": [dict(r) for r in sample_fluxo],
-        "sample_fila_recentes": [dict(r) for r in sample_fila],
-    }
-
-@router.post("/api/dados/corrigir-valores")
-async def api_corrigir_valores(request: Request):
+@router.post("/api/dados/corrigir-pedidos")
+async def api_corrigir_pedidos(request: Request):
     """
-    Retroativamente:
-    - Atualiza pedidos_fluxo.valor, cidade e bairro lendo o payload_json da fila
-    - Popula itens_pedido para pedidos que ainda não têm itens registrados
+    Corrige todos os pedidos com dados zerados/faltando.
+    Estratégia 1: lê payload da fila_eventos (rápido, sem API externa).
+    Estratégia 2: para os que ainda ficaram com valor=0, busca no VHSys (lento).
+    Atualiza: pedidos_fluxo.valor, cidade, bairro + popula itens_pedido.
     """
-    import json as _json
+    import json as _json, time as _time
     from datetime import datetime, timezone as _tz
+    from vhsys_service import VhsysService
 
     ip = request.client.host if request.client else ""
-    atualizados = 0
+    via_fila = 0
+    via_vhsys = 0
     itens_preenchidos = 0
+    erros = 0
 
     with db.get_conn() as conn:
-        # Busca o payload mais completo por mercos_id (prefere pedido.gerado)
-        rows = conn.execute("""
+
+        # ── Estratégia 1: fila_eventos ────────────────────────────────────────
+        rows_fila = conn.execute("""
             SELECT mercos_id,
-                   MAX(CASE WHEN evento='pedido.gerado' THEN payload_json END)
-                   AS payload_gerado,
-                   MAX(CASE WHEN evento='pedido.faturado' THEN payload_json END)
-                   AS payload_faturado,
+                   MAX(CASE WHEN evento='pedido.gerado'   THEN payload_json END) AS pg,
+                   MAX(CASE WHEN evento='pedido.faturado' THEN payload_json END) AS pf,
                    MAX(criado_em) AS criado_em
             FROM fila_eventos
             WHERE evento IN ('pedido.gerado','pedido.faturado')
@@ -477,26 +441,15 @@ async def api_corrigir_valores(request: Request):
             GROUP BY mercos_id
         """).fetchall()
 
-        # Resolve qual payload usar: prefere pedido.gerado
-        class _Row:
-            def __init__(self, mid, pj, em):
-                self.mercos_id   = mid
-                self.payload_json = pj
-                self.criado_em   = em
-            def __getitem__(self, k): return getattr(self, k)
-
-        rows = [_Row(r["mercos_id"],
-                     r["payload_gerado"] or r["payload_faturado"],
-                     r["criado_em"]) for r in rows if (r["payload_gerado"] or r["payload_faturado"])]
-
-        for row in rows:
+        for row in rows_fila:
+            pj = row["pg"] or row["pf"]
+            if not pj:
+                continue
             try:
-                dados  = _json.loads(row["payload_json"])
+                dados  = _json.loads(pj)
                 valor  = float(dados.get("valor_total", 0) or 0)
                 cidade = dados.get("cliente_cidade", "") or ""
                 bairro = dados.get("cliente_bairro", "") or ""
-
-                # Atualiza fluxo
                 conn.execute("""
                     UPDATE pedidos_fluxo
                     SET valor  = CASE WHEN ? > 0 THEN ? ELSE valor END,
@@ -504,127 +457,89 @@ async def api_corrigir_valores(request: Request):
                         bairro = CASE WHEN ? != '' THEN ? ELSE bairro END
                     WHERE mercos_id = ?
                 """, (valor, valor, cidade, cidade, bairro, bairro, row["mercos_id"]))
-
-                atualizados += 1
-
-                # Popula itens se ainda não existem
-                tem_itens = conn.execute(
-                    "SELECT 1 FROM itens_pedido WHERE mercos_id = ? LIMIT 1", (row["mercos_id"],)
-                ).fetchone()
-                if not tem_itens:
-                    itens_raw = dados.get("itens", [])
+                via_fila += 1
+                # Itens
+                if not conn.execute("SELECT 1 FROM itens_pedido WHERE mercos_id=? LIMIT 1", (row["mercos_id"],)).fetchone():
                     ts = row["criado_em"] or datetime.now(_tz.utc).isoformat()
-                    for it in itens_raw:
+                    salvou = False
+                    for it in dados.get("itens", []):
                         if it.get("excluido"):
                             continue
                         qtd   = float(it.get("quantidade", 0) or 0)
                         preco = float(it.get("preco_liquido", 0) or 0)
-                        conn.execute("""
-                            INSERT INTO itens_pedido
-                                (mercos_id, sku, nome_produto, quantidade, valor_unit, valor_total, processado_em)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            row["mercos_id"],
-                            str(it.get("produto_codigo", "") or "").strip(),
-                            it.get("produto_nome", ""),
-                            qtd, preco, qtd * preco, ts,
-                        ))
-                    if itens_raw:
+                        conn.execute(
+                            "INSERT INTO itens_pedido (mercos_id,sku,nome_produto,quantidade,valor_unit,valor_total,processado_em) VALUES (?,?,?,?,?,?,?)",
+                            (row["mercos_id"], str(it.get("produto_codigo","") or "").strip(),
+                             it.get("produto_nome",""), qtd, preco, qtd*preco, ts)
+                        )
+                        salvou = True
+                    if salvou:
                         itens_preenchidos += 1
             except Exception:
                 pass
 
-    db.admin_registrar_acao("corrigir_valores", None,
-                            f"{atualizados} pedidos corrigidos, {itens_preenchidos} com itens restaurados", ip)
-    return {"ok": True, "atualizados": atualizados, "itens_preenchidos": itens_preenchidos}
-
-
-@router.post("/api/dados/recuperar-do-vhsys")
-async def api_recuperar_do_vhsys(request: Request):
-    """
-    Para cada pedido com valor=0 que tem vhsys_id válido,
-    busca GET /pedidos/{vhsys_id} no VHSys e atualiza valor + itens_pedido.
-    Roda de forma síncrona — pode demorar ~30-60s para 30+ pedidos.
-    """
-    import time as _time
-    from datetime import datetime, timezone as _tz
-    from vhsys_service import VhsysService
-
-    ip = request.client.host if request.client else ""
-    vhsys = VhsysService()
-    atualizados = 0
-    itens_preenchidos = 0
-    erros = 0
-
-    with db.get_conn() as conn:
-        # Pedidos com valor=0 que têm vhsys_id válido
+        # ── Estratégia 2: VHSys para os que ainda têm valor=0 ─────────────────
         pares = conn.execute("""
             SELECT f.mercos_id, p.vhsys_id, f.recebido_em
             FROM pedidos_fluxo f
             JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
             WHERE (f.valor = 0 OR f.valor IS NULL)
               AND p.status = 'ok'
+              AND p.vhsys_id NOT IN ('', 'erro')
               AND p.vhsys_id IS NOT NULL
-              AND p.vhsys_id != ''
-              AND p.vhsys_id != 'erro'
         """).fetchall()
 
-        for par in pares:
-            mercos_id = par["mercos_id"]
-            vhsys_id  = par["vhsys_id"]
+        if pares:
             try:
-                resp = vhsys._requisitar_com_retry(
-                    "GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15
-                )
-                if resp is None or resp.status_code != 200:
+                vhsys = VhsysService()
+            except Exception as e:
+                logger.warning(f"[CorrigirPedidos] VHSys indisponível: {e}")
+                vhsys = None
+
+            for par in pares:
+                if not vhsys:
                     erros += 1
                     continue
+                mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
+                try:
+                    resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
+                    if resp is None or resp.status_code != 200:
+                        erros += 1
+                        continue
+                    dados = resp.json().get("data", {})
+                    if isinstance(dados, list):
+                        dados = dados[0] if dados else {}
+                    valor = float(dados.get("valor_total_nota") or dados.get("valor_total") or 0)
+                    conn.execute(
+                        "UPDATE pedidos_fluxo SET valor=? WHERE mercos_id=? AND (valor=0 OR valor IS NULL)",
+                        (valor, mercos_id)
+                    )
+                    via_vhsys += 1
+                    if not conn.execute("SELECT 1 FROM itens_pedido WHERE mercos_id=? LIMIT 1", (mercos_id,)).fetchone():
+                        ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
+                        salvou = False
+                        for it in dados.get("itens", dados.get("produtos", [])) or []:
+                            qtd   = float(it.get("qtde_produto") or it.get("quantidade") or 0)
+                            preco = float(it.get("preco_unitario") or it.get("valor_unit") or 0)
+                            nome  = it.get("descricao_produto") or it.get("nome_produto") or it.get("descricao") or ""
+                            sku   = str(it.get("codigo_produto") or it.get("sku") or "").strip()
+                            conn.execute(
+                                "INSERT INTO itens_pedido (mercos_id,sku,nome_produto,quantidade,valor_unit,valor_total,processado_em) VALUES (?,?,?,?,?,?,?)",
+                                (mercos_id, sku, nome, qtd, preco, qtd*preco, ts)
+                            )
+                            salvou = True
+                        if salvou:
+                            itens_preenchidos += 1
+                    _time.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"[CorrigirPedidos] mercos={mercos_id}: {e}")
+                    erros += 1
 
-                raw   = resp.json()
-                dados = raw.get("data", raw)
-                if isinstance(dados, list):
-                    dados = dados[0] if dados else {}
-
-                valor = float(dados.get("valor_total_nota", 0) or
-                              dados.get("valor_total", 0) or 0)
-
-                conn.execute(
-                    "UPDATE pedidos_fluxo SET valor = ? WHERE mercos_id = ? AND (valor = 0 OR valor IS NULL)",
-                    (valor, mercos_id)
-                )
-                atualizados += 1
-
-                # Tenta extrair itens do response VHSys
-                tem_itens = conn.execute(
-                    "SELECT 1 FROM itens_pedido WHERE mercos_id = ? LIMIT 1", (mercos_id,)
-                ).fetchone()
-                if not tem_itens:
-                    itens_raw = dados.get("itens", dados.get("produtos", []))
-                    ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
-                    inseridos = 0
-                    for it in (itens_raw or []):
-                        qtd   = float(it.get("qtde_produto", it.get("quantidade", 0)) or 0)
-                        preco = float(it.get("preco_unitario", it.get("valor_unit", 0)) or 0)
-                        nome  = (it.get("descricao_produto") or it.get("nome_produto") or
-                                 it.get("descricao") or "")
-                        sku   = str(it.get("codigo_produto") or it.get("sku") or "").strip()
-                        conn.execute("""
-                            INSERT INTO itens_pedido
-                                (mercos_id, sku, nome_produto, quantidade, valor_unit, valor_total, processado_em)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (mercos_id, sku, nome, qtd, preco, qtd * preco, ts))
-                        inseridos += 1
-                    if inseridos:
-                        itens_preenchidos += 1
-
-                _time.sleep(0.3)  # respeita rate limit VHSys
-            except Exception as e:
-                logger.warning(f"[RecuperarVHSys] Pedido mercos={mercos_id} vhsys={vhsys_id}: {e}")
-                erros += 1
-
-    db.admin_registrar_acao("recuperar_vhsys", None,
-                            f"{atualizados} valores, {itens_preenchidos} itens, {erros} erros", ip)
-    return {"ok": True, "atualizados": atualizados, "itens_preenchidos": itens_preenchidos, "erros": erros}
+    total = via_fila + via_vhsys
+    db.admin_registrar_acao("corrigir_pedidos", None,
+                            f"{total} corrigidos (fila:{via_fila} vhsys:{via_vhsys}), {itens_preenchidos} itens, {erros} erros", ip)
+    return {"ok": True, "corrigidos": total, "via_fila": via_fila, "via_vhsys": via_vhsys,
+            "itens_preenchidos": itens_preenchidos, "erros": erros}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
