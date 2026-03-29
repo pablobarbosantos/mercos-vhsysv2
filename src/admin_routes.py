@@ -406,8 +406,47 @@ async def api_analytics_score():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Correção de dados históricos
+# Diagnóstico e Correção de dados históricos
 # ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/dados/diagnostico")
+async def api_diagnostico():
+    """Retorna estado do banco para entender por que analytics mostra zero."""
+    with db.get_conn() as conn:
+        fila_total = conn.execute("SELECT COUNT(*) FROM fila_eventos").fetchone()[0]
+        fila_por_evento = conn.execute(
+            "SELECT evento, COUNT(*) AS qtd FROM fila_eventos GROUP BY evento"
+        ).fetchall()
+        fluxo_total = conn.execute("SELECT COUNT(*) FROM pedidos_fluxo").fetchone()[0]
+        fluxo_valor_zero = conn.execute(
+            "SELECT COUNT(*) FROM pedidos_fluxo WHERE valor = 0 OR valor IS NULL"
+        ).fetchone()[0]
+        fluxo_com_valor = conn.execute(
+            "SELECT COUNT(*) FROM pedidos_fluxo WHERE valor > 0"
+        ).fetchone()[0]
+        processados_total = conn.execute("SELECT COUNT(*) FROM pedidos_processados").fetchone()[0]
+        itens_total = conn.execute("SELECT COUNT(*) FROM itens_pedido").fetchone()[0]
+        sample_fluxo = conn.execute(
+            "SELECT mercos_id, numero, cliente, valor, cidade, status_fluxo FROM pedidos_fluxo ORDER BY recebido_em DESC LIMIT 5"
+        ).fetchall()
+        sample_fila = conn.execute(
+            "SELECT id, evento, mercos_id, status, SUBSTR(payload_json,1,100) as payload_preview FROM fila_eventos ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+    return {
+        "fila_eventos": {
+            "total": fila_total,
+            "por_evento": {r["evento"]: r["qtd"] for r in fila_por_evento},
+        },
+        "pedidos_fluxo": {
+            "total": fluxo_total,
+            "com_valor_zero": fluxo_valor_zero,
+            "com_valor_preenchido": fluxo_com_valor,
+        },
+        "pedidos_processados": {"total": processados_total},
+        "itens_pedido": {"total": itens_total},
+        "sample_fluxo_recentes": [dict(r) for r in sample_fluxo],
+        "sample_fila_recentes": [dict(r) for r in sample_fila],
+    }
 
 @router.post("/api/dados/corrigir-valores")
 async def api_corrigir_valores(request: Request):
