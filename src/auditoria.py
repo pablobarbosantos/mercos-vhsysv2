@@ -139,6 +139,21 @@ def marcar_buraco_resolvido(mercos_id: int, resolucao: str = "processado_manualm
     logger.info(f"[Auditoria/Seq] Buraco {mercos_id} marcado como resolvido: {resolucao}")
 
 
+def marcar_todos_buracos_resolvidos(resolucao: str = "verificado_em_lote") -> int:
+    """Marca todos os buracos abertos como resolvidos de uma vez. Retorna qtd resolvida."""
+    agora = datetime.now(timezone.utc).isoformat()
+    with db.get_conn() as conn:
+        cur = conn.execute(
+            """UPDATE auditoria_sequencia
+               SET resolvido = 1, resolucao = ?, resolvido_em = ?
+               WHERE resolvido = 0""",
+            (resolucao, agora)
+        )
+        qtd = cur.rowcount
+    logger.info(f"[Auditoria/Seq] {qtd} buracos resolvidos em lote.")
+    return qtd
+
+
 # ══════════════════════════════════════════════════════════════
 # 2. AUDITORIA DE FLUXO
 # ══════════════════════════════════════════════════════════════

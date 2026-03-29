@@ -403,3 +403,347 @@ async def api_analytics_score():
         cor = "vermelho"
 
     return {"score": score, "cor": cor, "detalhes": detalhes}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Correção de dados históricos
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/api/dados/corrigir-valores")
+async def api_corrigir_valores(request: Request):
+    """
+    Retroativamente atualiza pedidos_fluxo.valor, cidade e bairro lendo o
+    payload_json da fila_eventos (pedido.gerado) onde valor=0 ou cidade=NULL.
+    """
+    import json as _json
+    ip = request.client.host if request.client else ""
+    atualizados = 0
+    with db.get_conn() as conn:
+        rows = conn.execute("""
+            SELECT fe.mercos_id, fe.payload_json
+            FROM fila_eventos fe
+            JOIN pedidos_fluxo pf ON pf.mercos_id = fe.mercos_id
+            WHERE fe.evento = 'pedido.gerado'
+              AND (pf.valor = 0 OR pf.valor IS NULL OR pf.cidade IS NULL OR pf.cidade = '')
+        """).fetchall()
+        for row in rows:
+            try:
+                dados = _json.loads(row["payload_json"])
+                valor  = float(dados.get("valor_total", 0) or 0)
+                cidade = dados.get("cliente_cidade", "") or ""
+                bairro = dados.get("cliente_bairro", "") or ""
+                conn.execute("""
+                    UPDATE pedidos_fluxo
+                    SET valor  = CASE WHEN ? > 0 THEN ? ELSE valor END,
+                        cidade = CASE WHEN ? != '' THEN ? ELSE cidade END,
+                        bairro = CASE WHEN ? != '' THEN ? ELSE bairro END
+                    WHERE mercos_id = ?
+                """, (valor, valor, cidade, cidade, bairro, bairro, row["mercos_id"]))
+                atualizados += 1
+            except Exception:
+                pass
+    db.admin_registrar_acao("corrigir_valores", None,
+                            f"{atualizados} pedidos corrigidos", ip)
+    return {"ok": True, "atualizados": atualizados}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Auditoria — resolver todos os buracos
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/api/auditoria/sequencia/resolver-todos")
+async def api_resolver_todos_buracos(request: Request):
+    from src.auditoria import marcar_todos_buracos_resolvidos
+    ip = request.client.host if request.client else ""
+    qtd = marcar_todos_buracos_resolvidos("verificado_em_lote")
+    db.admin_registrar_acao("resolver_todos_buracos", None,
+                            f"{qtd} buracos resolvidos em lote", ip)
+    return {"ok": True, "resolvidos": qtd}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Relatórios ABC
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/relatorios/abc-produtos")
+async def api_abc_produtos(data_inicio: str = None, data_fim: str = None, top: int = 100):
+    """Classificação ABC de produtos por receita (A=80%, B=95%, C=100%)."""
+    filtros = []
+    params = []
+    if data_inicio:
+        filtros.append("i.processado_em >= ?")
+        params.append(data_inicio)
+    if data_fim:
+        filtros.append("i.processado_em <= ?")
+        params.append(data_fim + "T23:59:59")
+    where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+
+    with db.get_conn() as conn:
+        rows = conn.execute(f"""
+            SELECT
+                COALESCE(NULLIF(i.sku,''), i.nome_produto) AS produto,
+                i.nome_produto,
+                SUM(i.quantidade)  AS qtd_total,
+                SUM(i.valor_total) AS valor_total,
+                COUNT(DISTINCT i.mercos_id) AS num_pedidos
+            FROM itens_pedido i
+            {where}
+            GROUP BY COALESCE(NULLIF(i.sku,''), i.nome_produto)
+            ORDER BY valor_total DESC
+            LIMIT ?
+        """, (*params, top)).fetchall()
+
+    total_geral = sum(r["valor_total"] or 0 for r in rows)
+    acumulado = 0
+    resultado = []
+    for r in rows:
+        v = r["valor_total"] or 0
+        acumulado += v
+        pct_acum = (acumulado / total_geral * 100) if total_geral > 0 else 0
+        classe = "A" if pct_acum <= 80 else ("B" if pct_acum <= 95 else "C")
+        resultado.append({
+            **dict(r),
+            "pct_receita": round(v / total_geral * 100, 2) if total_geral > 0 else 0,
+            "pct_acumulado": round(pct_acum, 2),
+            "classe": classe,
+        })
+    return {"itens": resultado, "total_geral": round(total_geral, 2)}
+
+
+@router.get("/api/relatorios/abc-clientes")
+async def api_abc_clientes(data_inicio: str = None, data_fim: str = None, top: int = 100):
+    """Classificação ABC de clientes por receita."""
+    filtros = ["status_fluxo NOT IN ('cancelado','erro')"]
+    params = []
+    if data_inicio:
+        filtros.append("recebido_em >= ?")
+        params.append(data_inicio)
+    if data_fim:
+        filtros.append("recebido_em <= ?")
+        params.append(data_fim + "T23:59:59")
+    where = "WHERE " + " AND ".join(filtros)
+
+    with db.get_conn() as conn:
+        rows = conn.execute(f"""
+            SELECT
+                cliente,
+                COUNT(*) AS num_pedidos,
+                SUM(valor) AS valor_total,
+                AVG(valor) AS ticket_medio,
+                MAX(recebido_em) AS ultima_compra
+            FROM pedidos_fluxo
+            {where}
+            GROUP BY cliente
+            ORDER BY valor_total DESC
+            LIMIT ?
+        """, (*params, top)).fetchall()
+
+    total_geral = sum(r["valor_total"] or 0 for r in rows)
+    acumulado = 0
+    resultado = []
+    for r in rows:
+        v = r["valor_total"] or 0
+        acumulado += v
+        pct_acum = (acumulado / total_geral * 100) if total_geral > 0 else 0
+        classe = "A" if pct_acum <= 80 else ("B" if pct_acum <= 95 else "C")
+        resultado.append({
+            **dict(r),
+            "ticket_medio": round(r["ticket_medio"] or 0, 2),
+            "pct_receita": round(v / total_geral * 100, 2) if total_geral > 0 else 0,
+            "pct_acumulado": round(pct_acum, 2),
+            "classe": classe,
+        })
+    return {"itens": resultado, "total_geral": round(total_geral, 2)}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Analytics com filtros
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/analytics/resumo-filtrado")
+async def api_analytics_resumo_filtrado(
+    data_inicio: str = None, data_fim: str = None,
+    cliente: str = None, cidade: str = None, bairro: str = None
+):
+    """Resumo de faturamento com filtros opcionais."""
+    filtros = ["status_fluxo NOT IN ('cancelado','erro')"]
+    params: list = []
+
+    if data_inicio:
+        filtros.append("recebido_em >= ?")
+        params.append(data_inicio)
+    if data_fim:
+        filtros.append("recebido_em <= ?")
+        params.append(data_fim + "T23:59:59")
+    if cliente:
+        filtros.append("cliente LIKE ?")
+        params.append(f"%{cliente}%")
+    if cidade:
+        filtros.append("cidade LIKE ?")
+        params.append(f"%{cidade}%")
+    if bairro:
+        filtros.append("bairro LIKE ?")
+        params.append(f"%{bairro}%")
+
+    where = "WHERE " + " AND ".join(filtros)
+
+    with db.get_conn() as conn:
+        faturamento = conn.execute(
+            f"SELECT COALESCE(SUM(valor),0) FROM pedidos_fluxo {where}", params
+        ).fetchone()[0]
+        num_pedidos = conn.execute(
+            f"SELECT COUNT(*) FROM pedidos_fluxo {where}", params
+        ).fetchone()[0]
+        ticket_medio = round(faturamento / num_pedidos, 2) if num_pedidos > 0 else 0
+
+        # Top clientes no período filtrado
+        top_clientes = conn.execute(f"""
+            SELECT cliente, COUNT(*) AS num_pedidos, SUM(valor) AS valor_total,
+                   AVG(valor) AS ticket_medio, MAX(recebido_em) AS ultima_compra
+            FROM pedidos_fluxo {where}
+            GROUP BY cliente ORDER BY valor_total DESC LIMIT 10
+        """, params).fetchall()
+
+        # Bairros no período
+        por_bairro = conn.execute(f"""
+            SELECT COALESCE(NULLIF(bairro,''),'(sem bairro)') AS bairro,
+                   COUNT(*) AS num_pedidos, SUM(valor) AS faturamento
+            FROM pedidos_fluxo {where}
+            GROUP BY bairro ORDER BY faturamento DESC LIMIT 20
+        """, params).fetchall()
+
+    return {
+        "faturamento_total": round(faturamento, 2),
+        "num_pedidos": num_pedidos,
+        "ticket_medio": ticket_medio,
+        "top_clientes": [dict(r) for r in top_clientes],
+        "por_bairro": [dict(r) for r in por_bairro],
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Módulo Separação
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/separacao/fila")
+async def api_separacao_fila():
+    """Pedidos em status 'processado' prontos para separação, com seus itens."""
+    with db.get_conn() as conn:
+        pedidos = conn.execute("""
+            SELECT f.mercos_id, f.numero, f.cliente, f.valor,
+                   f.cidade, f.bairro, f.processado_em, f.recebido_em,
+                   p.vhsys_id
+            FROM pedidos_fluxo f
+            LEFT JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
+            WHERE f.status_fluxo = 'processado'
+            ORDER BY f.processado_em ASC
+        """).fetchall()
+
+        resultado = []
+        for p in pedidos:
+            itens = conn.execute("""
+                SELECT sku, nome_produto, quantidade, valor_unit, valor_total
+                FROM itens_pedido WHERE mercos_id = ?
+            """, (p["mercos_id"],)).fetchall()
+            resultado.append({
+                **dict(p),
+                "itens": [dict(i) for i in itens],
+                "total_itens": len(itens),
+            })
+
+    return {"pedidos": resultado, "total": len(resultado)}
+
+
+@router.get("/api/separacao/guia/{mercos_id}")
+async def api_separacao_guia(mercos_id: int):
+    """Guia de separação de um pedido específico."""
+    with db.get_conn() as conn:
+        pedido = conn.execute(
+            "SELECT * FROM pedidos_fluxo WHERE mercos_id = ?", (mercos_id,)
+        ).fetchone()
+        if not pedido:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        itens = conn.execute(
+            "SELECT * FROM itens_pedido WHERE mercos_id = ?", (mercos_id,)
+        ).fetchall()
+        vhsys = conn.execute(
+            "SELECT vhsys_id FROM pedidos_processados WHERE mercos_id = ?", (mercos_id,)
+        ).fetchone()
+    return {
+        "pedido": dict(pedido),
+        "vhsys_id": vhsys["vhsys_id"] if vhsys else None,
+        "itens": [dict(i) for i in itens],
+    }
+
+
+@router.get("/api/separacao/guia-lote")
+async def api_separacao_guia_lote(ids: str):
+    """
+    Guia consolidado de múltiplos pedidos.
+    ids = '101,102,103' (comma-separated)
+    Retorna itens agrupados por produto com lista de pedidos que os contêm.
+    """
+    try:
+        mercos_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="IDs inválidos")
+
+    if not mercos_ids:
+        raise HTTPException(status_code=400, detail="Nenhum ID fornecido")
+
+    placeholders = ",".join("?" * len(mercos_ids))
+    with db.get_conn() as conn:
+        pedidos = conn.execute(
+            f"SELECT mercos_id, numero, cliente, cidade, bairro, valor FROM pedidos_fluxo WHERE mercos_id IN ({placeholders})",
+            mercos_ids
+        ).fetchall()
+        itens = conn.execute(
+            f"SELECT * FROM itens_pedido WHERE mercos_id IN ({placeholders}) ORDER BY nome_produto",
+            mercos_ids
+        ).fetchall()
+
+    # Agrupa itens por produto
+    agrupado: dict = {}
+    for item in itens:
+        chave = item["sku"] or item["nome_produto"] or "?"
+        if chave not in agrupado:
+            agrupado[chave] = {
+                "sku": item["sku"],
+                "nome_produto": item["nome_produto"],
+                "qtd_total": 0,
+                "pedidos": [],
+            }
+        agrupado[chave]["qtd_total"] += item["quantidade"] or 0
+        agrupado[chave]["pedidos"].append({
+            "mercos_id": item["mercos_id"],
+            "quantidade": item["quantidade"],
+        })
+
+    return {
+        "pedidos": [dict(p) for p in pedidos],
+        "itens_consolidados": list(agrupado.values()),
+        "total_pedidos": len(pedidos),
+    }
+
+
+@router.get("/api/separacao/em-separacao")
+async def api_separacao_em_separacao():
+    """Pedidos em status 'separado' aguardando envio."""
+    with db.get_conn() as conn:
+        pedidos = conn.execute("""
+            SELECT f.mercos_id, f.numero, f.cliente, f.valor,
+                   f.cidade, f.bairro, f.separado_em, f.processado_em,
+                   p.vhsys_id
+            FROM pedidos_fluxo f
+            LEFT JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
+            WHERE f.status_fluxo = 'separado'
+            ORDER BY f.separado_em ASC
+        """).fetchall()
+        resultado = []
+        for p in pedidos:
+            itens = conn.execute(
+                "SELECT sku, nome_produto, quantidade FROM itens_pedido WHERE mercos_id = ?",
+                (p["mercos_id"],)
+            ).fetchall()
+            resultado.append({**dict(p), "itens": [dict(i) for i in itens]})
+    return {"pedidos": resultado, "total": len(resultado)}

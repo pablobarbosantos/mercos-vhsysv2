@@ -77,6 +77,8 @@ def init_db():
                 numero          TEXT,
                 cliente         TEXT,
                 valor           REAL DEFAULT 0,
+                cidade          TEXT,
+                bairro          TEXT,
                 recebido_em     TEXT NOT NULL,
                 processado_em   TEXT,
                 separado_em     TEXT,
@@ -145,6 +147,13 @@ def init_db():
                 feito_em  TEXT NOT NULL
             );
         """)
+    # Migrations seguras (ADD COLUMN é idempotente no SQLite via try/except)
+    for col, typedef in [("cidade", "TEXT"), ("bairro", "TEXT")]:
+        try:
+            conn.execute(f"ALTER TABLE pedidos_fluxo ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass  # coluna já existe
+
     logger.info("[DB] Banco inicializado.")
 
 
@@ -182,14 +191,25 @@ def registrar_erro(entidade: str, referencia_id: str, erro: str):
 # NOVO: Fluxo operacional
 # ──────────────────────────────────────────────────────────────
 
-def fluxo_registrar_recebido(mercos_id: int, numero: str, cliente: str, valor: float = 0):
+def fluxo_registrar_recebido(mercos_id: int, numero: str, cliente: str,
+                              valor: float = 0, cidade: str = "", bairro: str = ""):
     """Chamado quando o webhook chega — primeira etapa do fluxo."""
+    agora = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
         conn.execute("""
             INSERT OR IGNORE INTO pedidos_fluxo
-                (mercos_id, numero, cliente, valor, recebido_em, status_fluxo)
-            VALUES (?, ?, ?, ?, ?, 'recebido')
-        """, (mercos_id, str(numero), cliente, valor, datetime.now(timezone.utc).isoformat()))
+                (mercos_id, numero, cliente, valor, cidade, bairro, recebido_em, status_fluxo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'recebido')
+        """, (mercos_id, str(numero), cliente, valor, cidade or "", bairro or "", agora))
+        # Atualiza valor/cidade/bairro mesmo se row já existia (INSERT OR IGNORE não atualiza)
+        if valor > 0 or cidade or bairro:
+            conn.execute("""
+                UPDATE pedidos_fluxo
+                SET valor  = CASE WHEN ? > 0 THEN ? ELSE valor END,
+                    cidade = CASE WHEN ? != '' THEN ? ELSE cidade END,
+                    bairro = CASE WHEN ? != '' THEN ? ELSE bairro END
+                WHERE mercos_id = ?
+            """, (valor, valor, cidade or "", cidade or "", bairro or "", bairro or "", mercos_id))
 
 
 def fluxo_marcar_processado(mercos_id: int):

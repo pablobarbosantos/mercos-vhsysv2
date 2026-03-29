@@ -58,6 +58,10 @@ logger.info("[Startup] Inicializando banco SQLite...")
 db.init_db()
 logger.info("[Startup] Banco OK.")
 
+from compras import database as compras_db
+compras_db.init_db()
+logger.info("[Startup] Banco compras OK.")
+
 mercos_service = MercosService()
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -73,6 +77,8 @@ FECHAMENTO_HORA      = os.getenv("AUDIT_FECHAMENTO_HORA", "20")
 FILA_WORKER_SEG      = int(os.getenv("FILA_WORKER_INTERVAL_SEG", 10))
 CACHE_REFRESH_HORAS  = int(os.getenv("VHSYS_CACHE_TTL_HORAS", 4))
 EXPEDICAO_POLL_MIN   = int(os.getenv("EXPEDICAO_POLL_INTERVAL_MIN", 5))
+COMPRAS_SEFAZ_HORAS  = float(os.getenv("COMPRAS_SEFAZ_INTERVAL_HORAS", 1.5))
+COMPRAS_WORKER_MIN   = int(os.getenv("COMPRAS_WORKER_INTERVAL_MIN", 5))
 
 
 def _job_sequencia():
@@ -194,6 +200,27 @@ def _job_processar_fila():
         _worker_lock.release()
 
 
+# ── Compras / NF-e ────────────────────────────────────────────────────────────
+
+def _job_sefaz_coletar():
+    try:
+        from compras.nfe_collector import coletar_nfes
+        resultado = coletar_nfes()
+        logger.info(f"[Compras/SEFAZ] {resultado}")
+    except Exception as e:
+        logger.error(f"[Compras/SEFAZ] Erro: {e}", exc_info=True)
+
+
+def _job_processar_compras():
+    try:
+        from compras.service import processar_fila_compras
+        resultado = processar_fila_compras()
+        if not resultado.get("skipped"):
+            logger.info(f"[Compras/Worker] {resultado}")
+    except Exception as e:
+        logger.error(f"[Compras/Worker] Erro: {e}", exc_info=True)
+
+
 # ── Expedição VHSys ───────────────────────────────────────────────────────────
 
 from src.expedicao import init_expedicao, job_sync_expedicao as _job_sync_expedicao
@@ -227,12 +254,18 @@ scheduler.add_job(
 # scheduler.add_job(_job_sync_expedicao, "interval", minutes=EXPEDICAO_POLL_MIN,
 #                   id="job_sync_expedicao", max_instances=1)
 
+scheduler.add_job(_job_sefaz_coletar,    "interval", hours=COMPRAS_SEFAZ_HORAS, id="compras_sefaz",   max_instances=1)
+scheduler.add_job(_job_processar_compras,"interval", minutes=COMPRAS_WORKER_MIN, id="compras_worker",  max_instances=1)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
 app.include_router(admin_router)
+
+from compras.admin_routes import router as compras_router
+app.include_router(compras_router)
 
 
 @app.on_event("startup")
@@ -252,6 +285,13 @@ async def startup_event():
     if recuperados:
         logger.warning(
             f"[Startup] Fila recuperada — {recuperados} item(s) resetados "
+            f"para reprocessamento (crash anterior detectado)."
+        )
+
+    recuperados_compras = compras_db.fila_recuperar_travados()
+    if recuperados_compras:
+        logger.warning(
+            f"[Startup] Fila compras: {recuperados_compras} item(s) resetados "
             f"para reprocessamento (crash anterior detectado)."
         )
     scheduler.start()
@@ -315,6 +355,8 @@ async def receive_mercos_order(request: Request):
                         numero=str(numero or mercos_id),
                         cliente=dados.get("cliente_razao_social", ""),
                         valor=float(dados.get("valor_total", 0) or 0),
+                        cidade=dados.get("cliente_cidade", "") or "",
+                        bairro=dados.get("cliente_bairro", "") or "",
                     )
 
                 logger.info(f"[Webhook] Pedido #{numero} persistido na fila (id={fila_id}).")
@@ -348,6 +390,8 @@ async def receive_mercos_order(request: Request):
                         numero=str(numero),
                         cliente=dados.get("cliente_razao_social", ""),
                         valor=float(dados.get("valor_total", 0) or 0),
+                        cidade=dados.get("cliente_cidade", "") or "",
+                        bairro=dados.get("cliente_bairro", "") or "",
                     )
                     logger.info(f"[Webhook] Pedido #{numero} persistido na fila (id={fila_id}).")
 

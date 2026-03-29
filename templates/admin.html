@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
     :root {
       --bg:        #080b10;
@@ -492,6 +493,287 @@
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--muted2); }
+
+    /* ── Kanban ── */
+    .kanban-board {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 16px;
+      align-items: flex-start;
+    }
+    .kanban-col {
+      flex: 0 0 210px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      min-height: 120px;
+    }
+    .kanban-col-header {
+      padding: 9px 12px;
+      font-size: 9px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--border2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .col-count {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 9px;
+      color: var(--muted2);
+      font-weight: 700;
+    }
+    .kanban-cards {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex: 1;
+    }
+    .kanban-card {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 9px 11px;
+      transition: border-color .15s, box-shadow .15s;
+      position: relative;
+    }
+    .kanban-card:hover {
+      border-color: rgba(0,212,255,.4);
+      box-shadow: 0 0 0 1px rgba(0,212,255,.08);
+    }
+    .kanban-card.selected {
+      border-color: var(--accent);
+      background: rgba(0,212,255,.05);
+    }
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .card-id    { font-family: var(--font-mono); font-size: 10px; color: var(--muted2); font-weight: 700; }
+    .card-value { font-family: var(--font-mono); font-size: 10px; color: var(--ok); font-weight: 700; }
+    .card-client {
+      font-size: 11px; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 5px;
+    }
+    .card-time { font-size: 10px; color: var(--muted2); font-family: var(--font-mono); margin-bottom: 7px; }
+    .card-time.atrasado { color: var(--warn); font-weight: 700; }
+    .card-time.critico  { color: var(--erro); font-weight: 700; }
+    .card-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .card-checkbox {
+      position: absolute; top: 7px; right: 7px;
+      width: 14px; height: 14px;
+      accent-color: var(--accent); cursor: pointer;
+    }
+
+    /* ── Drag & Drop ── */
+    .kanban-card.draggable { cursor: grab; }
+    .kanban-card.draggable:active { cursor: grabbing; }
+    .kanban-card.dragging { opacity: .35; box-shadow: 0 0 0 2px var(--accent); }
+    .kanban-col.drag-over { border-color: rgba(0,212,255,.5); }
+    .kanban-col.drag-over .kanban-cards {
+      background: rgba(0,212,255,.04);
+      outline: 2px dashed rgba(0,212,255,.3);
+      outline-offset: -4px;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+
+    /* ── Barra de rota ── */
+    #rota-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,212,255,.05);
+      border: 1px solid rgba(0,212,255,.3);
+      border-radius: var(--radius);
+      padding: 9px 14px;
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+      flex-wrap: wrap;
+    }
+    #rota-bar.show { display: flex; }
+    #rota-bar input {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      padding: 6px 10px;
+      outline: none;
+      flex: 1;
+      min-width: 220px;
+      max-width: 340px;
+    }
+    #rota-bar input:focus { border-color: rgba(0,212,255,.5); }
+    button.gerar-rota {
+      background: var(--accent);
+      border: none; border-radius: 6px;
+      color: #000; font-size: 11px; font-weight: 700;
+      font-family: var(--font-mono);
+      padding: 7px 14px; cursor: pointer;
+      letter-spacing: .4px;
+      transition: all .2s;
+    }
+    button.gerar-rota:hover { background: #33deff; box-shadow: 0 0 14px rgba(0,212,255,.4); }
+
+    /* ── Modal QR ── */
+    #modal-qr {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.72);
+      z-index: 200;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    #modal-qr.show { display: flex; }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      width: 92%; max-width: 820px;
+      max-height: 90vh; overflow-y: auto;
+      padding: 26px;
+      box-shadow: 0 24px 80px #00000080;
+    }
+    .modal-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border2);
+    }
+    .modal-title {
+      font-family: var(--font-disp);
+      font-size: 15px; font-weight: 800; color: var(--text);
+    }
+    button.modal-close {
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--muted2);
+      font-size: 13px; padding: 4px 10px; cursor: pointer;
+      transition: all .2s;
+    }
+    button.modal-close:hover { background: var(--surface2); color: var(--text); }
+    .qr-segmento {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .qr-seg-header {
+      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+      color: var(--accent); margin-bottom: 12px;
+      text-transform: uppercase; letter-spacing: .8px;
+    }
+    .qr-seg-body { display: flex; gap: 18px; align-items: flex-start; }
+    .qr-paradas {
+      flex: 1; font-family: var(--font-mono);
+      font-size: 11px; line-height: 1.8; color: var(--text);
+    }
+    canvas.qr-canvas {
+      border: 4px solid #fff; border-radius: 6px; flex-shrink: 0;
+    }
+    .qr-link { margin-top: 10px; }
+    .qr-link a {
+      color: var(--accent); font-family: var(--font-mono);
+      font-size: 10px; text-decoration: none;
+    }
+    .qr-link a:hover { text-decoration: underline; }
+
+    /* ── Separação & sub-abas ── */
+    .sep-subtab {
+      padding: 6px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted2);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .sep-subtab.active, .sep-subtab:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .btn-action {
+      padding: 6px 14px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn-action:hover { background: var(--accent); color: #000; }
+    .btn-action:disabled { opacity: .4; cursor: default; }
+
+    /* ── Badge ABC ── */
+    .badge-abc-A { background:#00e67620;color:var(--ok);border:1px solid var(--ok);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700 }
+    .badge-abc-B { background:#ffb40020;color:var(--warn);border:1px solid var(--warn);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700 }
+    .badge-abc-C { background:#ff3d5720;color:var(--erro);border:1px solid var(--erro);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700 }
+
+    /* ── Guia de separação (impressão) ── */
+    @media print {
+      body > *:not(#modal-guia) { display: none !important; }
+      #modal-guia { position: static !important; background: #fff !important; }
+      #modal-guia > div { border: none !important; box-shadow: none !important; max-width: 100% !important; }
+      .no-print { display: none !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .guia-item { border: 1px solid #ccc; padding: 8px; margin-bottom: 4px; border-radius: 4px; }
+    }
+    .guia-pedido-header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .guia-item {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .guia-item .sku { color: var(--muted2); font-size: 11px; min-width: 80px; }
+    .guia-item .nome { flex: 1; }
+    .guia-item .qtd { font-size: 18px; font-weight: 700; color: var(--accent); min-width: 60px; text-align: right; }
+    .guia-lote-item {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .guia-lote-item .info { flex: 1; }
+    .guia-lote-item .qtd-total { font-size: 22px; font-weight: 700; color: var(--ok); min-width: 60px; text-align: right; }
+    .cidade-badge {
+      padding: 4px 12px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      font-size: 11px;
+      cursor: pointer;
+      color: var(--accent);
+    }
+    .cidade-badge:hover { background: var(--accent); color: #000; }
   </style>
 </head>
 <body>
@@ -503,6 +785,7 @@
   </div>
   <div class="header-right">
     <span id="ultima-atualizacao">—</span>
+    <a href="/compras" style="color:var(--muted2);font-size:11px;font-family:var(--font-mono);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:6px;transition:color .2s,border-color .2s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--muted2)';this.style.borderColor='var(--border)'">🛒 Compras</a>
     <button class="audit-now" onclick="auditarAgora()">⚡ Auditar agora</button>
     <button class="refresh" onclick="carregarTudo()">↻ Atualizar</button>
   </div>
@@ -513,6 +796,7 @@
   <div class="tab active" onclick="trocarAba('pedidos')">📦 Pedidos</div>
   <div class="tab" onclick="trocarAba('fluxo')" id="tab-fluxo">🔄 Fluxo Operacional</div>
   <div class="tab" onclick="trocarAba('sequencia')" id="tab-seq">🔍 Auditoria de Sequência</div>
+  <div class="tab" onclick="trocarAba('separacao')">🗂️ Separação</div>
   <div class="tab" onclick="trocarAba('analytics')">📊 Analytics</div>
 </div>
 
@@ -621,23 +905,52 @@
       <span id="contagem-fluxo">— pedidos</span>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Pedido</th>
-            <th>Cliente</th>
-            <th>Valor</th>
-            <th>Fluxo</th>
-            <th>Status</th>
-            <th>Tempo</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-fluxo">
-          <tr><td colspan="7" class="empty"><div class="icon">⏳</div><div><span class="spinner"></span> Carregando…</div></td></tr>
-        </tbody>
-      </table>
+    <!-- Barra de seleção para rota -->
+    <div id="rota-bar">
+      <span id="rota-count">0 pedido(s) selecionado(s)</span>
+      <input type="text" id="rota-endereco" placeholder="Endereço da empresa (origem da rota)…" />
+      <button class="gerar-rota" onclick="abrirModalRota()">🗺️ Gerar Rota + QR</button>
+      <button class="action-res" onclick="limparSelecao()" style="margin-left:auto;padding:5px 12px">✕ Limpar seleção</button>
+    </div>
+
+    <!-- Kanban board -->
+    <div class="kanban-board">
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:var(--info)">
+          📥 Recebido <span class="col-count" id="cnt-recebido">0</span>
+        </div>
+        <div class="kanban-cards" id="col-recebido"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:var(--ok)">
+          ⚙️ Processado <span class="col-count" id="cnt-processado">0</span>
+        </div>
+        <div class="kanban-cards" id="col-processado"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:var(--accent)">
+          📋 Separado <span class="col-count" id="cnt-separado">0</span>
+        </div>
+        <div class="kanban-cards" id="col-separado"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:var(--ok)">
+          🚚 Enviado <span class="col-count" id="cnt-enviado">0</span>
+        </div>
+        <div class="kanban-cards" id="col-enviado"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:var(--erro)">
+          ❌ Erro <span class="col-count" id="cnt-erro">0</span>
+        </div>
+        <div class="kanban-cards" id="col-erro"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:var(--muted2)">
+          🚫 Cancelado <span class="col-count" id="cnt-cancelado">0</span>
+        </div>
+        <div class="kanban-cards" id="col-cancelado"></div>
+      </div>
     </div>
   </div>
 
@@ -662,6 +975,7 @@
         <option value="todos">Todos</option>
       </select>
       <span id="contagem-seq">— registros</span>
+      <button class="btn-action" onclick="resolverTodosBuracos()" style="margin-left:auto;background:var(--ok);color:#000">✔ Resolver Todos</button>
     </div>
 
     <div class="table-wrap">
@@ -684,9 +998,109 @@
   </div>
 
   <!-- ══════════════════════════════════════════════
-       ABA 4 — ANALYTICS
+       ABA 4 — SEPARAÇÃO
+  ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="aba-separacao">
+
+    <!-- Sub-abas internas -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+      <button class="sep-subtab active" id="stab-fila" onclick="sepAba('fila')">📋 Fila de Separação</button>
+      <button class="sep-subtab" id="stab-separados" onclick="sepAba('separados')">📦 Em Separação</button>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-action" onclick="imprimirGuiaLote()" id="btn-imprimir-lote" disabled style="opacity:.5">🖨️ Imprimir Lote Selecionado</button>
+        <button class="btn-action" onclick="gerarRotaSep()" id="btn-rota-sep" disabled style="opacity:.5">🗺️ Gerar Rota</button>
+        <button class="btn-action" style="background:var(--ok);color:#000" onclick="marcarSeparadoLote()">✔ Marcar Separados</button>
+      </div>
+    </div>
+
+    <!-- Fila de Separação -->
+    <div id="sep-sec-fila">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+        <input type="text" id="sep-busca" placeholder="Buscar cliente ou pedido…" oninput="filtrarSep()" style="flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono)">
+        <select id="sep-filtro-cidade" onchange="filtrarSep()" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono)">
+          <option value="">Todas as cidades</option>
+        </select>
+        <button class="btn-action" onclick="selecionarTodosSep()">☑ Selecionar Todos</button>
+      </div>
+
+      <!-- Agrupamento por cidade/bairro -->
+      <div id="sep-por-cidade" style="display:none;margin-bottom:16px">
+        <div style="color:var(--muted2);font-size:11px;margin-bottom:8px">PEDIDOS POR CIDADE/BAIRRO</div>
+        <div id="sep-cidades-list" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" id="chk-sep-all" onchange="toggleTodosSep(this)"></th>
+              <th>#Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade / Bairro</th>
+              <th>Valor</th>
+              <th>Itens</th>
+              <th>Processado há</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-sep-fila">
+            <tr><td colspan="8" class="empty"><div class="icon">⏳</div><span class="spinner"></span> Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Em Separação -->
+    <div id="sep-sec-separados" style="display:none">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade / Bairro</th>
+              <th>Valor</th>
+              <th>Separado há</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-sep-separados">
+            <tr><td colspan="6" class="empty"><div class="icon">⏳</div><span class="spinner"></span> Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal guia de separação -->
+    <div id="modal-guia" style="display:none;position:fixed;inset:0;z-index:500;background:#000c;overflow:auto">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;max-width:800px;margin:40px auto;padding:32px;position:relative">
+        <button onclick="document.getElementById('modal-guia').style.display='none'" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted2);font-size:20px;cursor:pointer">✕</button>
+        <div id="guia-conteudo"></div>
+        <div style="display:flex;gap:12px;margin-top:24px;justify-content:flex-end" class="no-print">
+          <button class="btn-action" onclick="window.print()">🖨️ Imprimir / PDF</button>
+          <button class="btn-action" onclick="document.getElementById('modal-guia').style.display='none'">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       ABA 5 — ANALYTICS
   ══════════════════════════════════════════════ -->
   <div class="tab-content" id="aba-analytics">
+
+    <!-- Sub-abas Analytics -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <button class="sep-subtab active" id="antab-resumo" onclick="anAba('resumo')">📊 Resumo</button>
+      <button class="sep-subtab" id="antab-filtrado" onclick="anAba('filtrado')">🔍 Análise Filtrada</button>
+      <button class="sep-subtab" id="antab-abc" onclick="anAba('abc')">🏅 Relatório ABC</button>
+      <div style="margin-left:auto">
+        <button class="btn-action" onclick="corrigirValores()" style="background:var(--warn);color:#000">⚙️ Corrigir Dados Históricos</button>
+      </div>
+    </div>
+
+    <!-- Seção Resumo -->
+    <div id="an-sec-resumo">
 
     <!-- Score + Cards financeiros -->
     <div class="stats" style="grid-template-columns: repeat(auto-fit, minmax(180px,1fr))">
@@ -765,19 +1179,128 @@
       </table>
     </div>
 
+    </div><!-- /an-sec-resumo -->
+
+    <!-- Seção Análise Filtrada -->
+    <div id="an-sec-filtrado" style="display:none">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <div style="color:var(--accent);font-size:12px;font-weight:700;margin-bottom:14px">FILTROS</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+          <div>
+            <label style="font-size:11px;color:var(--muted2)">DATA INÍCIO</label>
+            <input type="date" id="filt-inicio" style="width:100%;margin-top:4px;padding:8px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted2)">DATA FIM</label>
+            <input type="date" id="filt-fim" style="width:100%;margin-top:4px;padding:8px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted2)">CLIENTE</label>
+            <input type="text" id="filt-cliente" placeholder="Parte do nome…" style="width:100%;margin-top:4px;padding:8px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted2)">CIDADE</label>
+            <input type="text" id="filt-cidade" placeholder="Cidade…" style="width:100%;margin-top:4px;padding:8px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted2)">BAIRRO</label>
+            <input type="text" id="filt-bairro" placeholder="Bairro…" style="width:100%;margin-top:4px;padding:8px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono)">
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn-action" onclick="aplicarFiltros()">▶ Aplicar Filtros</button>
+          <button class="btn-action" onclick="limparFiltros()" style="background:var(--surface);border:1px solid var(--border2)">✕ Limpar</button>
+        </div>
+      </div>
+
+      <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:20px">
+        <div class="stat-card hoje"><div class="label">Faturamento Total</div><div class="value" id="filt-fat" style="font-size:20px">—</div></div>
+        <div class="stat-card total"><div class="label">Pedidos</div><div class="value" id="filt-num">—</div></div>
+        <div class="stat-card info"><div class="label">Ticket Médio</div><div class="value" id="filt-ticket" style="font-size:20px">—</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div>
+          <div class="section-title">👥 Top Clientes (período)</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cliente</th><th>Pedidos</th><th>Faturamento</th><th>Ticket</th></tr></thead>
+              <tbody id="tbody-filt-clientes"><tr><td colspan="4" class="empty">Aplique os filtros</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="section-title">📍 Por Cidade/Bairro</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cidade/Bairro</th><th>Pedidos</th><th>Faturamento</th></tr></thead>
+              <tbody id="tbody-filt-bairro"><tr><td colspan="3" class="empty">Aplique os filtros</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /an-sec-filtrado -->
+
+    <!-- Seção ABC -->
+    <div id="an-sec-abc" style="display:none">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px">
+          <button class="sep-subtab active" id="abc-tab-prod" onclick="abcAba('prod')">📦 Produtos</button>
+          <button class="sep-subtab" id="abc-tab-cli" onclick="abcAba('cli')">👥 Clientes</button>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <input type="date" id="abc-inicio" style="padding:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono)" placeholder="De">
+          <span style="color:var(--muted2)">até</span>
+          <input type="date" id="abc-fim" style="padding:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono)" placeholder="Até">
+          <button class="btn-action" onclick="carregarABC()">▶ Gerar</button>
+        </div>
+      </div>
+      <div id="abc-resumo" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>
+      <div id="abc-sec-prod">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>Classe</th><th>Qtd</th><th>Faturamento</th><th>% Receita</th><th>% Acum.</th></tr></thead>
+            <tbody id="tbody-abc-prod"><tr><td colspan="6" class="empty">Clique em "Gerar" para calcular</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="abc-sec-cli" style="display:none">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Cliente</th><th>Classe</th><th>Pedidos</th><th>Faturamento</th><th>% Receita</th><th>% Acum.</th></tr></thead>
+            <tbody id="tbody-abc-cli"><tr><td colspan="6" class="empty">Clique em "Gerar" para calcular</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /an-sec-abc -->
+
   </div>
 
 </main>
 
 <div id="toast"></div>
 
+<!-- ══════════════════════════════════════════════
+     Modal — Roteirização QR Codes Google Maps
+══════════════════════════════════════════════ -->
+<div id="modal-qr">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">🗺️ Roteirização — QR Codes Google Maps</div>
+      <button class="modal-close" onclick="fecharModalRota()">✕ Fechar</button>
+    </div>
+    <div id="modal-qr-body"></div>
+  </div>
+</div>
+
 <script>
   // ════════════════════════════════════════════════
   // Estado global
   // ════════════════════════════════════════════════
-  let _pedidos = [];
-  let _fluxo   = [];
-  let _buracos = [];
+  let _pedidos     = [];
+  let _fluxo       = [];
+  let _buracos     = [];
+  let _selecionados = new Set();
 
   // ════════════════════════════════════════════════
   // Tabs
@@ -787,6 +1310,8 @@
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
     document.getElementById('aba-' + nome).classList.add('active');
     event.target.classList.add('active');
+    if (nome === 'separacao') carregarSeparacao();
+    if (nome === 'analytics')  carregarAnalytics();
   }
 
   // ════════════════════════════════════════════════
@@ -914,6 +1439,9 @@
     }
   }
 
+  // ════════════════════════════════════════════════
+  // ABA 2 — Kanban Fluxo Operacional
+  // ════════════════════════════════════════════════
   function filtrarFluxo() {
     const busca  = document.getElementById('filtro-fluxo').value.toLowerCase();
     const status = document.getElementById('filtro-fluxo-status').value.toLowerCase();
@@ -925,76 +1453,243 @@
       return matchBusca && matchStatus;
     });
     document.getElementById('contagem-fluxo').textContent = filtrados.length + ' pedidos';
-    renderTabelaFluxo(filtrados);
+    renderKanban(filtrados);
   }
 
-  function renderTabelaFluxo(pedidos) {
-    const tbody = document.getElementById('tbody-fluxo');
-    if (!pedidos.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="icon">📭</div><div>Nenhum pedido encontrado.</div></td></tr>`;
+  function renderKanban(pedidos) {
+    const cols = { recebido:[], processado:[], separado:[], enviado:[], erro:[], cancelado:[] };
+    pedidos.forEach(p => {
+      const s = p.status_fluxo || 'recebido';
+      (cols[s] || cols.recebido).push(p);
+    });
+    for (const [status, lista] of Object.entries(cols)) {
+      const el  = document.getElementById('col-'  + status);
+      const cnt = document.getElementById('cnt-' + status);
+      if (!el) continue;
+      cnt.textContent = lista.length;
+      if (!lista.length) {
+        el.innerHTML = `<div style="text-align:center;padding:20px 8px;color:var(--muted);font-size:10px;font-family:var(--font-mono)">—</div>`;
+        continue;
+      }
+      el.innerHTML = lista.map(p => renderCard(p)).join('');
+    }
+    setupDropZones();
+  }
+
+  function setupDropZones() {
+    ['recebido','processado','separado','enviado','erro','cancelado'].forEach(status => {
+      const el = document.getElementById('col-' + status);
+      if (!el) return;
+      el.ondragover  = e => e.preventDefault();
+      el.ondragenter = e => { e.preventDefault(); el.closest('.kanban-col').classList.add('drag-over'); };
+      el.ondragleave = e => { if (!el.contains(e.relatedTarget)) el.closest('.kanban-col').classList.remove('drag-over'); };
+      el.ondrop      = e => colDrop(e, status);
+    });
+  }
+
+  function renderCard(p) {
+    const status  = p.status_fluxo || 'recebido';
+    const numero  = p.numero || ('#' + p.mercos_id);
+    const cliente = p.cliente || '—';
+    const valor   = p.valor
+      ? `R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}`
+      : '—';
+    const sel = _selecionados.has(p.mercos_id) ? 'selected' : '';
+    const movivel = status === 'processado' || status === 'separado';
+    const dragAttrs = movivel
+      ? `draggable="true" ondragstart="dragStart(event,${p.mercos_id},'${status}')" ondragend="dragEnd(event)"`
+      : '';
+
+    let tempoHtml = '';
+    let urgente = false;
+    let critico = false;
+    if (p.recebido_em && status !== 'enviado' && status !== 'cancelado') {
+      const diff  = (Date.now() - new Date(p.recebido_em).getTime()) / 60000;
+      const label = diff < 60 ? `${Math.round(diff)}min` : `${(diff/60).toFixed(1)}h`;
+      critico  = diff > 240;
+      urgente  = diff > 120;
+      const cls = critico ? 'critico' : urgente ? 'atrasado' : '';
+      tempoHtml = `<div class="card-time ${cls}">${label} atrás</div>`;
+    }
+
+    // Borda lateral de urgência
+    const borderLeft = critico ? 'border-left:3px solid var(--erro)'
+                      : urgente ? 'border-left:3px solid var(--warn)'
+                      : '';
+
+    // Cidade/Bairro
+    const cidBairro = [p.cidade, p.bairro].filter(Boolean).join(' / ');
+    const locHtml = cidBairro ? `<div style="font-size:9px;color:var(--muted2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(cidBairro)}</div>` : '';
+
+    let acoes = '';
+    if (status === 'processado')
+      acoes = `<button class="action-sep" style="font-size:9px;padding:3px 8px" onclick="marcarSeparado(${p.mercos_id},this)">📋 Separado</button>`;
+    else if (status === 'separado')
+      acoes = `<button class="action-env" style="font-size:9px;padding:3px 8px" onclick="marcarEnviado(${p.mercos_id},this)">🚚 Enviado</button>`;
+    else if (status === 'erro')
+      acoes = `<button class="reprocess" style="font-size:9px;padding:3px 8px" onclick="reprocessarFluxo(${p.mercos_id},this)">⟳ Reprocessar</button>`;
+
+    // Checkbox para incluir na rota (separados) ou na rota de sep (processados)
+    const chk = (status === 'separado' || status === 'processado')
+      ? `<input type="checkbox" class="card-checkbox"
+           ${_selecionados.has(p.mercos_id) ? 'checked' : ''}
+           onchange="toggleSelecionado(${p.mercos_id},this)"
+           title="${status === 'separado' ? 'Incluir na rota' : 'Selecionar'}">`
+      : '';
+
+    return `<div class="kanban-card ${sel} ${movivel ? 'draggable' : ''}" id="card-${p.mercos_id}" ${dragAttrs} style="${borderLeft}">
+      ${chk}
+      <div class="card-top">
+        <span class="card-id">#${numero}</span>
+        <span class="card-value">${valor}</span>
+      </div>
+      <div class="card-client" title="${escHtml(cliente)}">${escHtml(cliente)}</div>
+      ${locHtml}
+      ${tempoHtml}
+      ${acoes ? `<div class="card-actions">${acoes}</div>` : ''}
+    </div>`;
+  }
+
+  // ── Drag & Drop ──────────────────────────────
+  let _dragId = null;
+  let _dragStatus = null;
+
+  function dragStart(e, id, status) {
+    _dragId     = id;
+    _dragStatus = status;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function dragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+  }
+
+  async function colDrop(e, destStatus) {
+    e.preventDefault();
+    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+    if (!_dragId || _dragStatus === destStatus) return;
+
+    const permitido = { processado: ['separado'], separado: ['enviado'] };
+    if (!permitido[_dragStatus]?.includes(destStatus)) {
+      toast(`Movimento "${_dragStatus}" → "${destStatus}" não permitido.`, 'erro');
+      _dragId = _dragStatus = null;
       return;
     }
-    tbody.innerHTML = pedidos.map(p => {
-      const status  = p.status_fluxo || 'recebido';
-      const numero  = p.numero || ('#' + p.mercos_id);
-      const cliente = p.cliente || '—';
-      const valor   = p.valor ? `R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '—';
 
-      // Fluxo visual
-      const steps = fluxoSteps(p);
+    const url = destStatus === 'separado'
+      ? `/admin/api/auditoria/fluxo/${_dragId}/separado`
+      : `/admin/api/auditoria/fluxo/${_dragId}/enviado`;
 
-      // Tempo desde recebido
-      const tempoHtml = tempoDesde(p.recebido_em, status);
-
-      // Botões de ação conforme etapa
-      let acoes = '—';
-      if (status === 'processado') {
-        acoes = `<button class="action-sep" onclick="marcarSeparado(${p.mercos_id}, this)">📋 Separado</button>`;
-      } else if (status === 'separado') {
-        acoes = `<button class="action-env" onclick="marcarEnviado(${p.mercos_id}, this)">🚚 Enviado</button>`;
+    try {
+      const res = await fetch(url, { method: 'POST' });
+      if (res.ok) {
+        toast(`Pedido #${_dragId} → ${destStatus}.`, 'ok');
+        await carregarFluxo();
+      } else {
+        const d = await res.json();
+        toast(d.detail || 'Erro ao mover.', 'erro');
       }
-
-      return `<tr>
-        <td class="id-cell">#${numero}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(cliente)}">${escHtml(cliente)}</td>
-        <td style="white-space:nowrap;color:var(--ok);font-family:var(--font-mono);font-size:12px">${valor}</td>
-        <td>${steps}</td>
-        <td><span class="badge badge-${status}">${status}</span></td>
-        <td>${tempoHtml}</td>
-        <td>${acoes}</td>
-      </tr>`;
-    }).join('');
+    } catch (err) {
+      toast('Falha: ' + err.message, 'erro');
+    }
+    _dragId = _dragStatus = null;
   }
 
-  function fluxoSteps(p) {
-    const s = p.status_fluxo;
-    const etapas = ['recebido','processado','separado','enviado'];
-    const idx = etapas.indexOf(s);
-    return `<div class="fluxo-steps">` +
-      etapas.map((e, i) => {
-        let cls = '';
-        if (s === 'erro' && i === 1) cls = 'erro';
-        else if (s === 'cancelado') cls = '';
-        else if (i < idx) cls = 'done';
-        else if (i === idx) cls = 'current';
-        const labels = ['REC','PROC','SEP','ENV'];
-        const sep = i < 3 ? `<span class="step-arrow">›</span>` : '';
-        return `<span class="step ${cls}">${labels[i]}</span>${sep}`;
-      }).join('') +
-    `</div>`;
+  function toggleSelecionado(id, chk) {
+    chk.checked ? _selecionados.add(id) : _selecionados.delete(id);
+    document.getElementById('card-' + id)?.classList.toggle('selected', chk.checked);
+    const bar = document.getElementById('rota-bar');
+    document.getElementById('rota-count').textContent =
+      `${_selecionados.size} pedido(s) selecionado(s)`;
+    bar.classList.toggle('show', _selecionados.size > 0);
   }
 
-  function tempoDesde(iso, status) {
-    if (!iso || status === 'enviado' || status === 'cancelado') return '<span class="tempo">—</span>';
-    const diff = (Date.now() - new Date(iso).getTime()) / 60000; // minutos
-    const label = diff < 60
-      ? `${Math.round(diff)}min`
-      : `${(diff/60).toFixed(1)}h`;
-    let cls = 'tempo';
-    if (diff > 240) cls = 'tempo critico';
-    else if (diff > 120) cls = 'tempo atrasado';
-    return `<span class="${cls}">${label}</span>`;
+  function limparSelecao() {
+    _selecionados.clear();
+    document.getElementById('rota-bar').classList.remove('show');
+    filtrarFluxo();
   }
+
+  async function reprocessarFluxo(mercosId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res  = await fetch(`/admin/api/reprocessar/${mercosId}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) { toast(`Pedido #${mercosId} marcado para reprocessamento.`, 'ok'); await carregarFluxo(); }
+      else { toast(data.detail || 'Erro.', 'erro'); btn.disabled = false; btn.textContent = '⟳ Reprocessar'; }
+    } catch (e) { toast('Falha: ' + e.message, 'erro'); btn.disabled = false; }
+  }
+
+  // ════════════════════════════════════════════════
+  // Roteirização — QR Codes Google Maps
+  // ════════════════════════════════════════════════
+  function abrirModalRota() {
+    const origem = document.getElementById('rota-endereco').value.trim();
+    if (!origem) { toast('Informe o endereço da empresa (origem).', 'erro'); return; }
+    const pedidos = _fluxo.filter(p => _selecionados.has(p.mercos_id));
+    if (!pedidos.length) { toast('Selecione ao menos um pedido separado.', 'erro'); return; }
+
+    const segs = gerarSegmentosRota(pedidos, origem);
+
+    document.getElementById('modal-qr-body').innerHTML = segs.map((s, i) => `
+      <div class="qr-segmento">
+        <div class="qr-seg-header">🗺️ Parte ${s.parte} de ${s.total} — ${s.qtd_paradas} parada(s)</div>
+        <div class="qr-seg-body">
+          <canvas class="qr-canvas" id="qrc-${i}" width="200" height="200"></canvas>
+          <div style="flex:1">
+            <div class="qr-paradas">
+              ${s.paradas.map((p, j) => `${j+1}. <strong>${escHtml(p.cliente || '—')}</strong>`).join('<br>')}
+            </div>
+            <div class="qr-link">
+              <a href="${escHtml(s.link)}" target="_blank">↗ Abrir esta parte no Google Maps</a>
+            </div>
+          </div>
+        </div>
+      </div>`).join('');
+
+    document.getElementById('modal-qr').classList.add('show');
+
+    // Renderiza QR codes após o DOM ser atualizado
+    setTimeout(() => {
+      segs.forEach((s, i) => {
+        const canvas = document.getElementById(`qrc-${i}`);
+        if (canvas && typeof QRCode !== 'undefined') {
+          QRCode.toCanvas(canvas, s.link, { width: 200, margin: 2,
+            color: { dark: '#000000', light: '#ffffff' } }, () => {});
+        }
+      });
+    }, 60);
+  }
+
+  function fecharModalRota() {
+    document.getElementById('modal-qr').classList.remove('show');
+  }
+
+  function gerarSegmentosRota(pedidos, enderecoEmpresa) {
+    const enc  = s => encodeURIComponent((s || '').trim());
+    const orig = enc(enderecoEmpresa);
+    const MAX  = 9;
+    const chunks = [];
+    for (let i = 0; i < pedidos.length; i += MAX) chunks.push(pedidos.slice(i, i + MAX));
+
+    return chunks.map((chunk, idx) => {
+      const total = chunks.length;
+      const parte = idx + 1;
+      const wps   = chunk.map(p => enc(p.cliente || '')).join('|');
+      const dest  = parte === total ? orig : enc(chunks[idx + 1][0].cliente || '');
+      const link  = `https://www.google.com/maps/dir/?api=1` +
+                    `&origin=${orig}&destination=${dest}` +
+                    `&waypoints=${wps}&travelmode=driving`;
+      return { parte, total, link, qtd_paradas: chunk.length, paradas: chunk };
+    });
+  }
+
+  // Fechar modal ao clicar fora
+  document.getElementById('modal-qr').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalRota();
+  });
 
   async function marcarSeparado(mercosId, btn) {
     btn.disabled = true; btn.textContent = '…';
@@ -1215,6 +1910,492 @@
     } catch (e) {
       toast('Erro ao carregar analytics: ' + e.message, 'erro');
     }
+  }
+
+  // ════════════════════════════════════════════════
+  // Resolver Todos os Buracos
+  // ════════════════════════════════════════════════
+  async function resolverTodosBuracos() {
+    if (!confirm('Marcar TODOS os buracos abertos como resolvidos?\n\nIsse marca como "verificado_em_lote" — use para limpar a auditoria e começar do zero.')) return;
+    try {
+      const res  = await fetch('/admin/api/auditoria/sequencia/resolver-todos', { method: 'POST' });
+      const data = await res.json();
+      toast(`${data.resolvidos} buraco(s) resolvidos`, 'ok');
+      await carregarSequencia();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  // Corrigir Dados Históricos
+  // ════════════════════════════════════════════════
+  async function corrigirValores() {
+    if (!confirm('Corrigir valores/cidade/bairro de pedidos históricos?\nIsso lê o payload original de cada pedido e atualiza os campos zerados.\nPode demorar alguns segundos.')) return;
+    toast('Corrigindo dados históricos…', 'info');
+    try {
+      const res  = await fetch('/admin/api/dados/corrigir-valores', { method: 'POST' });
+      const data = await res.json();
+      toast(`${data.atualizados} pedido(s) corrigidos`, 'ok');
+      await carregarAnalytics();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  // Analytics — sub-abas
+  // ════════════════════════════════════════════════
+  function anAba(nome) {
+    ['resumo','filtrado','abc'].forEach(n => {
+      document.getElementById('an-sec-' + n).style.display = n === nome ? 'block' : 'none';
+      const btn = document.getElementById('antab-' + n);
+      if (btn) btn.classList.toggle('active', n === nome);
+    });
+    if (nome === 'abc') carregarABC();
+  }
+
+  // ════════════════════════════════════════════════
+  // Analytics — Filtros
+  // ════════════════════════════════════════════════
+  async function aplicarFiltros() {
+    const params = new URLSearchParams();
+    const di = document.getElementById('filt-inicio').value;
+    const df = document.getElementById('filt-fim').value;
+    const cl = document.getElementById('filt-cliente').value.trim();
+    const ci = document.getElementById('filt-cidade').value.trim();
+    const ba = document.getElementById('filt-bairro').value.trim();
+    if (di) params.append('data_inicio', di);
+    if (df) params.append('data_fim', df);
+    if (cl) params.append('cliente', cl);
+    if (ci) params.append('cidade', ci);
+    if (ba) params.append('bairro', ba);
+    try {
+      const res  = await fetch('/admin/api/analytics/resumo-filtrado?' + params);
+      const data = await res.json();
+      document.getElementById('filt-fat').textContent    = brl(data.faturamento_total);
+      document.getElementById('filt-num').textContent    = data.num_pedidos;
+      document.getElementById('filt-ticket').textContent = brl(data.ticket_medio);
+
+      document.getElementById('tbody-filt-clientes').innerHTML = data.top_clientes.length
+        ? data.top_clientes.map(c => `<tr>
+            <td>${escHtml(c.cliente||'—')}</td>
+            <td>${c.num_pedidos}</td>
+            <td>${brl(c.valor_total)}</td>
+            <td>${brl(c.ticket_medio)}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="4" class="empty">Sem resultados</td></tr>';
+
+      document.getElementById('tbody-filt-bairro').innerHTML = data.por_bairro.length
+        ? data.por_bairro.map(b => `<tr>
+            <td>${escHtml(b.bairro||'—')}</td>
+            <td>${b.num_pedidos}</td>
+            <td>${brl(b.faturamento)}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="3" class="empty">Sem resultados</td></tr>';
+    } catch(e) {
+      toast('Erro ao aplicar filtros: ' + e.message, 'erro');
+    }
+  }
+
+  function limparFiltros() {
+    ['filt-inicio','filt-fim','filt-cliente','filt-cidade','filt-bairro'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('filt-fat').textContent = '—';
+    document.getElementById('filt-num').textContent = '—';
+    document.getElementById('filt-ticket').textContent = '—';
+    document.getElementById('tbody-filt-clientes').innerHTML = '<tr><td colspan="4" class="empty">Aplique os filtros</td></tr>';
+    document.getElementById('tbody-filt-bairro').innerHTML   = '<tr><td colspan="3" class="empty">Aplique os filtros</td></tr>';
+  }
+
+  // ════════════════════════════════════════════════
+  // Analytics — ABC
+  // ════════════════════════════════════════════════
+  let _abcAtual = 'prod';
+  function abcAba(tipo) {
+    _abcAtual = tipo;
+    document.getElementById('abc-sec-prod').style.display = tipo === 'prod' ? 'block' : 'none';
+    document.getElementById('abc-sec-cli').style.display  = tipo === 'cli'  ? 'block' : 'none';
+    document.getElementById('abc-tab-prod').classList.toggle('active', tipo === 'prod');
+    document.getElementById('abc-tab-cli').classList.toggle('active',  tipo === 'cli');
+  }
+
+  async function carregarABC() {
+    const di  = document.getElementById('abc-inicio').value;
+    const df  = document.getElementById('abc-fim').value;
+    const par = new URLSearchParams({ top: 200 });
+    if (di) par.append('data_inicio', di);
+    if (df) par.append('data_fim', df);
+    try {
+      const [rProd, rCli] = await Promise.all([
+        fetch('/admin/api/relatorios/abc-produtos?' + par).then(r => r.json()),
+        fetch('/admin/api/relatorios/abc-clientes?' + par).then(r => r.json()),
+      ]);
+      _renderABCProd(rProd);
+      _renderABCCli(rCli);
+      const totalP = rProd.total_geral || 0;
+      const cntA   = rProd.itens.filter(i => i.classe === 'A').length;
+      const cntB   = rProd.itens.filter(i => i.classe === 'B').length;
+      const cntC   = rProd.itens.filter(i => i.classe === 'C').length;
+      document.getElementById('abc-resumo').innerHTML = `
+        <div class="stat-card ok" style="min-width:120px;padding:12px 16px">
+          <div class="label">Classe A</div>
+          <div class="value" style="font-size:28px">${cntA}</div>
+          <div style="font-size:10px;color:var(--muted2)">80% da receita</div>
+        </div>
+        <div class="stat-card warn" style="min-width:120px;padding:12px 16px">
+          <div class="label">Classe B</div>
+          <div class="value" style="font-size:28px">${cntB}</div>
+          <div style="font-size:10px;color:var(--muted2)">80–95% da receita</div>
+        </div>
+        <div class="stat-card erro" style="min-width:120px;padding:12px 16px">
+          <div class="label">Classe C</div>
+          <div class="value" style="font-size:28px">${cntC}</div>
+          <div style="font-size:10px;color:var(--muted2)">cauda longa</div>
+        </div>
+        <div class="stat-card total" style="min-width:160px;padding:12px 16px">
+          <div class="label">Total Geral</div>
+          <div class="value" style="font-size:20px">${brl(totalP)}</div>
+        </div>`;
+    } catch(e) {
+      toast('Erro ao gerar ABC: ' + e.message, 'erro');
+    }
+  }
+
+  function _renderABCProd(data) {
+    const tbody = document.getElementById('tbody-abc-prod');
+    if (!data.itens?.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Sem dados</td></tr>'; return;
+    }
+    tbody.innerHTML = data.itens.map(i => `<tr>
+      <td>${escHtml(i.nome_produto || i.produto || '—')}</td>
+      <td><span class="badge-abc-${i.classe}">${i.classe}</span></td>
+      <td>${(i.qtd_total||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
+      <td>${brl(i.valor_total)}</td>
+      <td>${(i.pct_receita||0).toFixed(1)}%</td>
+      <td>${(i.pct_acumulado||0).toFixed(1)}%</td>
+    </tr>`).join('');
+  }
+
+  function _renderABCCli(data) {
+    const tbody = document.getElementById('tbody-abc-cli');
+    if (!data.itens?.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Sem dados</td></tr>'; return;
+    }
+    tbody.innerHTML = data.itens.map(i => `<tr>
+      <td>${escHtml(i.cliente || '—')}</td>
+      <td><span class="badge-abc-${i.classe}">${i.classe}</span></td>
+      <td>${i.num_pedidos}</td>
+      <td>${brl(i.valor_total)}</td>
+      <td>${(i.pct_receita||0).toFixed(1)}%</td>
+      <td>${(i.pct_acumulado||0).toFixed(1)}%</td>
+    </tr>`).join('');
+  }
+
+  // ════════════════════════════════════════════════
+  // ABA Separação
+  // ════════════════════════════════════════════════
+  let _sepFila      = [];
+  let _sepSeparados = [];
+  let _sepSelecionados = new Set();
+
+  async function carregarSeparacao() {
+    try {
+      const [rFila, rSep] = await Promise.all([
+        fetch('/admin/api/separacao/fila').then(r => r.json()),
+        fetch('/admin/api/separacao/em-separacao').then(r => r.json()),
+      ]);
+      _sepFila      = rFila.pedidos || [];
+      _sepSeparados = rSep.pedidos  || [];
+      _renderSepFila();
+      _renderSepSeparados();
+      _atualizarCidadesFiltro();
+    } catch(e) {
+      toast('Erro ao carregar separação: ' + e.message, 'erro');
+    }
+  }
+
+  function sepAba(nome) {
+    document.getElementById('sep-sec-fila').style.display       = nome === 'fila'       ? 'block' : 'none';
+    document.getElementById('sep-sec-separados').style.display  = nome === 'separados'  ? 'block' : 'none';
+    document.getElementById('stab-fila').classList.toggle('active',       nome === 'fila');
+    document.getElementById('stab-separados').classList.toggle('active',  nome === 'separados');
+  }
+
+  function _atualizarCidadesFiltro() {
+    const sel    = document.getElementById('sep-filtro-cidade');
+    const cidades = [...new Set(_sepFila.map(p => p.cidade || '').filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">Todas as cidades</option>' +
+      cidades.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+
+    const listEl = document.getElementById('sep-cidades-list');
+    if (cidades.length > 1) {
+      document.getElementById('sep-por-cidade').style.display = 'block';
+      listEl.innerHTML = cidades.map(c => {
+        const cnt = _sepFila.filter(p => p.cidade === c).length;
+        const fat = _sepFila.filter(p => p.cidade === c).reduce((s, p) => s + (p.valor||0), 0);
+        return `<div class="cidade-badge" onclick="filtrarCidade('${escHtml(c)}')">${escHtml(c)} · ${cnt} pedidos · ${brl(fat)}</div>`;
+      }).join('');
+    } else {
+      document.getElementById('sep-por-cidade').style.display = 'none';
+    }
+  }
+
+  function filtrarCidade(cidade) {
+    document.getElementById('sep-filtro-cidade').value = cidade;
+    filtrarSep();
+  }
+
+  function filtrarSep() {
+    const busca  = document.getElementById('sep-busca').value.toLowerCase();
+    const cidade = document.getElementById('sep-filtro-cidade').value;
+    const filtrado = _sepFila.filter(p =>
+      (!busca  || (p.cliente||'').toLowerCase().includes(busca) || String(p.numero||p.mercos_id).includes(busca)) &&
+      (!cidade || p.cidade === cidade)
+    );
+    _renderSepFilaRows(filtrado);
+  }
+
+  function _renderSepFila() {
+    _renderSepFilaRows(_sepFila);
+  }
+
+  function _renderSepFilaRows(lista) {
+    const tbody = document.getElementById('tbody-sep-fila');
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty"><div class="icon">✅</div>Nenhum pedido aguardando separação</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(p => {
+      const agora     = new Date();
+      const proc      = p.processado_em ? new Date(p.processado_em) : null;
+      const minutos   = proc ? Math.round((agora - proc) / 60000) : null;
+      const tempoStr  = minutos !== null ? (minutos >= 60 ? `${Math.floor(minutos/60)}h ${minutos%60}m` : `${minutos}m`) : '—';
+      const urgente   = minutos !== null && minutos > 120;
+      const bordaCor  = urgente ? 'var(--erro)' : 'transparent';
+      const cidBairro = [p.cidade, p.bairro].filter(Boolean).join(' / ') || '—';
+      const sel       = _sepSelecionados.has(p.mercos_id);
+      return `<tr style="border-left: 3px solid ${bordaCor}">
+        <td><input type="checkbox" ${sel ? 'checked' : ''} onchange="toggleSepItem(${p.mercos_id}, this)"></td>
+        <td class="id-cell">#${p.numero || p.mercos_id}</td>
+        <td>${escHtml(p.cliente || '—')}</td>
+        <td style="color:var(--muted2)">${escHtml(cidBairro)}</td>
+        <td>${brl(p.valor)}</td>
+        <td>${p.total_itens ?? (p.itens?.length ?? 0)}</td>
+        <td style="color:${urgente ? 'var(--erro)' : 'var(--text)'}">${tempoStr}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-action" style="padding:4px 10px;font-size:11px" onclick="verGuia(${p.mercos_id})">📋 Guia</button>
+          <button class="btn-action" style="padding:4px 10px;font-size:11px;background:var(--ok);color:#000" onclick="marcarSepUm(${p.mercos_id}, this)">✔ Separado</button>
+        </td>
+      </tr>`;
+    }).join('');
+    _atualizarBotoesSep();
+  }
+
+  function _renderSepSeparados() {
+    const tbody = document.getElementById('tbody-sep-separados');
+    if (!_sepSeparados.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty"><div class="icon">✅</div>Nenhum pedido em separação aguardando envio</td></tr>';
+      return;
+    }
+    tbody.innerHTML = _sepSeparados.map(p => {
+      const agora    = new Date();
+      const sepEm    = p.separado_em ? new Date(p.separado_em) : null;
+      const mins     = sepEm ? Math.round((agora - sepEm) / 60000) : null;
+      const tempoStr = mins !== null ? (mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`) : '—';
+      const cidBairro = [p.cidade, p.bairro].filter(Boolean).join(' / ') || '—';
+      return `<tr>
+        <td class="id-cell">#${p.numero || p.mercos_id}</td>
+        <td>${escHtml(p.cliente || '—')}</td>
+        <td style="color:var(--muted2)">${escHtml(cidBairro)}</td>
+        <td>${brl(p.valor)}</td>
+        <td>${tempoStr}</td>
+        <td style="display:flex;gap:6px">
+          <button class="btn-action" style="padding:4px 10px;font-size:11px" onclick="verGuia(${p.mercos_id})">📋 Guia</button>
+          <button class="btn-action" style="padding:4px 10px;font-size:11px;background:var(--accent);color:#000" onclick="marcarEnviadoSep(${p.mercos_id}, this)">🚚 Enviado</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function toggleSepItem(mercosId, el) {
+    if (el.checked) _sepSelecionados.add(mercosId);
+    else _sepSelecionados.delete(mercosId);
+    _atualizarBotoesSep();
+  }
+
+  function toggleTodosSep(chk) {
+    const visiveis = document.querySelectorAll('#tbody-sep-fila input[type=checkbox]');
+    visiveis.forEach(cb => {
+      cb.checked = chk.checked;
+      const id = parseInt(cb.closest('tr')?.querySelector('.id-cell')?.textContent?.replace('#','') || '0');
+      const pedido = _sepFila.find(p => String(p.numero || p.mercos_id) === String(cb.closest('tr').querySelectorAll('td')[1].textContent.replace('#','')));
+      if (pedido) { if (chk.checked) _sepSelecionados.add(pedido.mercos_id); else _sepSelecionados.delete(pedido.mercos_id); }
+    });
+    _atualizarBotoesSep();
+  }
+
+  function selecionarTodosSep() {
+    _sepFila.forEach(p => _sepSelecionados.add(p.mercos_id));
+    _renderSepFila();
+    document.getElementById('chk-sep-all').checked = true;
+  }
+
+  function _atualizarBotoesSep() {
+    const tem = _sepSelecionados.size > 0;
+    const btnImprimir = document.getElementById('btn-imprimir-lote');
+    const btnRota     = document.getElementById('btn-rota-sep');
+    btnImprimir.disabled = !tem; btnImprimir.style.opacity = tem ? '1' : '.5';
+    btnRota.disabled     = !tem; btnRota.style.opacity     = tem ? '1' : '.5';
+  }
+
+  async function verGuia(mercosId) {
+    try {
+      const res  = await fetch(`/admin/api/separacao/guia/${mercosId}`);
+      const data = await res.json();
+      const pedido = data.pedido;
+      const cidBairro = [pedido.cidade, pedido.bairro].filter(Boolean).join(' / ') || '—';
+      let html = `<div class="guia-pedido-header">
+        <div style="font-family:var(--font-disp);font-size:20px;font-weight:800">
+          GUIA DE SEPARAÇÃO — Pedido #${pedido.numero || pedido.mercos_id}
+        </div>
+        <div style="color:var(--muted2);font-size:12px;margin-top:8px">
+          Cliente: <b>${escHtml(pedido.cliente||'—')}</b> &nbsp;|&nbsp;
+          Endereço: <b>${escHtml(cidBairro)}</b> &nbsp;|&nbsp;
+          Valor: <b>${brl(pedido.valor)}</b>
+          ${data.vhsys_id ? `&nbsp;|&nbsp; VHSys: <b>${data.vhsys_id}</b>` : ''}
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:16px">
+        ${data.itens.length} ite${data.itens.length !== 1 ? 'ns' : 'm'} a separar
+      </div>`;
+      html += data.itens.map(it => `
+        <div class="guia-item">
+          <div class="sku">${escHtml(it.sku||'—')}</div>
+          <div class="nome">${escHtml(it.nome_produto||'—')}</div>
+          <div class="qtd">${(it.quantidade||0).toLocaleString('pt-BR',{maximumFractionDigits:2})} un</div>
+        </div>`).join('');
+      document.getElementById('guia-conteudo').innerHTML = html;
+      document.getElementById('modal-guia').style.display = 'block';
+    } catch(e) {
+      toast('Erro ao carregar guia: ' + e.message, 'erro');
+    }
+  }
+
+  async function imprimirGuiaLote() {
+    if (!_sepSelecionados.size) return;
+    const ids = [..._sepSelecionados].join(',');
+    try {
+      const res  = await fetch(`/admin/api/separacao/guia-lote?ids=${ids}`);
+      const data = await res.json();
+      let html = `<div style="font-family:var(--font-disp);font-size:22px;font-weight:800;margin-bottom:8px">
+        GUIA DE SEPARAÇÃO — LOTE (${data.total_pedidos} pedidos)
+      </div>
+      <div style="color:var(--muted2);font-size:11px;margin-bottom:20px">
+        Pedidos: ${data.pedidos.map(p => '#' + (p.numero || p.mercos_id)).join(', ')}
+      </div>`;
+      html += '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:12px">ITENS CONSOLIDADOS (separar por produto):</div>';
+      html += data.itens_consolidados.map(it => {
+        const pedidosList = it.pedidos.map(p => `#${p.mercos_id} (${(p.quantidade||0).toLocaleString('pt-BR',{maximumFractionDigits:2})})`).join(', ');
+        return `<div class="guia-lote-item">
+          <div class="info">
+            <div style="font-weight:700">${escHtml(it.nome_produto||'—')}</div>
+            <div style="font-size:11px;color:var(--muted2);margin-top:2px">SKU: ${escHtml(it.sku||'—')}</div>
+            <div style="font-size:10px;color:var(--muted2);margin-top:4px">Pedidos: ${pedidosList}</div>
+          </div>
+          <div class="qtd-total">${(it.qtd_total||0).toLocaleString('pt-BR',{maximumFractionDigits:2})}</div>
+        </div>`;
+      }).join('');
+      document.getElementById('guia-conteudo').innerHTML = html;
+      document.getElementById('modal-guia').style.display = 'block';
+    } catch(e) {
+      toast('Erro ao gerar guia lote: ' + e.message, 'erro');
+    }
+  }
+
+  async function marcarSepUm(mercosId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      await fetch(`/admin/api/auditoria/fluxo/${mercosId}/separado`, { method: 'POST' });
+      toast(`Pedido #${mercosId} marcado como separado`, 'ok');
+      await carregarSeparacao();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+      btn.disabled = false; btn.textContent = '✔ Separado';
+    }
+  }
+
+  async function marcarSeparadoLote() {
+    if (!_sepSelecionados.size) { toast('Selecione ao menos um pedido', 'warn'); return; }
+    if (!confirm(`Marcar ${_sepSelecionados.size} pedido(s) como separado?`)) return;
+    for (const id of _sepSelecionados) {
+      await fetch(`/admin/api/auditoria/fluxo/${id}/separado`, { method: 'POST' });
+    }
+    _sepSelecionados.clear();
+    toast('Pedidos marcados como separados', 'ok');
+    await carregarSeparacao();
+  }
+
+  async function marcarEnviadoSep(mercosId, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      await fetch(`/admin/api/auditoria/fluxo/${mercosId}/enviado`, { method: 'POST' });
+      toast(`Pedido #${mercosId} marcado como enviado`, 'ok');
+      await carregarSeparacao();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+      btn.disabled = false; btn.textContent = '🚚 Enviado';
+    }
+  }
+
+  function gerarRotaSep() {
+    if (!_sepSelecionados.size) return;
+    const pedidos = _sepFila.filter(p => _sepSelecionados.has(p.mercos_id));
+    // Reutiliza a lógica do kanban — monta _selecionados e abre modal
+    _selecionados = new Set(pedidos.map(p => p.mercos_id));
+    const origem = (document.getElementById('rota-endereco')?.value?.trim()) ||
+                   prompt('Endereço de origem (empresa):', 'Uberlândia, MG') || 'Uberlândia, MG';
+    const pedidosFluxoFmt = pedidos.map(p => ({
+      mercos_id: p.mercos_id,
+      numero: p.numero || p.mercos_id,
+      cliente: p.cliente,
+      cidade: p.cidade,
+      bairro: p.bairro,
+    }));
+    abrirModalRotaSep(origem, pedidosFluxoFmt);
+  }
+
+  function abrirModalRotaSep(origem, pedidos) {
+    const destinos = pedidos.map(p =>
+      [p.cidade, p.bairro].filter(Boolean).join(', ') + ', Brasil'
+    );
+    const segmentos = gerarSegmentosRota(origem, destinos, pedidos);
+    const corpo = document.getElementById('modal-qr-body');
+    corpo.innerHTML = '';
+    segmentos.forEach((seg, i) => {
+      const div = document.createElement('div');
+      div.className = 'qr-seg';
+      const titulo = document.createElement('div');
+      titulo.className = 'qr-seg-header';
+      titulo.textContent = `SEGMENTO ${i + 1} — ${seg.paradas.length} parada(s)`;
+      div.appendChild(titulo);
+      const body = document.createElement('div');
+      body.className = 'qr-seg-body';
+      const canvas = document.createElement('canvas');
+      canvas.className = 'qr-canvas';
+      QRCode.toCanvas(canvas, seg.url, { width: 160, margin: 1 }, () => {});
+      const paradas = document.createElement('div');
+      paradas.className = 'qr-paradas';
+      paradas.innerHTML = seg.paradas.map((p, j) => `${j + 1}. ${escHtml(p.cliente)}<br><small style="color:var(--muted2)">${escHtml(p.cidade||'')} ${escHtml(p.bairro||'')}</small>`).join('<br>');
+      const link = document.createElement('div');
+      link.className = 'qr-link';
+      link.innerHTML = `<a href="${seg.url}" target="_blank">Abrir no Google Maps ↗</a>`;
+      body.appendChild(canvas); body.appendChild(paradas);
+      div.appendChild(body); div.appendChild(link);
+      corpo.appendChild(div);
+    });
+    document.getElementById('modal-qr').style.display = 'flex';
   }
 
   // Auto-refresh a cada 30s
