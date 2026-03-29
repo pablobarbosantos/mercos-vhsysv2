@@ -424,13 +424,31 @@ async def api_corrigir_valores(request: Request):
     itens_preenchidos = 0
 
     with db.get_conn() as conn:
-        # Busca todos os pedidos.gerado da fila (independente de valor/cidade)
+        # Busca o payload mais completo por mercos_id (prefere pedido.gerado)
         rows = conn.execute("""
-            SELECT fe.mercos_id, fe.payload_json, fe.criado_em
-            FROM fila_eventos fe
-            WHERE fe.evento = 'pedido.gerado'
-              AND fe.mercos_id IS NOT NULL
+            SELECT mercos_id,
+                   MAX(CASE WHEN evento='pedido.gerado' THEN payload_json END)
+                   AS payload_gerado,
+                   MAX(CASE WHEN evento='pedido.faturado' THEN payload_json END)
+                   AS payload_faturado,
+                   MAX(criado_em) AS criado_em
+            FROM fila_eventos
+            WHERE evento IN ('pedido.gerado','pedido.faturado')
+              AND mercos_id IS NOT NULL
+            GROUP BY mercos_id
         """).fetchall()
+
+        # Resolve qual payload usar: prefere pedido.gerado
+        class _Row:
+            def __init__(self, mid, pj, em):
+                self.mercos_id   = mid
+                self.payload_json = pj
+                self.criado_em   = em
+            def __getitem__(self, k): return getattr(self, k)
+
+        rows = [_Row(r["mercos_id"],
+                     r["payload_gerado"] or r["payload_faturado"],
+                     r["criado_em"]) for r in rows if (r["payload_gerado"] or r["payload_faturado"])]
 
         for row in rows:
             try:
