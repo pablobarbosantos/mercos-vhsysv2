@@ -1,0 +1,9 @@
+08:50:22 [INFO] pdv.server: [PDV] Tabelas inicializadas.
+08:50:22 [INFO] pdv.server: [PDV] Auto-sync agendado (startup + 30min).
+08:50:22 [INFO] __main__: [PDV] Sincronizando produtos do VHSys...
+08:50:33 [INFO] pdv.vhsys: [PDV/Sync] 674 produtos importados do VHSys
+08:50:33 [INFO] __main__: [PDV] 674 produtos prontos.
+08:50:57 [INFO] pdv.vhsys: [PDV/Sync venda 1] OK — id_frente=77972437
+08:51:59 [INFO] pdv.vhsys: [PDV/Sync venda 2] OK — id_frente=77972474
+08:52:25 [INFO] pdv.vhsys: [PDV/Sync venda 3] OK — id_frente=77972501
+08:53:00 [INFO] pdv.vhsys: [PDV/Sync venda 4] OK — id_frente=77972521

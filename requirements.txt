@@ -3,3 +3,7 @@ uvicorn[standard]
 python-dotenv
 requests
 apscheduler
+lxml
+cryptography
+zeep
+python-multipart

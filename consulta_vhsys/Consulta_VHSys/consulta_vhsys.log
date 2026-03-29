@@ -1,0 +1,4 @@
+20:01:20 [INFO] __main__: [CONSULTA] Aguardando servidor na porta 8082…
+20:01:20 [INFO] consulta_vhsys.database: [DB] Banco inicializado: C:\mercos_vhsys_git\consulta_vhsys\Consulta_VHSys\data\consulta_vhsys.db
+20:01:20 [INFO] consulta_vhsys.server: [CONSULTA] Banco inicializado.
+20:01:20 [INFO] __main__: [CONSULTA] Servidor pronto.

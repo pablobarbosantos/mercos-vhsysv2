@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta VHSys</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    background: #1a1d27;
+    border-bottom: 1px solid #2d3148;
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #8892b0;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+    user-select: none;
+  }
+  .tab:hover { color: #ccd6f6; }
+  .tab.active { color: #64ffda; border-bottom-color: #64ffda; }
+
+  /* ── Content ── */
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2d3148;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #8892b0;
+    margin-bottom: 14px;
+  }
+
+  /* ── Inputs ── */
+  input[type=text], input[type=number] {
+    background: #0f1117;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    color: #e2e8f0;
+    padding: 9px 12px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus { border-color: #64ffda; }
+  input::placeholder { color: #4a5568; }
+
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; font-size: 15px; }
+
+  /* ── Buttons ── */
+  button {
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity .15s;
+    font-family: inherit;
+  }
+  button:hover { opacity: .85; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-primary { background: #64ffda; color: #0f1117; font-weight: 600; }
+  .btn-secondary { background: #2d3148; color: #ccd6f6; }
+  .btn-danger { background: #ff6b6b; color: #fff; }
+  .btn-warn { background: #f6ad55; color: #1a1d27; font-weight: 600; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* ── Produto card ── */
+  .produto-result {
+    background: #1a1d27;
+    border: 1px solid #2d3148;
+    border-radius: 8px;
+    padding: 20px;
+    display: none;
+  }
+  .produto-result.visible { display: block; }
+  .produto-nome { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .produto-meta { font-size: 12px; color: #8892b0; margin-bottom: 16px; }
+  .produto-campos { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .campo-label { font-size: 11px; color: #8892b0; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .campo-valor { font-size: 20px; font-weight: 600; }
+  .campo-valor.preco { color: #64ffda; }
+  .campo-valor.estoque { color: #a8b4f8; }
+  .campo-valor.ean { font-size: 14px; color: #f6ad55; }
+
+  .dirty-badge {
+    display: inline-block;
+    background: #f6ad55;
+    color: #1a1d27;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* ── Edit form ── */
+  .edit-form {
+    display: none;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    border-top: 1px solid #2d3148;
+    padding-top: 16px;
+    margin-top: 4px;
+  }
+  .edit-form.visible { display: flex; }
+  .edit-group { display: flex; flex-direction: column; gap: 4px; }
+  .edit-group label { font-size: 11px; color: #8892b0; }
+  .edit-form input { width: 120px; }
+
+  /* ── Lista produtos ── */
+  .lista-produtos { margin-top: 12px; }
+  .produto-item {
+    padding: 10px 14px;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background .1s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .produto-item:hover { background: #252840; }
+  .produto-item .pi-nome { font-size: 14px; }
+  .produto-item .pi-meta { font-size: 11px; color: #8892b0; }
+  .produto-item .pi-preco { font-size: 14px; color: #64ffda; font-weight: 600; }
+
+  /* ── Sync panel ── */
+  .sync-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .sync-action { text-align: center; padding: 24px; }
+  .sync-action button { width: 100%; padding: 14px; font-size: 14px; }
+  .sync-result {
+    background: #0f1117;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    padding: 14px;
+    font-size: 13px;
+    margin-top: 14px;
+    white-space: pre-wrap;
+    display: none;
+    line-height: 1.6;
+  }
+  .sync-result.visible { display: block; }
+
+  /* ── Duplicidades ── */
+  .dupl-item {
+    background: #0f1117;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .dupl-tipo {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 8px;
+  }
+  .dupl-tipo.ean { background: #ff6b6b33; color: #ff6b6b; }
+  .dupl-tipo.nome { background: #f6ad5533; color: #f6ad55; }
+  .dupl-valor { font-size: 13px; font-weight: 600; }
+  .dupl-prods { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .dupl-prod-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #1a1d27;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  .dupl-prod-row .dp-nome { flex: 1; }
+  .dupl-prod-row .dp-id { font-size: 11px; color: #8892b0; margin: 0 12px; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 9999;
+    display: none;
+    max-width: 360px;
+  }
+  #toast.ok { background: #1a3d2b; border: 1px solid #64ffda; color: #64ffda; }
+  #toast.err { background: #3d1a1a; border: 1px solid #ff6b6b; color: #ff6b6b; }
+  #toast.warn { background: #3d2e10; border: 1px solid #f6ad55; color: #f6ad55; }
+
+  /* ── Misc ── */
+  .empty { text-align: center; color: #4a5568; padding: 32px; font-size: 13px; }
+  .loading { color: #8892b0; font-size: 13px; padding: 8px 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mt8 { margin-top: 8px; }
+  .mt16 { margin-top: 16px; }
+  .sep { border: none; border-top: 1px solid #2d3148; margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <div class="tab active" onclick="setTab('consulta')">Consulta</div>
+  <div class="tab" onclick="setTab('sync')">Sincronizar</div>
+  <div class="tab" onclick="setTab('duplicidades')">Duplicidades</div>
+</div>
+
+<div class="content">
+
+  <!-- ── CONSULTA ── -->
+  <div id="tab-consulta" class="panel active">
+
+    <div class="card">
+      <div class="card-title">Buscar por EAN</div>
+      <div class="search-row">
+        <input id="inp-ean" type="text" placeholder="Digite ou leia o código de barras…" autofocus
+               onkeydown="if(event.key==='Enter') buscarEan()">
+        <button class="btn-primary" onclick="buscarEan()">Buscar</button>
+      </div>
+    </div>
+
+    <div id="resultado-ean" class="produto-result">
+      <div style="display:flex; align-items:center; justify-content:space-between">
+        <div>
+          <div class="produto-nome" id="r-nome">—</div>
+          <div class="produto-meta" id="r-meta">—</div>
+        </div>
+        <button class="btn-secondary btn-sm" onclick="toggleEdit()">Editar</button>
+      </div>
+      <div class="produto-campos mt8">
+        <div>
+          <div class="campo-label">Preço</div>
+          <div class="campo-valor preco" id="r-preco">—</div>
+        </div>
+        <div>
+          <div class="campo-label">Estoque</div>
+          <div class="campo-valor estoque" id="r-estoque">—</div>
+        </div>
+        <div>
+          <div class="campo-label">EAN</div>
+          <div class="campo-valor ean" id="r-ean">—</div>
+        </div>
+      </div>
+      <div id="edit-form" class="edit-form">
+        <div class="edit-group">
+          <label>Novo preço</label>
+          <input id="edit-preco" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+        <div class="edit-group">
+          <label>Novo estoque</label>
+          <input id="edit-estoque" type="number" step="1" min="0" placeholder="0">
+        </div>
+        <button class="btn-warn btn-sm" onclick="salvarEdicao()">Salvar alterações</button>
+        <button class="btn-secondary btn-sm" onclick="toggleEdit()">Cancelar</button>
+      </div>
+    </div>
+
+    <div id="nao-encontrado" style="display:none" class="card">
+      <div class="card-title">Produto não encontrado por EAN</div>
+      <p style="font-size:13px; color:#8892b0; margin-bottom:14px">
+        Busque pelo nome para selecionar o produto e vincular o EAN.
+      </p>
+      <div class="search-row">
+        <input id="inp-nome" type="text" placeholder="Nome do produto…"
+               onkeydown="if(event.key==='Enter') buscarNome()">
+        <button class="btn-secondary" onclick="buscarNome()">Buscar nome</button>
+      </div>
+      <div id="lista-nome" class="lista-produtos"></div>
+    </div>
+
+  </div><!-- /tab-consulta -->
+
+  <!-- ── SYNC ── -->
+  <div id="tab-sync" class="panel">
+
+    <div class="sync-grid">
+      <div class="card sync-action">
+        <div class="card-title">Sincronizar edições</div>
+        <p style="font-size:12px; color:#8892b0; margin-bottom:16px">
+          Envia produtos com alterações locais (dirty) para o VHSys.<br>
+          Detecta conflitos antes de sobrescrever.
+        </p>
+        <button class="btn-primary" onclick="syncSujos()">Sincronizar sujos</button>
+        <div id="res-sujos" class="sync-result"></div>
+      </div>
+
+      <div class="card sync-action">
+        <div class="card-title">Atualizar base</div>
+        <p style="font-size:12px; color:#8892b0; margin-bottom:16px">
+          Busca todos os produtos do VHSys e atualiza a base local.<br>
+          Produtos com edições pendentes são preservados.
+        </p>
+        <button class="btn-secondary" onclick="atualizarBase()">Atualizar base</button>
+        <div id="res-base" class="sync-result"></div>
+      </div>
+    </div>
+
+  </div><!-- /tab-sync -->
+
+  <!-- ── DUPLICIDADES ── -->
+  <div id="tab-duplicidades" class="panel">
+
+    <div class="card" style="display:flex; justify-content:space-between; align-items:center">
+      <div>
+        <div class="card-title" style="margin:0">Verificar duplicidades</div>
+      </div>
+      <button class="btn-secondary" onclick="carregarDuplicidades()">Verificar agora</button>
+    </div>
+
+    <div id="lista-duplicidades">
+      <div class="empty">Clique em "Verificar agora" para checar duplicidades.</div>
+    </div>
+
+  </div><!-- /tab-duplicidades -->
+
+</div><!-- /content -->
+
+<div id="toast"></div>
+
+<script>
+// ── Estado ────────────────────────────────────────────────────────────────────
+let _produtoAtual = null;
+let _eanBuscado   = null;
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function setTab(nome) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="${nome}"]`).classList.add('active');
+  document.getElementById(`tab-${nome}`).classList.add('active');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, tipo = 'ok') {
+  const el = document.getElementById('toast');
+  el.className = tipo;
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.display = 'none', 3500);
+}
+
+// ── Busca EAN ─────────────────────────────────────────────────────────────────
+async function buscarEan() {
+  const ean = document.getElementById('inp-ean').value.trim();
+  if (!ean) return;
+  _eanBuscado = ean;
+
+  const res = await fetch(`/api/produto/ean/${encodeURIComponent(ean)}`).then(r => r.json());
+
+  if (res.encontrado) {
+    mostrarProduto(res.produto, true);
+    document.getElementById('nao-encontrado').style.display = 'none';
+  } else {
+    document.getElementById('resultado-ean').classList.remove('visible');
+    document.getElementById('nao-encontrado').style.display = 'block';
+    document.getElementById('inp-nome').focus();
+    toast('EAN não encontrado — busque pelo nome para vincular', 'warn');
+  }
+}
+
+function mostrarProduto(p, abrirEdicao = false) {
+  _produtoAtual = p;
+  document.getElementById('resultado-ean').classList.add('visible');
+  document.getElementById('nao-encontrado').style.display = 'none';
+
+  const dirty = p.dirty ? '<span class="dirty-badge">PENDENTE SYNC</span>' : '';
+  document.getElementById('r-nome').innerHTML = escHtml(p.nome || '—') + dirty;
+  document.getElementById('r-meta').textContent = `vhsys_id: ${p.vhsys_id} | ativo: ${p.ativo ? 'sim' : 'não'}`;
+  document.getElementById('r-preco').textContent = p.preco != null ? `R$ ${Number(p.preco).toFixed(2)}` : '—';
+  document.getElementById('r-estoque').textContent = p.estoque != null ? String(p.estoque) : '—';
+  document.getElementById('r-ean').textContent = p.ean || '—';
+
+  // Pre-preenche campos de edição
+  document.getElementById('edit-preco').value   = p.preco   != null ? p.preco   : '';
+  document.getElementById('edit-estoque').value = p.estoque != null ? p.estoque : '';
+
+  if (abrirEdicao) {
+    document.getElementById('edit-form').classList.add('visible');
+    document.getElementById('edit-preco').focus();
+  } else {
+    document.getElementById('edit-form').classList.remove('visible');
+  }
+}
+
+function toggleEdit() {
+  document.getElementById('edit-form').classList.toggle('visible');
+}
+
+async function salvarEdicao() {
+  if (!_produtoAtual) return;
+  const preco   = document.getElementById('edit-preco').value;
+  const estoque = document.getElementById('edit-estoque').value;
+  if (preco === '' || estoque === '') { toast('Informe preço e estoque', 'warn'); return; }
+  const body = { preco: parseFloat(preco), estoque: parseFloat(estoque) };
+
+  const res = await fetch(`/api/produto/${_produtoAtual.vhsys_id}/editar`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  }).then(r => r.json()).catch(() => null);
+
+  if (res && res.ok) {
+    mostrarProduto(res.produto);
+    toast('Alterações salvas — produto marcado como pendente de sync');
+    document.getElementById('resultado-ean').classList.remove('visible');
+    const inp = document.getElementById('inp-ean');
+    inp.value = '';
+    inp.focus();
+  } else {
+    toast(res?.detail || 'Erro ao salvar', 'err');
+  }
+}
+
+// ── Busca Nome ────────────────────────────────────────────────────────────────
+async function buscarNome() {
+  const q = document.getElementById('inp-nome').value.trim();
+  if (!q) return;
+  const lista = document.getElementById('lista-nome');
+  lista.innerHTML = '<div class="loading">Buscando…</div>';
+
+  const res = await fetch(`/api/produto/nome?q=${encodeURIComponent(q)}`).then(r => r.json());
+  if (!res.produtos.length) {
+    lista.innerHTML = '<div class="empty">Nenhum produto encontrado.</div>';
+    return;
+  }
+
+  lista.innerHTML = res.produtos.map(p => `
+    <div class="produto-item" onclick="selecionarProdutoNome(${p.vhsys_id})">
+      <div>
+        <div class="pi-nome">${escHtml(p.nome)}</div>
+        <div class="pi-meta">vhsys_id: ${p.vhsys_id} | EAN: ${p.ean || '—'}</div>
+      </div>
+      <div class="pi-preco">R$ ${Number(p.preco || 0).toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+async function selecionarProdutoNome(vhsys_id) {
+  if (!_eanBuscado) { toast('Nenhum EAN pendente de vinculação', 'warn'); return; }
+
+  const res = await fetch(`/api/produto/${vhsys_id}/vincular-ean`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ean: _eanBuscado}),
+  });
+
+  if (res.ok) {
+    toast(`EAN ${_eanBuscado} vinculado com sucesso`);
+    // Rebusca para mostrar produto atualizado
+    const prod = await fetch(`/api/produto/ean/${encodeURIComponent(_eanBuscado)}`).then(r => r.json());
+    if (prod.encontrado) mostrarProduto(prod.produto, true);
+    document.getElementById('nao-encontrado').style.display = 'none';
+    document.getElementById('lista-nome').innerHTML = '';
+    document.getElementById('inp-nome').value = '';
+  } else {
+    const err = await res.json();
+    toast(err.detail || 'Erro ao vincular EAN', 'err');
+  }
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function syncSujos() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Sincronizando…';
+  const el = document.getElementById('res-sujos');
+  el.classList.remove('visible');
+
+  const res = await fetch('/api/sync/sujos', {method:'POST'}).then(r => r.json()).catch(() => null);
+  btn.disabled = false;
+  btn.textContent = 'Sincronizar sujos';
+
+  if (!res) { toast('Erro na requisição', 'err'); return; }
+
+  const linhas = [
+    `✓ Sincronizados: ${res.sincronizados.length}`,
+    res.sincronizados.length ? res.sincronizados.map(p => `    • ${p.nome}`).join('\n') : '',
+    res.conflitos.length ? `\n⚠ Conflitos (VHSys mudou externamente): ${res.conflitos.length}` : '',
+    ...res.conflitos.map(c => {
+      const linhas = [`    • ${c.nome}`];
+      if (Math.abs((c.preco_vhsys_atual ?? 0) - (c.preco_vhsys_baseline ?? 0)) > 0.01)
+        linhas.push(`      Preço   — local R$${Number(c.preco_local).toFixed(2)}, baseline R$${Number(c.preco_vhsys_baseline).toFixed(2)}, VHSys R$${Number(c.preco_vhsys_atual).toFixed(2)}`);
+      if (Math.abs((c.estoque_vhsys_atual ?? 0) - (c.estoque_vhsys_baseline ?? 0)) > 0.01)
+        linhas.push(`      Estoque — local ${Number(c.estoque_local).toFixed(2)}, baseline ${Number(c.estoque_vhsys_baseline).toFixed(2)}, VHSys ${Number(c.estoque_vhsys_atual).toFixed(2)}`);
+      return linhas.join('\n');
+    }),
+    res.erros.length ? `\n✗ Erros: ${res.erros.length}` : '',
+    ...res.erros.map(e => `    • ${e.nome}: ${e.erro}`),
+  ].filter(l => l !== '').join('\n');
+
+  el.textContent = linhas || 'Nenhum produto dirty para sincronizar.';
+  el.classList.add('visible');
+
+  if (res.conflitos.length) toast(`${res.conflitos.length} conflito(s) — VHSys alterado externamente`, 'warn');
+  else if (res.erros.length) toast(`${res.erros.length} erro(s) na sincronização`, 'err');
+  else toast(`${res.sincronizados.length} produto(s) sincronizado(s)`);
+}
+
+async function atualizarBase() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Atualizando…';
+  const el = document.getElementById('res-base');
+  el.classList.remove('visible');
+
+  const res = await fetch('/api/sync/atualizar-base', {method:'POST'}).then(r => r.json()).catch(() => null);
+  btn.disabled = false;
+  btn.textContent = 'Atualizar base';
+
+  if (!res) { toast('Erro na requisição', 'err'); return; }
+
+  el.textContent = [
+    `Atualizados: ${res.atualizados}`,
+    `Inseridos:   ${res.inseridos}`,
+    `Preservados (dirty): ${res.preservados_dirty}`,
+  ].join('\n');
+  el.classList.add('visible');
+  toast(`Base atualizada: ${res.atualizados} atualizados, ${res.inseridos} novos`);
+}
+
+// ── Duplicidades ──────────────────────────────────────────────────────────────
+async function carregarDuplicidades() {
+  const el = document.getElementById('lista-duplicidades');
+  el.innerHTML = '<div class="loading">Verificando…</div>';
+
+  const res = await fetch('/api/duplicidades').then(r => r.json()).catch(() => null);
+  if (!res) { el.innerHTML = '<div class="empty">Erro ao carregar.</div>'; return; }
+
+  if (!res.conflitos.length) {
+    el.innerHTML = '<div class="empty">Nenhuma duplicidade encontrada.</div>';
+    return;
+  }
+
+  el.innerHTML = res.conflitos.map((c, ci) => `
+    <div class="dupl-item">
+      <div>
+        <span class="dupl-tipo ${c.tipo}">${c.tipo.toUpperCase()}</span>
+        <span class="dupl-valor">${escHtml(c.valor)}</span>
+      </div>
+      <div class="dupl-prods">
+        ${c.produtos.map(p => `
+          <div class="dupl-prod-row">
+            <span class="dp-nome">${escHtml(p.nome)}</span>
+            <span class="dp-id">id: ${p.vhsys_id}</span>
+            ${c.tipo === 'nome'
+              ? `<button class="btn-danger btn-sm" onclick="inativarProduto(${p.vhsys_id}, ${ci})">Inativar</button>`
+              : `<button class="btn-secondary btn-sm" onclick="removerEan(${p.vhsys_id}, ${ci})">Remover EAN</button>`
+            }
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function inativarProduto(vhsys_id, idx) {
+  if (!confirm(`Inativar vhsys_id=${vhsys_id}?`)) return;
+  const res = await fetch('/api/duplicidades/resolver-nome', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({vhsys_id_inativar: vhsys_id}),
+  }).then(r => r.json()).catch(() => null);
+  if (res?.ok) { toast('Produto inativado'); carregarDuplicidades(); }
+  else toast('Erro ao inativar', 'err');
+}
+
+async function removerEan(vhsys_id_remover, idx) {
+  if (!confirm(`Remover EAN do produto ${vhsys_id_remover}?`)) return;
+  // Busca os outros ids do mesmo grupo para saber quem "manter"
+  const items = document.querySelectorAll(`.dupl-item`)[idx]
+    ?.querySelectorAll('.dp-id');
+  const todos_ids = Array.from(items || []).map(el => parseInt(el.textContent.replace('id:','').trim()));
+  const manter = todos_ids.find(id => id !== vhsys_id_remover) || vhsys_id_remover;
+
+  const res = await fetch('/api/duplicidades/resolver-ean', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({vhsys_id_manter: manter, vhsys_ids_remover_ean: [vhsys_id_remover]}),
+  }).then(r => r.json()).catch(() => null);
+  if (res?.ok) { toast('EAN removido'); carregarDuplicidades(); }
+  else toast('Erro ao remover EAN', 'err');
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Foco automático no campo EAN ao abrir aba consulta
+document.querySelector('.tab[onclick*="consulta"]').addEventListener('click', () => {
+  setTimeout(() => document.getElementById('inp-ean').focus(), 50);
+});
+
+// Se bipar EAN no campo de busca por nome, redireciona para busca EAN
+document.getElementById('inp-nome').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    const val = this.value.trim();
+    if (/^\d{8,}$/.test(val)) {
+      this.value = '';
+      document.getElementById('nao-encontrado').style.display = 'none';
+      document.getElementById('inp-ean').value = val;
+      buscarEan();
+    }
+  }
+});
+
+// ── Auto-sync a cada 5 minutos ─────────────────────────────────────────────────
+setInterval(async () => {
+  const res = await fetch('/api/sync/sujos', {method: 'POST'}).then(r => r.json()).catch(() => null);
+  if (!res) return;
+  if (res.sincronizados.length > 0)
+    toast(`Auto-sync: ${res.sincronizados.length} produto(s) enviado(s) ao VHSys`);
+  if (res.conflitos.length > 0)
+    toast(`Auto-sync: ${res.conflitos.length} conflito(s) — verifique a aba Sincronizar`, 'warn');
+}, 5 * 60 * 1000);
+</script>
+</body>
+</html>

@@ -177,6 +177,11 @@ O código de suporte existe em `src/expedicao.py` e `vhsys_service.py` mas o job
 ### Contas a Receber / Parcelas (desativado)
 `gerar_parcelas()` em `vhsys_service.py` existe mas **não é mais chamada** — o lançamento de boletos/parcelas é feito manualmente no VHSys. Não reativar sem validação.
 
+### Numeração de Pedidos VHSys = Mercos (pendente)
+O pedido criado no VHSys recebe um número próprio do VHSys, diferente do `mercos_id`. O objetivo é fazer com que o número do pedido no VHSys seja idêntico ao do Mercos para facilitar rastreabilidade.
+
+Investigar: a API VHSys (`POST /pedidos`) aceita campo `numero_pedido` (ou equivalente) para forçar a numeração. Se aceitar, passar `mercos_id` como número do pedido em `vhsys_service.py` na função que cria o pedido. Validar que não gera conflito com numeração interna do VHSys antes de implementar.
+
 ## Workflow: Commit After Testing
 
 **After every change that is tested and validated, commit automatically to GitHub.**
@@ -185,3 +190,64 @@ Steps Claude must follow after a successful test cycle:
 1. `git add` the changed files
 2. `git commit` with a descriptive message
 3. `git push origin main`
+
+---
+
+## Módulo consulta_vhsys
+
+Backend **LOCAL FIRST** para consulta e gestão de produtos VHSys. Arquivos em `consulta_vhsys/`.
+DB separado: `data/consulta_vhsys.db`. Logs: `logs/consulta_vhsys.log`.
+
+### Estrutura
+
+```
+consulta_vhsys/
+├── database/database.py       — SQLite CRUD, init_db(), get_conn()
+├── services/vhsys_adapter.py  — HTTP VHSys (standalone, sem ORM)
+├── services/duplicidade_service.py
+├── services/product_lookup.py
+├── services/sync_service.py
+└── scripts/sync_inicial.py    — importação única
+```
+
+### Como usar
+
+```bash
+# Importação inicial (executar uma vez)
+python consulta_vhsys/scripts/sync_inicial.py
+
+# Verificar duplicidades
+from consulta_vhsys.services.duplicidade_service import verificar_duplicidades
+conflitos = verificar_duplicidades()
+
+# Sincronizar edições locais → VHSys
+from consulta_vhsys.services.sync_service import sincronizar_sujos
+resultado = sincronizar_sujos()
+
+# Atualizar base local com dados atuais do VHSys
+from consulta_vhsys.services.sync_service import atualizar_base
+stats = atualizar_base()
+```
+
+### Regras principais
+
+- Busca sempre no SQLite local — API VHSys apenas para import/sync/atualização de base
+- `dirty=1`: produto tem edição local pendente de sync
+- EAN duplicado: **BLOQUEADO** — nunca decisão automática
+- Conflito de sync: VHSys mudou externamente (preço diferente do baseline) → operador decide
+- `atualizar_base()` preserva edições locais (dirty=1)
+
+### Tabela produtos (consulta_vhsys.db)
+
+| Campo | Descrição |
+|---|---|
+| `vhsys_id` | PK do produto no VHSys |
+| `preco` | Preço local (pode estar editado) |
+| `preco_vhsys` | Preço na última importação (baseline para detecção de conflito) |
+| `estoque` | Estoque local |
+| `dirty` | 1 = tem edição pendente de sync |
+| `ativo` | 0 = inativado pelo operador |
+
+### Nota sobre estoque
+
+VHSys não expõe `qtde_produto` em todos os planos/endpoints. Se `PUT /produtos/{id}` não persistir estoque, o campo fica apenas local. Verificar resultado após primeira execução de `sincronizar_sujos()`.

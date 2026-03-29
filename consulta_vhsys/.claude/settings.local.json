@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venvScriptspyinstaller.exe consulta_vhsysconsulta_vhsys.spec --distpath consulta_vhsys --workpath consulta_vhsysbuild)"
+    ]
+  }
+}

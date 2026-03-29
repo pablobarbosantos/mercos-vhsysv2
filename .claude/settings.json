@@ -8,7 +8,17 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(grep -r \"def \" /c/mercos_vhsys_git/mercos_service.py --no-heading)",
-      "Bash(grep -r \"def \" /c/mercos_vhsys_git/vhsys_service.py --no-heading)"
+      "Bash(grep -r \"def \" /c/mercos_vhsys_git/vhsys_service.py --no-heading)",
+      "Bash(python -c \":*)",
+      "Bash(findstr /i \"MERCOS\")",
+      "WebFetch(domain:developers.vhsys.com.br)",
+      "Bash(curl -s -X POST http://localhost:8000/admin/api/expedicao/verificar-agora)",
+      "Bash(grep -r MERCOS_ c:mercos_vhsys_git/*.py)",
+      "Bash(grep -r \"requests\\\\.\" c:/mercos_vhsys_git/*.py)",
+      "Bash(grep -r \"Mercos\\\\|mercos\" c:/mercos_vhsys_git/*.py c:/mercos_vhsys_git/src/*.py)",
+      "Bash(grep -r \"mercos_client\\\\|MercosClient\\\\|get_pedidos\\\\|atualizar_status\" c:/mercos_vhsys_git/*.py c:/mercos_vhsys_git/src/*.py)",
+      "Bash(ls -la c:/mercos_vhsys_git/.env*)",
+      "Bash(python -c \"from src.admin_routes import router; print\\(''import OK''\\)\")"
     ]
   }
 }

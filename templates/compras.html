@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Compras — NF-e</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #080b10;
+      --surface:   #0d1117;
+      --surface2:  #111620;
+      --border:    #1e2535;
+      --border2:   #263045;
+      --accent:    #00d4ff;
+      --accent-dim:#00d4ff22;
+      --ok:        #00e676;
+      --erro:      #ff3d57;
+      --warn:      #ffb400;
+      --info:      #448aff;
+      --purple:    #d580ff;
+      --text:      #cdd6f4;
+      --muted:     #4a5568;
+      --muted2:    #6b7a99;
+      --radius:    8px;
+      --font-mono: 'Space Mono', monospace;
+      --font-disp: 'Syne', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      background-image:
+        linear-gradient(rgba(0,212,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    header {
+      background: rgba(13,17,23,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border2);
+      padding: 0 32px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 0 rgba(0,212,255,.08), 0 4px 24px #00000080;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo-mark {
+      width: 32px; height: 32px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(0,212,255,.3);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    header h1 {
+      font-family: var(--font-disp);
+      font-size: 17px; font-weight: 800; letter-spacing: -.2px; color: var(--text);
+    }
+    header h1 span { color: var(--accent); text-shadow: 0 0 20px rgba(0,212,255,.5); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    #ultima-atualizacao {
+      color: var(--muted); font-size: 11px; font-family: var(--font-mono);
+      padding: 4px 10px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 20px;
+    }
+    a.back-link {
+      color: var(--muted2); font-size: 11px; font-family: var(--font-mono);
+      text-decoration: none; padding: 6px 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      transition: color .2s, border-color .2s;
+    }
+    a.back-link:hover { color: var(--text); border-color: var(--border2); }
+
+    button.refresh {
+      background: var(--accent); border: none; border-radius: 6px;
+      color: #000; font-size: 11px; font-weight: 700; font-family: var(--font-mono);
+      padding: 7px 16px; cursor: pointer; letter-spacing: .5px; transition: all .2s;
+      box-shadow: 0 0 16px rgba(0,212,255,.25);
+    }
+    button.refresh:hover { background: #33deff; transform: translateY(-1px); }
+    button.btn-action {
+      background: transparent; border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--muted2); font-size: 10px; font-weight: 700; font-family: var(--font-mono);
+      padding: 5px 12px; cursor: pointer; letter-spacing: .3px; transition: all .2s;
+    }
+    button.btn-action:hover { color: var(--accent); border-color: rgba(0,212,255,.5); }
+    button.btn-ok {
+      background: transparent; border: 1px solid rgba(0,230,118,.4); border-radius: 6px;
+      color: var(--ok); font-size: 10px; font-weight: 700; font-family: var(--font-mono);
+      padding: 5px 12px; cursor: pointer; transition: all .2s;
+    }
+    button.btn-ok:hover { background: rgba(0,230,118,.08); }
+    button.btn-warn {
+      background: transparent; border: 1px solid rgba(255,180,0,.4); border-radius: 6px;
+      color: var(--warn); font-size: 10px; font-weight: 700; font-family: var(--font-mono);
+      padding: 5px 12px; cursor: pointer; transition: all .2s;
+    }
+    button.btn-warn:hover { background: rgba(255,180,0,.08); }
+    button.btn-ignorar {
+      background: transparent; border: 1px solid rgba(150,150,150,.4); border-radius: 6px;
+      color: #888; font-size: 10px; font-weight: 700; font-family: var(--font-mono);
+      padding: 5px 12px; cursor: pointer; transition: all .2s;
+    }
+    button.btn-ignorar:hover { color: #bbb; border-color: rgba(150,150,150,.7); }
+    .tab-status-btn {
+      background: transparent; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--muted2); font-size: 11px; font-family: var(--font-mono);
+      padding: 3px 10px; cursor: pointer; transition: all .2s;
+    }
+    .tab-status-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .tab-status-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,.08); }
+
+    .tabs {
+      display: flex; gap: 0; background: var(--surface);
+      border-bottom: 1px solid var(--border2); padding: 0 32px;
+    }
+    .tab {
+      padding: 14px 20px; font-size: 11px; font-weight: 700;
+      font-family: var(--font-mono); letter-spacing: .5px; text-transform: uppercase;
+      color: var(--muted2); cursor: pointer; border-bottom: 2px solid transparent;
+      margin-bottom: -1px; transition: color .2s, border-color .2s;
+      user-select: none; white-space: nowrap;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); text-shadow: 0 0 12px rgba(0,212,255,.4); }
+    .tab-badge {
+      display: inline-block; background: var(--erro); color: #fff;
+      font-size: 9px; font-weight: 700; font-family: var(--font-mono);
+      border-radius: 10px; padding: 1px 6px; margin-left: 6px;
+      vertical-align: middle; box-shadow: 0 0 8px rgba(255,61,87,.4);
+    }
+
+    main { padding: 28px 32px; max-width: 1440px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 20px 20px 18px;
+      position: relative; overflow: hidden; animation: cardIn .4s ease both;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 3px; height: 100%; border-radius: 8px 0 0 8px;
+    }
+    @keyframes cardIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    .stat-card .label {
+      color: var(--muted2); font-size: 9px; font-family: var(--font-mono);
+      text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 10px;
+    }
+    .stat-card .value { font-family: var(--font-disp); font-size: 34px; font-weight: 800; line-height: 1; }
+    .stat-card.ok::before    { background: var(--ok);     box-shadow: 0 0 8px var(--ok); }
+    .stat-card.erro::before  { background: var(--erro);   box-shadow: 0 0 8px var(--erro); }
+    .stat-card.hoje::before  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .stat-card.total::before { background: var(--muted2); }
+    .stat-card.warn::before  { background: var(--warn);   box-shadow: 0 0 8px var(--warn); }
+    .stat-card.info::before  { background: var(--info);   box-shadow: 0 0 8px var(--info); }
+    .stat-card.ok    .value { color: var(--ok); }
+    .stat-card.erro  .value { color: var(--erro); }
+    .stat-card.hoje  .value { color: var(--accent); }
+    .stat-card.total .value { color: var(--text); }
+    .stat-card.warn  .value { color: var(--warn); }
+    .stat-card.info  .value { color: var(--info); }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .toolbar input, .toolbar select {
+      background: var(--surface); border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--text); font-size: 12px; font-family: var(--font-mono);
+      padding: 8px 12px; outline: none; transition: border-color .2s;
+    }
+    .toolbar input:focus, .toolbar select:focus { border-color: rgba(0,212,255,.5); }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); overflow: hidden; margin-bottom: 20px;
+    }
+    .card-header {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; color: var(--muted2);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .8px; color: var(--muted2);
+      border-bottom: 1px solid var(--border2); white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 10px 14px; font-size: 12px; vertical-align: middle; }
+
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 9px; font-weight: 700; font-family: var(--font-mono);
+      letter-spacing: .5px; text-transform: uppercase;
+    }
+    .badge-ok      { background: rgba(0,230,118,.1);  color: var(--ok);    border: 1px solid rgba(0,230,118,.2); }
+    .badge-erro    { background: rgba(255,61,87,.1);   color: var(--erro);  border: 1px solid rgba(255,61,87,.2); }
+    .badge-warn    { background: rgba(255,180,0,.1);   color: var(--warn);  border: 1px solid rgba(255,180,0,.2); }
+    .badge-info    { background: rgba(68,138,255,.1);  color: var(--info);  border: 1px solid rgba(68,138,255,.2); }
+    .badge-muted   { background: rgba(107,122,153,.1); color: var(--muted2);border: 1px solid rgba(107,122,153,.2); }
+    .badge-purple  { background: rgba(213,128,255,.1); color: var(--purple);border: 1px solid rgba(213,128,255,.2); }
+
+    .empty-state {
+      text-align: center; padding: 48px 20px;
+      color: var(--muted); font-size: 12px;
+    }
+    .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed var(--border2); border-radius: var(--radius);
+      padding: 32px; text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s; margin-bottom: 20px;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: rgba(0,212,255,.5); background: var(--accent-dim);
+    }
+    .upload-zone .icon { font-size: 32px; margin-bottom: 8px; color: var(--muted2); }
+    .upload-zone p { color: var(--muted2); font-size: 12px; }
+    .upload-zone strong { color: var(--accent); }
+
+    /* Form mapeamento */
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px; padding: 20px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--muted2);
+    }
+    .form-group input, .form-group select {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      font-family: var(--font-mono); padding: 8px 12px; outline: none;
+      transition: border-color .2s;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: rgba(0,212,255,.5);
+    }
+    .form-actions { padding: 0 20px 20px; display: flex; gap: 10px; }
+
+    /* SEFAZ status card */
+    .cert-card {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 20px;
+    }
+    .cert-icon { font-size: 36px; }
+    .cert-info h3 { font-size: 14px; margin-bottom: 6px; }
+    .cert-info p { font-size: 11px; color: var(--muted2); }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 12px 20px;
+      font-size: 12px; font-family: var(--font-mono);
+      transform: translateY(80px); opacity: 0; pointer-events: none;
+      transition: all .3s cubic-bezier(.34,1.56,.64,1);
+      max-width: 360px;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.ok   { border-left: 3px solid var(--ok);   color: var(--ok); }
+    #toast.erro { border-left: 3px solid var(--erro);  color: var(--erro); }
+    #toast.warn { border-left: 3px solid var(--warn);  color: var(--warn); }
+    #toast.info { border-left: 3px solid var(--info);  color: var(--info); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">
+    <div class="header-logo-mark">🛒</div>
+    <h1>Compras — <span>NF-e</span></h1>
+  </div>
+  <div class="header-right">
+    <span id="ultima-atualizacao">—</span>
+    <a class="back-link" href="/admin">← Admin Principal</a>
+    <button class="refresh" onclick="carregarTudo()">↻ Atualizar</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tab active" onclick="trocarAba('notas')">
+    Notas Fiscais <span class="tab-badge" id="badge-aguardando" style="display:none"></span>
+  </div>
+  <div class="tab" onclick="trocarAba('fila')">Fila</div>
+  <div class="tab" onclick="trocarAba('mapeamentos')">Mapeamentos</div>
+  <div class="tab" onclick="trocarAba('contas')">Contas a Pagar</div>
+  <div class="tab" onclick="trocarAba('sefaz')">SEFAZ</div>
+</nav>
+
+<main>
+
+  <!-- ── ABA: NOTAS FISCAIS ── -->
+  <div class="tab-content active" id="aba-notas">
+
+    <!-- Upload zone -->
+    <div class="upload-zone" id="upload-zone"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('dragover')"
+         ondragleave="this.classList.remove('dragover')"
+         ondrop="handleDrop(event)">
+      <div class="icon">📄</div>
+      <p><strong>Clique ou arraste</strong> um XML de NF-e aqui</p>
+      <p style="margin-top:6px;font-size:11px;">Aceita arquivos .xml de NF-e ou procNFe</p>
+    </div>
+    <input type="file" id="file-input" accept=".xml" style="display:none"
+           onchange="uploadXml(this.files[0])">
+
+    <!-- Stats -->
+    <div class="stats" id="stats-notas"></div>
+
+    <!-- Tabela -->
+    <div class="card">
+      <div class="card-header" style="flex-wrap:wrap;gap:8px;">
+        <span>Notas Fiscais Recebidas</span>
+        <!-- Tabs de filtro por status -->
+        <div style="display:flex;gap:4px;margin-left:12px;" id="filtro-status-tabs">
+          <button class="tab-status-btn active" data-status="" onclick="setFiltroStatus(this,'')">Todas</button>
+          <button class="tab-status-btn" data-status="pendente,aguardando_mapeamento" onclick="setFiltroStatus(this,'pendente,aguardando_mapeamento')">Pendentes</button>
+          <button class="tab-status-btn" data-status="concluido" onclick="setFiltroStatus(this,'concluido')">Concluídas</button>
+          <button class="tab-status-btn" data-status="ignorado" onclick="setFiltroStatus(this,'ignorado')">Ignoradas</button>
+          <button class="tab-status-btn" data-status="erro" onclick="setFiltroStatus(this,'erro')">Erro</button>
+        </div>
+        <span style="flex:1"></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="filtro-notas" placeholder="Filtrar fornecedor..."
+                 oninput="filtrarNotas()" style="width:180px">
+          <button class="btn-action" onclick="selecionarTodas(true)" style="font-size:11px;padding:4px 10px;">☑ Todas</button>
+          <button class="btn-action" onclick="selecionarTodas(false)" style="font-size:11px;padding:4px 10px;">☐ Nenhuma</button>
+          <button class="refresh" id="btn-processar-sel" onclick="processarSelecionadas()"
+                  style="font-size:12px;padding:6px 14px;">▶ Processar Selecionadas</button>
+          <button class="btn-action" id="btn-ignorar-sel" onclick="ignorarSelecionadas()"
+                  style="font-size:12px;padding:6px 14px;border-color:#666;">⊘ Ignorar Selecionadas</button>
+        </div>
+      </div>
+      <div id="tabela-notas-container">
+        <div class="empty-state"><div class="icon">📋</div><p>Carregando...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ABA: FILA ── -->
+  <div class="tab-content" id="aba-fila">
+    <div class="stats" id="stats-fila"></div>
+    <div class="card">
+      <div class="card-header">Status da Fila de Processamento</div>
+      <div id="fila-info" style="padding:20px;color:var(--muted2);font-size:12px;">
+        Carregando...
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ABA: MAPEAMENTOS ── -->
+  <div class="tab-content" id="aba-mapeamentos">
+    <div id="mapeamentos-container">
+      <div class="empty-state"><div class="icon">🔗</div><p>Carregando...</p></div>
+    </div>
+  </div>
+
+  <!-- ── ABA: CONTAS A PAGAR ── -->
+  <div class="tab-content" id="aba-contas">
+    <div class="toolbar">
+      <select id="filtro-status-contas" onchange="carregarContas()">
+        <option value="">Todos os status</option>
+        <option value="pendente">Pendente</option>
+        <option value="pago">Pago</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="card-header">Contas a Pagar Extraídas de NF-e</div>
+      <div id="tabela-contas-container">
+        <div class="empty-state"><div class="icon">💰</div><p>Carregando...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ABA: SEFAZ ── -->
+  <div class="tab-content" id="aba-sefaz">
+
+    <!-- Status do certificado -->
+    <div class="cert-card" id="cert-card">
+      <div class="cert-icon" id="cert-icon">🔐</div>
+      <div class="cert-info">
+        <h3 id="cert-status-text">Verificando certificado...</h3>
+        <p id="cert-expira" style="margin-top:4px;">—</p>
+        <p id="cert-cnpj"   style="margin-top:4px;color:var(--muted2);font-size:11px;">—</p>
+        <p id="cert-nsu"    style="margin-top:6px;color:var(--muted2);font-size:11px;">Último NSU: —</p>
+      </div>
+    </div>
+
+    <!-- Upload de certificado -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">Upload do Certificado A1</div>
+      <div style="padding:20px;">
+        <div
+          class="upload-zone"
+          id="cert-drop-zone"
+          style="margin-bottom:16px;"
+          onclick="document.getElementById('cert-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('dragover')"
+          ondragleave="this.classList.remove('dragover')"
+          ondrop="handleCertDrop(event)">
+          <div class="icon">🔑</div>
+          <p><strong>Clique ou arraste</strong> o certificado A1 aqui</p>
+          <p style="margin-top:6px;font-size:11px;" id="cert-filename-label">Aceita .pfx ou .p12</p>
+        </div>
+        <input type="file" id="cert-file-input" accept=".pfx,.p12" style="display:none"
+               onchange="selecionarCert(this.files[0])">
+
+        <div class="form-grid" style="padding:0;margin-bottom:16px;">
+          <div class="form-group">
+            <label>CNPJ da Empresa (14 dígitos)</label>
+            <input type="text" id="cert-cnpj-input" placeholder="00000000000000" maxlength="18">
+          </div>
+          <div class="form-group">
+            <label>Senha do Certificado</label>
+            <input type="password" id="cert-senha-input" placeholder="Senha do .pfx">
+          </div>
+        </div>
+
+        <button class="refresh" id="btn-enviar-cert" onclick="enviarCertificado()" disabled>
+          Enviar Certificado
+        </button>
+        <small style="color:var(--muted2);margin-left:12px;font-size:11px;">
+          O arquivo fica salvo localmente em data/certs/ — nunca sai desta máquina
+        </small>
+      </div>
+    </div>
+
+    <!-- Coleta manual -->
+    <div class="toolbar">
+      <button class="refresh" id="btn-coletar-sefaz" onclick="coletarAgora()">▶ Coletar NF-e Agora (SEFAZ)</button>
+      <small style="color:var(--muted2);">Coleta automática a cada 1h30. Limite SEFAZ: 1 req/hora.</small>
+    </div>
+    <!-- Resultado da última coleta -->
+    <div id="sefaz-resultado" style="display:none;margin-top:12px;" class="card">
+      <div class="card-header" id="sefaz-resultado-titulo">Resultado da coleta</div>
+      <div id="sefaz-resultado-corpo" style="padding:16px;font-size:13px;line-height:1.8;font-family:var(--font-mono)"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ════════════════════════════════════════════════
+  // Dados em memória
+  // ════════════════════════════════════════════════
+  let _notas = [];
+  let _mapeamentos = [];
+  let _filtroStatus = '';
+
+  // ════════════════════════════════════════════════
+  // Tabs
+  // ════════════════════════════════════════════════
+  function trocarAba(nome) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('aba-' + nome).classList.add('active');
+    document.querySelectorAll('.tab')[['notas','fila','mapeamentos','contas','sefaz'].indexOf(nome)].classList.add('active');
+    if (nome === 'fila') carregarFila();
+    if (nome === 'mapeamentos') carregarMapeamentos();
+    if (nome === 'contas') carregarContas();
+    if (nome === 'sefaz') carregarSefaz();
+  }
+
+  // ════════════════════════════════════════════════
+  // Loader principal
+  // ════════════════════════════════════════════════
+  async function carregarTudo() {
+    await carregarNotas();
+    document.getElementById('ultima-atualizacao').textContent =
+      new Date().toLocaleTimeString('pt-BR');
+  }
+
+  // ════════════════════════════════════════════════
+  // Notas Fiscais
+  // ════════════════════════════════════════════════
+  async function carregarNotas() {
+    try {
+      const r = await fetch('/compras/api/notas?limit=200');
+      const d = await r.json();
+      _notas = d.notas || [];
+      renderStatsNotas(d.stats || {});
+      renderTabelaNotas(_notas);
+
+      const nAguard = d.stats.aguardando_mapeamento || 0;
+      const badge = document.getElementById('badge-aguardando');
+      badge.textContent = nAguard;
+      badge.style.display = nAguard > 0 ? '' : 'none';
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  function renderStatsNotas(s) {
+    const container = document.getElementById('stats-notas');
+    const total = s.total || 0;
+    const concluido = s.concluido || 0;
+    const aguardando = s.aguardando_mapeamento || 0;
+    const erro = (s.erro || 0) + (s.erro_permanente || 0);
+    const pendente = s.pendente || 0;
+    const ignorado = s.ignorado || 0;
+    container.innerHTML = `
+      <div class="stat-card total"><div class="label">Total NF-e</div><div class="value">${total}</div></div>
+      <div class="stat-card ok"><div class="label">Concluídas</div><div class="value">${concluido}</div></div>
+      <div class="stat-card warn"><div class="label">Ag. Mapeamento</div><div class="value">${aguardando}</div></div>
+      <div class="stat-card info"><div class="label">Pendente</div><div class="value">${pendente}</div></div>
+      <div class="stat-card erro"><div class="label">Erro</div><div class="value">${erro}</div></div>
+      ${ignorado > 0 ? `<div class="stat-card" style="border-color:#555"><div class="label">Ignoradas</div><div class="value" style="color:#777">${ignorado}</div></div>` : ''}
+    `;
+  }
+
+  function renderTabelaNotas(notas) {
+    const container = document.getElementById('tabela-notas-container');
+    if (!notas.length) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nenhuma NF-e ainda. Faça upload de um XML ou configure o SEFAZ.</p></div>';
+      return;
+    }
+    const rows = notas.map(n => `
+      <tr>
+        <td style="width:32px;text-align:center">
+          <input type="checkbox" class="chk-nota" data-chave="${n.chave_nfe}"
+            ${['pendente','aguardando_mapeamento'].includes(n.status) ? 'checked' : ''}
+            style="accent-color:var(--accent);width:15px;height:15px;cursor:pointer;">
+        </td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:var(--muted2)">
+          ${n.numero || '—'} / ${n.serie || '—'}
+        </td>
+        <td>${n.fornecedor_nome || '—'}</td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:var(--muted2)">${n.fornecedor_cnpj || '—'}</td>
+        <td style="text-align:right;font-family:var(--font-mono)">
+          ${n.valor_total ? 'R$ ' + n.valor_total.toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—'}
+        </td>
+        <td>${statusBadge(n.status)}</td>
+        <td style="color:var(--muted2);font-size:11px">${(n.emitida_em || '').slice(0,10) || '—'}</td>
+        <td style="color:var(--muted2);font-size:11px">${(n.criado_em || '').slice(0,16)}</td>
+        <td>
+          <button class="btn-action" onclick="reprocessar('${n.chave_nfe}')">↻</button>
+        </td>
+      </tr>
+    `).join('');
+    container.innerHTML = `
+      <table>
+        <thead><tr>
+          <th style="width:32px"></th>
+          <th>Nº / Série</th><th>Fornecedor</th><th>CNPJ</th>
+          <th style="text-align:right">Valor</th><th>Status</th>
+          <th>Emissão</th><th>Recebida</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function setFiltroStatus(btn, status) {
+    _filtroStatus = status;
+    document.querySelectorAll('.tab-status-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filtrarNotas();
+  }
+
+  function filtrarNotas() {
+    const q = document.getElementById('filtro-notas').value.toLowerCase();
+    const statuses = _filtroStatus ? _filtroStatus.split(',') : [];
+    const filtradas = _notas.filter(n => {
+      if (statuses.length && !statuses.includes(n.status)) return false;
+      return (n.fornecedor_nome || '').toLowerCase().includes(q) ||
+             (n.fornecedor_cnpj || '').includes(q) ||
+             (n.numero || '').includes(q);
+    });
+    renderTabelaNotas(filtradas);
+  }
+
+  function selecionarTodas(val) {
+    document.querySelectorAll('.chk-nota').forEach(c => c.checked = val);
+  }
+
+  async function ignorarSelecionadas() {
+    const chaves = [...document.querySelectorAll('.chk-nota:checked')].map(c => c.dataset.chave);
+    if (!chaves.length) { toast('Selecione ao menos uma nota', 'warn'); return; }
+    if (!confirm(`Ignorar ${chaves.length} nota(s)? Elas não serão processadas.`)) return;
+    const btn = document.getElementById('btn-ignorar-sel');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/compras/api/notas/ignorar', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({chaves})
+      });
+      const d = await r.json();
+      if (r.ok) { toast(`${d.ignoradas} nota(s) ignorada(s)`, 'ok'); await carregarNotas(); }
+      else toast(d.detail || 'Erro', 'erro');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+    finally { btn.disabled = false; }
+  }
+
+  async function reprocessar(chave) {
+    try {
+      const r = await fetch(`/compras/api/notas/${chave}/processar`, {method:'POST'});
+      if (r.ok) { toast('Nota re-enfileirada para processamento', 'ok'); await carregarNotas(); }
+      else toast('Erro ao reprocessar', 'erro');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+  }
+
+  async function ignorarNota(chave, btn) {
+    if (!confirm('Ignorar esta nota? Ela não será processada.')) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/compras/api/notas/ignorar', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({chaves:[chave]})
+      });
+      if (r.ok) { toast('Nota ignorada', 'ok'); await carregarMapeamentos(); }
+      else toast('Erro ao ignorar nota', 'erro');
+    } catch(e) { toast('Erro: '+e.message,'erro'); }
+    finally { btn.disabled = false; }
+  }
+
+  async function ignorarItem(chave, itemId, btn) {
+    btn.disabled = true;
+    try {
+      const r = await fetch(`/compras/api/notas/${chave}/itens/${itemId}/ignorar`, {method:'POST'});
+      if (r.ok) {
+        toast('Item ignorado','ok');
+        btn.closest('td').innerHTML = '<span style="color:#555;font-size:11px;">ignorado</span>';
+      } else toast('Erro ao ignorar item','erro');
+    } catch(e) { toast('Erro: '+e.message,'erro'); }
+  }
+
+  async function processarNota(chave, btn) {
+    btn.disabled = true; btn.textContent = '⏳';
+    try {
+      const r = await fetch('/compras/api/notas/processar-selecionadas', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({chaves: [chave]})
+      });
+      const data = await r.json();
+      if (r.ok) {
+        const msg = data.status === 'concluido' ? 'Nota processada com sucesso ✓'
+                  : data.status === 'aguardando_mapeamento' ? 'Aguardando mapeamento de itens'
+                  : 'Processado';
+        toast(msg, data.status === 'concluido' ? 'ok' : 'warn');
+        await carregarMapeamentos();
+        await carregarNotas();
+      }
+      else toast(data.detail || 'Erro ao processar', 'erro');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+    finally { btn.disabled = false; btn.textContent = '▶ Processar'; }
+  }
+
+  async function processarSelecionadas() {
+    const chaves = [...document.querySelectorAll('.chk-nota:checked')].map(c => c.dataset.chave);
+    if (!chaves.length) { toast('Selecione ao menos uma nota', 'warn'); return; }
+    const btn = document.getElementById('btn-processar-sel');
+    btn.disabled = true; btn.textContent = '⏳ Processando...';
+    try {
+      const r = await fetch('/compras/api/notas/processar-selecionadas', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({chaves})
+      });
+      const data = await r.json();
+      if (r.ok) {
+        const c = data.concluido || 0, a = data.aguardando_mapeamento || 0, e = data.erro || 0;
+        toast(`Concluídas: ${c} | Ag. mapeamento: ${a} | Erros: ${e}`, c > 0 ? 'ok' : 'warn');
+        await carregarNotas();
+        await carregarMapeamentos();
+      }
+      else toast(data.detail || 'Erro ao processar', 'erro');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+    finally { btn.disabled = false; btn.textContent = '▶ Processar Selecionadas'; }
+  }
+
+  // ════════════════════════════════════════════════
+  // Upload XML
+  // ════════════════════════════════════════════════
+  async function uploadXml(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.xml')) { toast('Apenas arquivos .xml são aceitos', 'warn'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    toast('Enviando XML...', 'info');
+    try {
+      const r = await fetch('/compras/upload-xml', {method:'POST', body: fd});
+      const d = await r.json();
+      if (r.ok) {
+        toast('NF-e registrada: ' + (d.chave_nfe || '').slice(0,8) + '...', 'ok');
+        await carregarNotas();
+      } else {
+        toast('Erro: ' + (d.detail || 'upload falhou'), 'erro');
+      }
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+    document.getElementById('file-input').value = '';
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('upload-zone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) uploadXml(file);
+  }
+
+  // ════════════════════════════════════════════════
+  // Fila
+  // ════════════════════════════════════════════════
+  async function carregarFila() {
+    try {
+      const r = await fetch('/compras/api/fila');
+      const d = await r.json();
+      const s = d.stats || {};
+      const statsEl = document.getElementById('stats-fila');
+      statsEl.innerHTML = `
+        <div class="stat-card info"><div class="label">Pendente</div><div class="value">${s.pendente||0}</div></div>
+        <div class="stat-card warn"><div class="label">Processando</div><div class="value">${s.processando||0}</div></div>
+        <div class="stat-card ok"><div class="label">Concluído</div><div class="value">${s.concluido||0}</div></div>
+        <div class="stat-card erro"><div class="label">Erro Permanente</div><div class="value">${s.erro_permanente||0}</div></div>
+      `;
+      const total = Object.values(s).reduce((a,b)=>a+b, 0);
+      document.getElementById('fila-info').innerHTML =
+        total === 0
+          ? '<span style="color:var(--ok)">✓ Fila vazia</span>'
+          : `<span style="color:var(--muted2)">${total} item(s) na fila</span>`;
+    } catch(e) { console.error(e); }
+  }
+
+  // ════════════════════════════════════════════════
+  // Mapeamentos — nova UI estilo planilha
+  // ════════════════════════════════════════════════
+
+  // dropdown de busca ativo no momento
+  let _dropdownAtivo = null;
+
+  async function carregarMapeamentos() {
+    const container = document.getElementById('mapeamentos-container');
+    try {
+      const r = await fetch('/compras/api/mapeamentos/pendentes');
+      const d = await r.json();
+      renderMapeamentos(d.notas || []);
+    } catch(e) { container.innerHTML = '<div class="empty-state"><p>Erro ao carregar</p></div>'; }
+  }
+
+  function renderMapeamentos(notas) {
+    const container = document.getElementById('mapeamentos-container');
+    if (!notas.length) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">✓</div><p>Nenhuma nota pendente de mapeamento.</p></div>';
+      return;
+    }
+
+    const blocos = notas.map(nota => {
+      const statusCor = nota.status === 'aguardando_mapeamento' ? 'var(--warn)' :
+                        nota.status === 'concluido' ? 'var(--ok)' :
+                        nota.status === 'erro' ? 'var(--erro)' : 'var(--info)';
+
+      const linhas = nota.itens.map(it => {
+        const map = it.mapeamento;
+        const sug = it.sugestao;
+
+        // valor inicial do input e cor da borda
+        let inputVal = '';
+        let borderColor = 'var(--border)';
+        let badgeVia = '';
+        let fatorInicial = map ? (map.fator_conversao || 1) : 1;
+
+        if (map) {
+          inputVal = map.nome_vhsys || ('ID ' + map.vhsys_id);
+          borderColor = 'var(--ok)';
+        } else if (sug) {
+          inputVal = sug.nome || ('ID ' + sug.vhsys_id);
+          borderColor = 'var(--warn)';
+          badgeVia = `<span style="font-size:10px;color:var(--warn);margin-left:6px;">sugestão via ${sug.via}</span>`;
+        }
+
+        const statusIcon = map
+          ? `<span style="color:var(--ok);font-size:13px" title="Mapeado">✓</span>`
+          : sug
+            ? `<span style="color:var(--warn);font-size:13px" title="Sugestão automática">?</span>`
+            : `<span style="color:var(--erro);font-size:13px" title="Sem mapeamento">✕</span>`;
+
+        return `<tr>
+          <td style="padding-left:16px;color:var(--text)">${it.descricao}</td>
+          <td style="color:var(--muted2);font-size:11px">${it.unidade} × ${it.quantidade}</td>
+          <td style="color:var(--muted2);font-size:11px">R$ ${it.valor_unitario.toFixed(2)}</td>
+          <td style="text-align:center">${statusIcon}${badgeVia}</td>
+          <td style="min-width:280px;">
+            <div class="busca-produto-wrap" style="position:relative">
+              <input type="text"
+                class="busca-produto-input"
+                value="${inputVal}"
+                placeholder="Buscar por nome, EAN ou SKU..."
+                autocomplete="off"
+                style="width:100%;background:var(--bg3);border:1px solid ${borderColor};border-radius:4px;padding:5px 8px;color:var(--text);font-size:12px;"
+                oninput="buscaProduto(this)"
+                onfocus="buscaProduto(this)"
+                onblur="setTimeout(()=>fecharDropdown(this),200)"
+                data-cnpj="${nota.fornecedor_cnpj}"
+                data-desc="${encodeURIComponent(it.descricao)}"
+                data-un="${it.unidade}"
+                data-custo="${it.valor_unitario||0}"
+                data-ean="${it.ean||''}"
+                ${sug && !map ? `data-sug-id="${sug.vhsys_id}" data-sug-nome="${(sug.nome||'').replace(/"/g,'&quot;')}" data-sug-preco="${sug.preco||0}"` : ''}
+              >
+              <div class="busca-dropdown" style="display:none;position:fixed;z-index:9999;background:#1a1f2e;border:1px solid var(--accent);border-radius:4px;max-height:220px;overflow-y:auto;box-shadow:0 4px 24px rgba(0,0,0,.8);min-width:300px;"></div>
+            </div>
+          </td>
+          <td>
+            <input type="number" class="fator-input" value="${fatorInicial}" min="0.001" step="0.001"
+              style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 6px;color:var(--text);font-size:12px;">
+          </td>
+          <td style="white-space:nowrap">
+            ${sug && !map
+              ? `<button class="btn-ok" style="font-size:11px;padding:4px 10px;" onclick="confirmarSugestao(this)">✓ Confirmar</button>`
+              : map
+                ? `<button class="btn-action" style="font-size:11px;padding:4px 8px;" onclick="this.closest('tr').querySelector('.busca-produto-input').value='';this.closest('tr').querySelector('.busca-produto-input').focus();">✎ Alterar</button>`
+                : ''
+            }
+            ${!it.ignorado ? `<button class="btn-ignorar" style="font-size:11px;padding:4px 8px;margin-left:4px;"
+              onclick="ignorarItem('${nota.chave_nfe}',${it.id},this)">⊘</button>` : '<span style="color:#555;font-size:11px;">ignorado</span>'}
+          </td>
+        </tr>`;
+      }).join('');
+
+      return `<div class="card" style="margin-bottom:16px;">
+        <div class="card-header" style="border-bottom:1px solid var(--border);">
+          <span>NF ${nota.numero}/${nota.serie} — <span style="color:var(--accent)">${nota.fornecedor_nome}</span></span>
+          <span style="font-size:11px;color:${statusCor};margin-left:12px;">${nota.status}</span>
+          <span style="flex:1"></span>
+          <span style="font-size:12px;color:var(--muted2);">Emissão: ${nota.emitida_em} &nbsp;|&nbsp; R$ ${nota.valor_total.toFixed(2)}</span>
+          &nbsp;
+          <button class="btn-ok" style="font-size:11px;padding:4px 12px;margin-left:10px;"
+            onclick="processarNota('${nota.chave_nfe}', this)">▶ Processar</button>
+          <button class="btn-ignorar" style="font-size:11px;padding:4px 10px;margin-left:6px;"
+            onclick="ignorarNota('${nota.chave_nfe}', this)">⊘ Ignorar nota</button>
+        </div>
+        <table style="width:100%">
+          <thead><tr>
+            <th>Produto na Nota</th><th>Qtd</th><th>Vlr Unit.</th>
+            <th style="text-align:center">Status</th><th>Produto VHSys</th><th>Fator</th><th></th>
+          </tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = blocos;
+  }
+
+  async function buscaProduto(input) {
+    const q = input.value.trim();
+    const wrap = input.closest('.busca-produto-wrap');
+    const dropdown = wrap.querySelector('.busca-dropdown');
+
+    // posiciona o dropdown fixo sob o input
+    const rect = input.getBoundingClientRect();
+    dropdown.style.top  = (rect.bottom + 2) + 'px';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.width = Math.max(rect.width, 320) + 'px';
+
+    if (q.length < 2) { dropdown.style.display = 'none'; return; }
+
+    const r = await fetch('/compras/api/produtos/buscar?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    const produtos = d.produtos || [];
+
+    const btnCadastrar = `<div onmousedown="event.preventDefault();abrirModalNovoProduto(this.closest('.busca-produto-wrap').querySelector('input'))"
+      style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--accent);border-top:1px solid var(--border);background:var(--bg2);"
+      onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      ➕ Cadastrar novo produto
+    </div>`;
+
+    if (!produtos.length) {
+      dropdown.innerHTML = '<div style="padding:8px 12px;color:var(--muted2);font-size:12px;">Nenhum produto encontrado</div>' + btnCadastrar;
+    } else {
+      dropdown.innerHTML = produtos.map(p => `
+        <div class="busca-item" onmousedown="event.preventDefault();selecionarProduto(this, ${p.vhsys_id}, '${(p.nome||'').replace(/'/g,"\\'")}', ${p.preco||0})"
+          style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);background:var(--bg2);"
+          onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+          <div style="color:var(--text)">${p.nome}</div>
+          <div style="color:var(--muted2);font-size:11px">ID: ${p.vhsys_id} &nbsp;|&nbsp; EAN: ${p.ean||'—'} &nbsp;|&nbsp; R$ ${(p.preco||0).toFixed(2)}</div>
+        </div>`).join('') + btnCadastrar;
+    }
+    dropdown.style.display = 'block';
+  }
+
+  function fecharDropdown(input) {
+    const wrap = input.closest('.busca-produto-wrap');
+    if (wrap) wrap.querySelector('.busca-dropdown').style.display = 'none';
+  }
+
+  async function confirmarSugestao(btn) {
+    const input = btn.closest('tr').querySelector('.busca-produto-input');
+    const vhsysId = parseInt(input.dataset.sugId);
+    const nomeVhsys = input.dataset.sugNome;
+    const preco = parseFloat(input.dataset.sugPreco) || 0;
+    await _salvarMapeamento(input, vhsysId, nomeVhsys, preco);
+  }
+
+  async function selecionarProduto(el, vhsysId, nomeVhsys, preco) {
+    // el pode ser o div do dropdown OU o input diretamente (chamado do modal)
+    const wrap = el.classList && el.classList.contains('busca-produto-input')
+      ? el.closest('.busca-produto-wrap')
+      : el.closest('.busca-produto-wrap');
+    const input = wrap ? wrap.querySelector('.busca-produto-input') : el;
+    if (wrap) wrap.querySelector('.busca-dropdown').style.display = 'none';
+    input.value = nomeVhsys;
+    await _salvarMapeamento(input, vhsysId, nomeVhsys, preco);
+  }
+
+  async function _salvarMapeamento(input, vhsysId, nomeVhsys, preco) {
+    const tr    = input.closest('tr');
+    const fator = parseFloat(tr.querySelector('.fator-input').value) || 1;
+    const cnpj  = input.dataset.cnpj;
+    const desc  = decodeURIComponent(input.dataset.desc);
+    const un    = input.dataset.un;
+
+    const body = {
+      fornecedor_cnpj: cnpj,
+      descricao_nota:  desc,
+      vhsys_id:        vhsysId,
+      nome_vhsys:      nomeVhsys,
+      unidade_compra:  un,
+      fator_conversao: fator,
+      unidade_estoque: un,
+    };
+    try {
+      const r = await fetch('/compras/api/mapeamentos', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (r.ok) {
+        toast(`✓ ${desc.slice(0,25)} → ${nomeVhsys.slice(0,25)}`, 'ok');
+        // atualiza visual inline: borda verde, ícone ✓, troca botão por "Alterar"
+        input.style.borderColor = 'var(--ok)';
+        const tdStatus = tr.querySelectorAll('td')[3];
+        tdStatus.innerHTML = `<span style="color:var(--ok);font-size:13px">✓</span>`;
+        const tdBtn = tr.querySelectorAll('td')[6];
+        tdBtn.innerHTML = `<button class="btn-action" style="font-size:11px;padding:4px 8px;"
+          onclick="this.closest('tr').querySelector('.busca-produto-input').value='';this.closest('tr').querySelector('.busca-produto-input').focus();">✎ Alterar</button>`;
+      } else {
+        const e = await r.json();
+        toast('Erro: ' + (e.detail||'falha ao salvar'), 'erro');
+      }
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+  }
+
+  async function deletarMapeamento(id) {
+    if (!confirm('Remover este mapeamento?')) return;
+    try {
+      const r = await fetch('/compras/api/mapeamentos/' + id, {method: 'DELETE'});
+      if (r.ok) { toast('Mapeamento removido', 'ok'); await carregarMapeamentos(); }
+      else toast('Erro ao remover', 'erro');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+  }
+
+  // ════════════════════════════════════════════════
+  // Contas a Pagar
+  // ════════════════════════════════════════════════
+  async function carregarContas() {
+    const status = document.getElementById('filtro-status-contas').value;
+    try {
+      const url = '/compras/api/contas-pagar' + (status ? '?status=' + status : '');
+      const r = await fetch(url);
+      const d = await r.json();
+      const contas = d.contas || [];
+      const container = document.getElementById('tabela-contas-container');
+      if (!contas.length) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">💰</div><p>Nenhuma conta a pagar registrada.</p></div>';
+        return;
+      }
+      const rows = contas.map(c => {
+        const venc = c.vencimento || '—';
+        const hoje = new Date().toISOString().slice(0,10);
+        const vencido = c.vencimento && c.vencimento < hoje && c.status === 'pendente';
+        return `
+          <tr>
+            <td>${c.fornecedor_nome || '—'}</td>
+            <td style="font-family:var(--font-mono);font-size:11px">${c.numero_duplicata || '—'}</td>
+            <td style="text-align:right;font-family:var(--font-mono)">R$ ${c.valor ? c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</td>
+            <td style="font-family:var(--font-mono);${vencido?'color:var(--erro)':''}">${venc}</td>
+            <td>${c.forma_pagamento || '—'}</td>
+            <td>${c.status === 'pago'
+              ? '<span class="badge badge-ok">Pago</span>'
+              : vencido
+                ? '<span class="badge badge-erro">Vencido</span>'
+                : '<span class="badge badge-warn">Pendente</span>'
+            }</td>
+            <td style="font-size:10px;color:var(--muted2)">${(c.chave_nfe||'').slice(0,8)}...</td>
+            <td>${c.status === 'pendente'
+              ? `<button class="btn-ok" onclick="marcarPago(${c.id})">✓ Pago</button>`
+              : ''
+            }</td>
+          </tr>`;
+      }).join('');
+      container.innerHTML = `
+        <table>
+          <thead><tr>
+            <th>Fornecedor</th><th>Duplicata</th><th style="text-align:right">Valor</th>
+            <th>Vencimento</th><th>Forma Pgto</th><th>Status</th><th>NF-e</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    } catch(e) { console.error(e); }
+  }
+
+  async function marcarPago(id) {
+    try {
+      const r = await fetch('/compras/api/contas-pagar/' + id + '/pago', {method: 'PATCH'});
+      if (r.ok) { toast('Marcado como pago', 'ok'); await carregarContas(); }
+      else toast('Erro', 'erro');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+  }
+
+  // ════════════════════════════════════════════════
+  // SEFAZ
+  // ════════════════════════════════════════════════
+  let _certFile = null;
+
+  function selecionarCert(file) {
+    if (!file) return;
+    _certFile = file;
+    document.getElementById('cert-filename-label').textContent = '📎 ' + file.name;
+    document.getElementById('btn-enviar-cert').disabled = false;
+  }
+
+  function handleCertDrop(e) {
+    e.preventDefault();
+    document.getElementById('cert-drop-zone').classList.remove('dragover');
+    selecionarCert(e.dataTransfer.files[0]);
+  }
+
+  async function enviarCertificado() {
+    const senha = document.getElementById('cert-senha-input').value;
+    const cnpj  = document.getElementById('cert-cnpj-input').value.trim().replace(/\D/g,'');
+    if (!_certFile) { toast('Selecione o arquivo .pfx', 'warn'); return; }
+    if (!senha)     { toast('Informe a senha do certificado', 'warn'); return; }
+    if (cnpj.length !== 14) { toast('CNPJ deve ter 14 dígitos', 'warn'); return; }
+
+    const fd = new FormData();
+    fd.append('file', _certFile);
+    fd.append('senha', senha);
+    fd.append('cnpj', cnpj);
+
+    toast('Validando certificado...', 'info');
+    document.getElementById('btn-enviar-cert').disabled = true;
+
+    try {
+      const r = await fetch('/compras/api/sefaz/certificado', {method:'POST', body: fd});
+      const d = await r.json();
+      if (r.ok && d.ok) {
+        toast('Certificado salvo! Expira em ' + (d.cert_expira_em || '?'), 'ok');
+        document.getElementById('cert-senha-input').value = '';
+        document.getElementById('cert-filename-label').textContent = 'Aceita .pfx ou .p12';
+        _certFile = null;
+        await carregarSefaz();
+      } else {
+        toast('Erro: ' + (d.detail || d.erro || 'falha ao salvar'), 'erro');
+        document.getElementById('btn-enviar-cert').disabled = false;
+      }
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+      document.getElementById('btn-enviar-cert').disabled = false;
+    }
+  }
+
+  async function carregarSefaz() {
+    try {
+      const r = await fetch('/compras/api/sefaz/status');
+      const d = await r.json();
+      const card = document.getElementById('cert-card');
+      const txt  = document.getElementById('cert-status-text');
+      const exp  = document.getElementById('cert-expira');
+      const cnpjEl = document.getElementById('cert-cnpj');
+      const nsu  = document.getElementById('cert-nsu');
+      if (d.cert_ok) {
+        // Verifica se está próximo do vencimento (< 30 dias)
+        const expira = d.cert_expira_em || '';
+        const diasRestantes = expira ? Math.floor((new Date(expira) - new Date()) / 86400000) : null;
+        const vencendo = diasRestantes !== null && diasRestantes <= 30;
+
+        card.style.borderColor = vencendo ? 'rgba(255,180,0,.4)' : 'rgba(0,230,118,.3)';
+        document.getElementById('cert-icon').textContent = vencendo ? '⚠️' : '✅';
+        txt.style.color = vencendo ? 'var(--warn)' : 'var(--ok)';
+        txt.textContent = vencendo
+          ? `⚠ Certificado válido — vence em ${diasRestantes} dia(s)!`
+          : '✓ Certificado A1 válido';
+        if (d.cert_razao_social) cnpjEl.textContent = d.cert_razao_social;
+        exp.style.color = vencendo ? 'var(--warn)' : 'var(--ok)';
+        exp.style.fontWeight = '600';
+        exp.textContent = expira ? `Validade: ${expira}` : '';
+        if (d.cnpj_empresa) document.getElementById('cert-cnpj-input').value = d.cnpj_empresa;
+      } else {
+        card.style.borderColor = 'rgba(255,61,87,.3)';
+        document.getElementById('cert-icon').textContent = '🔐';
+        txt.style.color = 'var(--erro)';
+        txt.textContent = '✕ Certificado não configurado';
+        exp.style.color = 'var(--muted2)';
+        exp.style.fontWeight = 'normal';
+        exp.textContent = d.msg || 'Faça upload do .pfx acima';
+        cnpjEl.textContent = '';
+      }
+      nsu.textContent = 'Último NSU: ' + (d.ultimo_nsu || '000000000000000');
+    } catch(e) { console.error(e); }
+  }
+
+  async function coletarAgora() {
+    const btn = document.getElementById('btn-coletar-sefaz');
+    const res = document.getElementById('sefaz-resultado');
+    const titulo = document.getElementById('sefaz-resultado-titulo');
+    const corpo = document.getElementById('sefaz-resultado-corpo');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Conectando na SEFAZ...';
+    res.style.display = 'none';
+
+    try {
+      const r = await fetch('/compras/api/sefaz/coletar-agora', {method:'POST'});
+      const d = await r.json();
+      res.style.display = 'block';
+
+      if (!d.ok) {
+        titulo.textContent = '❌ Erro na coleta';
+        titulo.style.color = 'var(--erro)';
+        corpo.innerHTML = `<span style="color:var(--erro)">${d.erro || 'Erro desconhecido'}</span>`;
+        toast('Erro na coleta SEFAZ', 'erro');
+      } else if (d.skipped) {
+        const seg = d.restante_seg || 0;
+        const min = Math.floor(seg / 60);
+        const s   = seg % 60;
+        const tempoStr = min > 0 ? `${min}min${s > 0 ? ` ${s}s` : ''}` : `${s}s`;
+        titulo.textContent = `⏸ Bloqueado pela SEFAZ — tente novamente em ${tempoStr}`;
+        titulo.style.color = 'var(--warn)';
+        corpo.innerHTML = `<span style="color:var(--muted2)">A SEFAZ limita a 1 coleta por hora. Próxima liberada em <b style="color:var(--warn)">${tempoStr}</b>.</span>`;
+        toast(`Tente novamente em ${tempoStr}`, 'warn');
+      } else {
+        const baixadas = d.baixadas || 0;
+        const existentes = d.ja_existentes || 0;
+        const erros = d.erros || 0;
+        titulo.textContent = baixadas > 0 ? `✓ Coleta concluída — ${baixadas} nota(s) nova(s)` : '✓ Coleta concluída — nenhuma nota nova';
+        titulo.style.color = baixadas > 0 ? 'var(--ok)' : 'var(--muted2)';
+        corpo.innerHTML = `
+          <div>📥 <b style="color:var(--ok)">${baixadas}</b> nota(s) baixada(s)</div>
+          <div>♻️ <b style="color:var(--muted2)">${existentes}</b> já existiam</div>
+          ${erros > 0 ? `<div>⚠️ <b style="color:var(--erro)">${erros}</b> erro(s)</div>` : ''}
+          ${baixadas > 0 ? `<div style="margin-top:8px;color:var(--accent)">→ As notas novas já aparecem na aba Notas Fiscais.</div>` : ''}
+        `;
+        toast(baixadas > 0 ? `${baixadas} nota(s) importada(s) com sucesso` : 'Nenhuma nota nova', baixadas > 0 ? 'ok' : 'warn');
+        if (baixadas > 0) { await carregarNotas(); await carregarMapeamentos(); }
+      }
+    } catch(e) {
+      res.style.display = 'block';
+      titulo.textContent = '❌ Erro de comunicação';
+      titulo.style.color = 'var(--erro)';
+      corpo.innerHTML = `<span style="color:var(--erro)">${e.message}</span>`;
+      toast('Erro: ' + e.message, 'erro');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ Coletar NF-e Agora (SEFAZ)';
+      carregarSefaz();
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  // Helpers
+  // ════════════════════════════════════════════════
+  function statusBadge(s) {
+    const map = {
+      concluido:            ['ok',    'Concluído'],
+      pendente:             ['info',  'Pendente'],
+      processando:          ['warn',  'Processando'],
+      erro:                 ['erro',  'Erro'],
+      erro_permanente:      ['erro',  'Erro Perm.'],
+      aguardando_mapeamento:['purple','Ag. Mapeamento'],
+    };
+    const [tipo, label] = map[s] || ['muted', s];
+    return `<span class="badge badge-${tipo}">${label}</span>`;
+  }
+
+  let _toastTimer;
+  function toast(msg, tipo = 'ok') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show ' + tipo;
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+  }
+
+  // ════════════════════════════════════════════════
+  // Init
+  // ════════════════════════════════════════════════
+  carregarTudo();
+  setInterval(carregarTudo, 30000);
+
+  // ════════════════════════════════════════════════
+  // Modal — Cadastrar novo produto
+  // ════════════════════════════════════════════════
+  let _modalInputRef = null;
+
+  async function abrirModalNovoProduto(inputRef) {
+    _modalInputRef = inputRef;
+    // Preenche com os dados da linha da nota
+    const descNota = inputRef.dataset.desc ? decodeURIComponent(inputRef.dataset.desc) : (inputRef.value || '');
+    document.getElementById('np-nome').value = descNota;
+    document.getElementById('np-un').value   = inputRef.dataset.un   || 'UN';
+    const custo = parseFloat(inputRef.dataset.custo) || 0;
+    document.getElementById('np-custo').value = custo > 0 ? custo.toFixed(2) : '';
+    document.getElementById('np-venda').value = '';
+    document.getElementById('np-ean').value   = inputRef.dataset.ean || '';
+    // Carrega categorias se ainda não carregou
+    const sel = document.getElementById('np-categoria');
+    if (sel.options.length <= 1) {
+      const r = await fetch('/compras/api/categorias');
+      const d = await r.json();
+      (d.categorias || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id_categoria;
+        opt.textContent = c.nome_categoria;
+        sel.appendChild(opt);
+      });
+    }
+    document.getElementById('modal-novo-produto').style.display = 'flex';
+    document.getElementById('np-nome').focus();
+  }
+
+  async function criarNovaCategoria() {
+    const nome = prompt('Nome da nova categoria:');
+    if (!nome || !nome.trim()) return;
+    try {
+      const r = await fetch('/compras/api/categorias/nova', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({nome_categoria: nome.trim()})
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'Erro');
+      // Adiciona ao select e seleciona
+      const sel = document.getElementById('np-categoria');
+      const opt = document.createElement('option');
+      opt.value = d.id_categoria;
+      opt.textContent = d.nome_categoria;
+      sel.appendChild(opt);
+      sel.value = d.id_categoria;
+      _categorias_cache.push(d);
+      toast('Categoria criada: ' + d.nome_categoria, 'ok');
+    } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function fecharModalNovoProduto() {
+    document.getElementById('modal-novo-produto').style.display = 'none';
+    _modalInputRef = null;
+  }
+
+  async function salvarNovoProduto() {
+    const nome  = document.getElementById('np-nome').value.trim();
+    const un    = document.getElementById('np-un').value.trim() || 'UN';
+    const venda = parseFloat(document.getElementById('np-venda').value) || 0;
+    const custo = parseFloat(document.getElementById('np-custo').value) || 0;
+    const catId = document.getElementById('np-categoria').value;
+    const ean   = document.getElementById('np-ean').value.trim();
+
+    if (!nome) { alert('Informe o nome do produto'); return; }
+
+    const body = {
+      desc_produto:    nome,
+      unidade_produto: un,
+      valor_produto:   venda,
+    };
+    if (custo)  body.valor_custo_produto   = custo;
+    if (catId)  body.id_categoria          = parseInt(catId);
+    if (ean)    body.codigo_barra_produto   = ean;
+
+    const btn = document.getElementById('np-btn-salvar');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    try {
+      const r = await fetch('/compras/api/produtos/novo', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'Erro ao criar produto');
+
+      // Auto-seleciona o novo produto na linha que abriu o modal
+      if (_modalInputRef) {
+        await selecionarProduto(_modalInputRef, d.vhsys_id, d.nome, d.preco);
+      }
+      fecharModalNovoProduto();
+    } catch(e) {
+      alert('Erro: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✓ Cadastrar';
+    }
+  }
+</script>
+
+<!-- Modal novo produto -->
+<div id="modal-novo-produto" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;align-items:center;justify-content:center;">
+  <div style="background:#1a1f2e;border:1px solid var(--accent);border-radius:8px;padding:28px 32px;min-width:420px;max-width:500px;box-shadow:0 8px 40px rgba(0,0,0,.9);position:relative;z-index:10001;">
+    <div style="font-size:15px;font-weight:600;margin-bottom:20px;color:var(--accent)">➕ Cadastrar novo produto</div>
+    <div style="display:grid;gap:12px;">
+      <label style="font-size:12px;color:var(--muted2)">Nome *
+        <input id="np-nome" type="text" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--text);font-size:13px;">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label style="font-size:12px;color:var(--muted2)">Unidade
+          <input id="np-un" type="text" value="UN" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--text);font-size:13px;">
+        </label>
+        <label style="font-size:12px;color:var(--muted2)">EAN / Cód. barras
+          <input id="np-ean" type="text" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--text);font-size:13px;">
+        </label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <label style="font-size:12px;color:var(--muted2)">Preço de venda (R$)
+          <input id="np-venda" type="number" min="0" step="0.01" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--text);font-size:13px;">
+        </label>
+        <label style="font-size:12px;color:var(--muted2)">Custo (R$)
+          <input id="np-custo" type="number" min="0" step="0.01" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--text);font-size:13px;">
+        </label>
+      </div>
+      <label style="font-size:12px;color:var(--muted2)">Categoria
+        <div style="display:flex;gap:8px;margin-top:4px;align-items:center;">
+          <select id="np-categoria" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--text);font-size:13px;">
+            <option value="">— Sem categoria —</option>
+          </select>
+          <button type="button" class="btn-action" style="padding:6px 10px;font-size:12px;white-space:nowrap;"
+            onclick="criarNovaCategoria()">+ Nova</button>
+        </div>
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px;">
+      <button class="btn-action" onclick="fecharModalNovoProduto()" style="padding:8px 18px;">Cancelar</button>
+      <button id="np-btn-salvar" class="btn-ok" onclick="salvarNovoProduto()" style="padding:8px 18px;">✓ Cadastrar</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
