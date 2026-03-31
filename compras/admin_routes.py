@@ -34,7 +34,7 @@ XML_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "nfe_xmls")
 
 @router.get("/", response_class=HTMLResponse)
 async def painel_compras(request: Request):
-    return templates.TemplateResponse("compras.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="compras.html")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

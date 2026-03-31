@@ -86,7 +86,7 @@ def _stats() -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 async def painel(request: Request):
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="admin.html")
 
 
 @router.get("/api/pedidos")
@@ -118,7 +118,7 @@ async def api_reprocessar(request: Request, mercos_id: int):
 @router.get("/auditoria", response_class=HTMLResponse)
 async def painel_auditoria(request: Request):
     """Mesma página admin — o frontend decide o que renderizar."""
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="admin.html")
 
 
 @router.get("/api/auditoria/sequencia")
@@ -478,15 +478,18 @@ async def api_corrigir_pedidos(request: Request):
             except Exception:
                 pass
 
-        # ── Estratégia 2: VHSys para os que ainda têm valor=0 ─────────────────
+        # ── Estratégia 2: VHSys — corrige valor=0 e/ou itens ausentes ──────────
         pares = conn.execute("""
-            SELECT f.mercos_id, p.vhsys_id, f.recebido_em
+            SELECT f.mercos_id, p.vhsys_id, f.recebido_em, f.valor
             FROM pedidos_fluxo f
             JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
-            WHERE (f.valor = 0 OR f.valor IS NULL)
-              AND p.status = 'ok'
+            WHERE p.status = 'ok'
               AND p.vhsys_id NOT IN ('', 'erro')
               AND p.vhsys_id IS NOT NULL
+              AND (
+                  (f.valor = 0 OR f.valor IS NULL)
+                  OR NOT EXISTS (SELECT 1 FROM itens_pedido i WHERE i.mercos_id = f.mercos_id)
+              )
         """).fetchall()
 
         if pares:
@@ -501,26 +504,34 @@ async def api_corrigir_pedidos(request: Request):
                     erros += 1
                     continue
                 mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
+                precisa_valor = (par["valor"] is None or par["valor"] == 0)
                 try:
-                    resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
-                    if resp is None or resp.status_code != 200:
-                        erros += 1
-                        continue
-                    dados = resp.json().get("data", {})
-                    if isinstance(dados, list):
-                        dados = dados[0] if dados else {}
-                    valor = float(dados.get("valor_total_nota") or dados.get("valor_total") or 0)
-                    conn.execute(
-                        "UPDATE pedidos_fluxo SET valor=? WHERE mercos_id=? AND (valor=0 OR valor IS NULL)",
-                        (valor, mercos_id)
-                    )
-                    via_vhsys += 1
+                    # Só chama GET /pedidos/{id} se precisar corrigir valor
+                    if precisa_valor:
+                        resp = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
+                        if resp is not None and resp.status_code == 200:
+                            dados = resp.json().get("data", {})
+                            if isinstance(dados, list):
+                                dados = dados[0] if dados else {}
+                            if isinstance(dados, dict):
+                                valor = float(dados.get("valor_total_nota") or dados.get("valor_total") or 0)
+                                conn.execute(
+                                    "UPDATE pedidos_fluxo SET valor=? WHERE mercos_id=? AND (valor=0 OR valor IS NULL)",
+                                    (valor, mercos_id)
+                                )
+                                via_vhsys += 1
+                            else:
+                                erros += 1
+                        else:
+                            erros += 1
+                    # Busca itens se ausentes (independe do resultado da correção de valor)
                     if not conn.execute("SELECT 1 FROM itens_pedido WHERE mercos_id=? LIMIT 1", (mercos_id,)).fetchone():
                         ts = par["recebido_em"] or datetime.now(_tz.utc).isoformat()
-                        # GET /pedidos/{id}/produtos — endpoint confirmado como funcional
                         itens_raw = vhsys.buscar_itens_pedido(vhsys_id)
                         salvou = False
                         for it in itens_raw:
+                            if not isinstance(it, dict):
+                                continue
                             qtd   = float(it.get("qtde_produto") or 0)
                             preco = float(it.get("valor_unit_produto") or 0)
                             nome  = it.get("desc_produto") or ""
@@ -544,6 +555,94 @@ async def api_corrigir_pedidos(request: Request):
                             f"{total} corrigidos (fila:{via_fila} vhsys:{via_vhsys}), {itens_preenchidos} itens, {erros} erros", ip)
     return {"ok": True, "corrigidos": total, "via_fila": via_fila, "via_vhsys": via_vhsys,
             "itens_preenchidos": itens_preenchidos, "erros": erros}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Backfill de endereços: busca cidade/bairro no VHSys para pedidos sem endereço
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/api/dados/backfill-enderecos")
+async def api_backfill_enderecos(request: Request):
+    """
+    Para cada pedido com cidade IS NULL em pedidos_fluxo:
+      1. GET /pedidos/{vhsys_id}  → extrai id_cliente
+      2. GET /clientes/{id_cliente} → extrai cidade_cliente, bairro_cliente
+      3. UPDATE pedidos_fluxo SET cidade, bairro
+    """
+    import time as _time
+    from vhsys_service import VhsysService
+
+    ip = request.client.host if request.client else ""
+    atualizados = 0
+    sem_endereco = 0
+    erros = 0
+
+    with db.get_conn() as conn:
+        pares = conn.execute("""
+            SELECT f.mercos_id, p.vhsys_id
+            FROM pedidos_fluxo f
+            JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
+            WHERE (f.cidade IS NULL OR f.cidade = '')
+              AND p.status = 'ok'
+              AND p.vhsys_id NOT IN ('', 'erro')
+              AND p.vhsys_id IS NOT NULL
+        """).fetchall()
+
+    if not pares:
+        return {"ok": True, "atualizados": 0, "sem_endereco": 0, "erros": 0, "msg": "Nenhum pedido sem endereço"}
+
+    try:
+        vhsys = VhsysService()
+    except Exception as e:
+        logger.warning(f"[BackfillEnderecos] VHSys indisponível: {e}")
+        return {"ok": False, "erro": str(e)}
+
+    for par in pares:
+        mercos_id, vhsys_id = par["mercos_id"], par["vhsys_id"]
+        try:
+            # Passo 1: buscar pedido no VHSys para obter id_cliente
+            resp_ped = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/pedidos/{vhsys_id}", timeout=15)
+            if resp_ped is None or resp_ped.status_code != 200:
+                erros += 1
+                continue
+            dados_ped = resp_ped.json().get("data", {})
+            if isinstance(dados_ped, list):
+                dados_ped = dados_ped[0] if dados_ped else {}
+            id_cliente = str(dados_ped.get("id_cliente") or "").strip()
+            if not id_cliente:
+                sem_endereco += 1
+                continue
+
+            # Passo 2: buscar cliente no VHSys
+            resp_cli = vhsys._requisitar_com_retry("GET", f"{vhsys.base_url}/clientes/{id_cliente}", timeout=15)
+            if resp_cli is None or resp_cli.status_code != 200:
+                erros += 1
+                continue
+            dados_cli = resp_cli.json().get("data", {})
+            if isinstance(dados_cli, list):
+                dados_cli = dados_cli[0] if dados_cli else {}
+            cidade = dados_cli.get("cidade_cliente", "") or ""
+            bairro = dados_cli.get("bairro_cliente", "") or ""
+
+            if not cidade and not bairro:
+                sem_endereco += 1
+                continue
+
+            # Passo 3: atualizar pedidos_fluxo
+            with db.get_conn() as conn:
+                conn.execute(
+                    "UPDATE pedidos_fluxo SET cidade=?, bairro=? WHERE mercos_id=?",
+                    (cidade, bairro, mercos_id)
+                )
+            atualizados += 1
+            _time.sleep(0.3)
+        except Exception as e:
+            logger.warning(f"[BackfillEnderecos] mercos={mercos_id}: {e}")
+            erros += 1
+
+    db.admin_registrar_acao("backfill_enderecos", None,
+                            f"{atualizados} atualizados, {sem_endereco} sem endereco, {erros} erros", ip)
+    return {"ok": True, "atualizados": atualizados, "sem_endereco": sem_endereco, "erros": erros}
 
 
 # ──────────────────────────────────────────────────────────────────────────────

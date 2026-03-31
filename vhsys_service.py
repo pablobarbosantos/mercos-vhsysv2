@@ -307,6 +307,8 @@ class VhsysService:
                     return {
                         "id_cliente":   str(cliente["id_cliente"]),
                         "razao_social": cliente.get("razao_cliente", ""),
+                        "cidade":       cliente.get("cidade_cliente", ""),
+                        "bairro":       cliente.get("bairro_cliente", ""),
                     }
         logger.info(f"[CLIENTE] CNPJ {cnpj_formatado} não encontrado.")
         return None
@@ -351,7 +353,12 @@ class VhsysService:
             data    = resp.json().get("data", {})
             id_novo = data.get("id_cliente")
             logger.info(f"[CLIENTE] Cadastrado! ID: {id_novo} | Nome: {razao}")
-            return {"id_cliente": str(id_novo), "razao_social": razao}
+            return {
+                "id_cliente":   str(id_novo),
+                "razao_social": razao,
+                "cidade":       dados_mercos.get("cliente_cidade", ""),
+                "bairro":       dados_mercos.get("cliente_bairro", ""),
+            }
         else:
             logger.error(f"[CLIENTE] Falha HTTP {resp.status_code}: {resp.text[:400]}")
             return None
@@ -475,7 +482,9 @@ class VhsysService:
             pedido_data = resultado.get("data", [{}])[0]
             id_vhsys    = pedido_data.get("id_ped", "?")
             logger.info(f"[PEDIDO] ✅ Criado! ID VHSYS: {id_vhsys}")
-
+            # Injeta dados do cliente para uso em mercos_service sem chamada extra
+            pedido_data["_cidade_cliente"] = cliente.get("cidade", "")
+            pedido_data["_bairro_cliente"] = cliente.get("bairro", "")
             return resultado
         else:
             logger.error(f"[PEDIDO] ❌ HTTP {resp.status_code}: {resp.text[:800]}")

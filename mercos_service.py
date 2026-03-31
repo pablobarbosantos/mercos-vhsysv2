@@ -75,22 +75,40 @@ class MercosService:
                 db.fluxo_marcar_processado(mercos_id)
                 logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS #{vhsys_numero} (id_ped={vhsys_id})")
 
-                # Persiste itens para analytics/ranking de produtos
+                # Salva endereço do cliente (vem do VHSys via buscar_ou_cadastrar_cliente)
                 try:
-                    itens_raw = dados_mercos.get("itens", [])
+                    cidade = pedido_data.get("_cidade_cliente", "")
+                    bairro = pedido_data.get("_bairro_cliente", "")
+                    if cidade or bairro:
+                        db.fluxo_registrar_recebido(
+                            mercos_id=mercos_id,
+                            numero=str(numero or mercos_id),
+                            cliente=dados_mercos.get("cliente_razao_social", ""),
+                            valor=valor_total,
+                            cidade=cidade,
+                            bairro=bairro,
+                        )
+                except Exception as e:
+                    logger.warning(f"[MercosService] Falha ao salvar endereço (não crítico): {e}")
+
+                # Busca itens do VHSys (fonte autoritativa — webhook Mercos não inclui itens)
+                try:
+                    itens_vhsys = self.vhsys.buscar_itens_pedido(vhsys_id)
                     itens_para_salvar = [
                         {
-                            "sku":          str(i.get("produto_codigo", "") or "").strip(),
-                            "nome_produto": i.get("produto_nome", ""),
-                            "quantidade":   float(i.get("quantidade", 0)),
-                            "valor_unit":   float(i.get("preco_liquido", 0)),
-                            "valor_total":  float(i.get("quantidade", 0)) * float(i.get("preco_liquido", 0)),
+                            "sku":          str(it.get("id_produto") or "").strip(),
+                            "nome_produto": it.get("desc_produto") or "",
+                            "quantidade":   float(it.get("qtde_produto") or 0),
+                            "valor_unit":   float(it.get("valor_unit_produto") or 0),
+                            "valor_total":  float(it.get("qtde_produto") or 0) * float(it.get("valor_unit_produto") or 0),
                         }
-                        for i in itens_raw if not i.get("excluido")
+                        for it in itens_vhsys
+                        if (it.get("desc_produto") or it.get("id_produto"))
                     ]
-                    db.salvar_itens_pedido(mercos_id, itens_para_salvar)
+                    if itens_para_salvar:
+                        db.salvar_itens_pedido(mercos_id, itens_para_salvar)
                 except Exception as e:
-                    logger.warning(f"[MercosService] Falha ao salvar itens para analytics (não crítico): {e}")
+                    logger.warning(f"[MercosService] Falha ao salvar itens do VHSys (não crítico): {e}")
 
                 # Notificação WhatsApp — alerta interno
                 try:
