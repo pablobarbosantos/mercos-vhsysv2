@@ -75,11 +75,13 @@ class MercosService:
                 db.fluxo_marcar_processado(mercos_id)
                 logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS #{vhsys_numero} (id_ped={vhsys_id})")
 
-                # Salva endereço do cliente (vem do VHSys via buscar_ou_cadastrar_cliente)
+                # Salva endereço do cliente (VHSys + Mercos webhook)
                 try:
-                    cidade = pedido_data.get("_cidade_cliente", "")
-                    bairro = pedido_data.get("_bairro_cliente", "")
-                    if cidade or bairro:
+                    cidade     = pedido_data.get("_cidade_cliente", "")
+                    bairro     = pedido_data.get("_bairro_cliente", "") or dados_mercos.get("cliente_bairro", "")
+                    rua        = dados_mercos.get("cliente_rua", "")
+                    numero_end = dados_mercos.get("cliente_numero", "")
+                    if cidade or bairro or rua:
                         db.fluxo_registrar_recebido(
                             mercos_id=mercos_id,
                             numero=str(numero or mercos_id),
@@ -87,6 +89,8 @@ class MercosService:
                             valor=valor_total,
                             cidade=cidade,
                             bairro=bairro,
+                            rua=rua,
+                            numero_end=numero_end,
                         )
                 except Exception as e:
                     logger.warning(f"[MercosService] Falha ao salvar endereço (não crítico): {e}")

@@ -447,16 +447,20 @@ async def api_corrigir_pedidos(request: Request):
                 continue
             try:
                 dados  = _json.loads(pj)
-                valor  = float(dados.get("valor_total", 0) or 0)
-                cidade = dados.get("cliente_cidade", "") or ""
-                bairro = dados.get("cliente_bairro", "") or ""
+                valor      = float(dados.get("valor_total", 0) or 0)
+                cidade     = dados.get("cliente_cidade", "") or ""
+                bairro     = dados.get("cliente_bairro", "") or ""
+                rua        = dados.get("cliente_rua", "") or ""
+                numero_end = dados.get("cliente_numero", "") or ""
                 conn.execute("""
                     UPDATE pedidos_fluxo
-                    SET valor  = CASE WHEN ? > 0 THEN ? ELSE valor END,
-                        cidade = CASE WHEN ? != '' THEN ? ELSE cidade END,
-                        bairro = CASE WHEN ? != '' THEN ? ELSE bairro END
+                    SET valor      = CASE WHEN ? > 0  THEN ? ELSE valor      END,
+                        cidade     = CASE WHEN ? != '' THEN ? ELSE cidade     END,
+                        bairro     = CASE WHEN ? != '' THEN ? ELSE bairro     END,
+                        rua        = CASE WHEN ? != '' THEN ? ELSE rua        END,
+                        numero_end = CASE WHEN ? != '' THEN ? ELSE numero_end END
                     WHERE mercos_id = ?
-                """, (valor, valor, cidade, cidade, bairro, bairro, row["mercos_id"]))
+                """, (valor, valor, cidade, cidade, bairro, bairro, rua, rua, numero_end, numero_end, row["mercos_id"]))
                 via_fila += 1
                 # Itens
                 if not conn.execute("SELECT 1 FROM itens_pedido WHERE mercos_id=? LIMIT 1", (row["mercos_id"],)).fetchone():
@@ -872,7 +876,8 @@ async def api_separacao_fila():
     with db.get_conn() as conn:
         pedidos = conn.execute("""
             SELECT f.mercos_id, f.numero, f.cliente, f.valor,
-                   f.cidade, f.bairro, f.processado_em, f.recebido_em,
+                   f.cidade, f.bairro, f.rua, f.numero_end,
+                   f.processado_em, f.recebido_em,
                    p.vhsys_id
             FROM pedidos_fluxo f
             LEFT JOIN pedidos_processados p ON p.mercos_id = f.mercos_id

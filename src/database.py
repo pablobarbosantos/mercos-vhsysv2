@@ -148,7 +148,7 @@ def init_db():
             );
         """)
     # Migrations seguras (ADD COLUMN é idempotente no SQLite via try/except)
-    for col, typedef in [("cidade", "TEXT"), ("bairro", "TEXT")]:
+    for col, typedef in [("cidade", "TEXT"), ("bairro", "TEXT"), ("rua", "TEXT"), ("numero_end", "TEXT")]:
         try:
             conn.execute(f"ALTER TABLE pedidos_fluxo ADD COLUMN {col} {typedef}")
         except Exception:
@@ -192,24 +192,32 @@ def registrar_erro(entidade: str, referencia_id: str, erro: str):
 # ──────────────────────────────────────────────────────────────
 
 def fluxo_registrar_recebido(mercos_id: int, numero: str, cliente: str,
-                              valor: float = 0, cidade: str = "", bairro: str = ""):
+                              valor: float = 0, cidade: str = "", bairro: str = "",
+                              rua: str = "", numero_end: str = ""):
     """Chamado quando o webhook chega — primeira etapa do fluxo."""
     agora = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
         conn.execute("""
             INSERT OR IGNORE INTO pedidos_fluxo
-                (mercos_id, numero, cliente, valor, cidade, bairro, recebido_em, status_fluxo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'recebido')
-        """, (mercos_id, str(numero), cliente, valor, cidade or "", bairro or "", agora))
-        # Atualiza valor/cidade/bairro mesmo se row já existia (INSERT OR IGNORE não atualiza)
-        if valor > 0 or cidade or bairro:
+                (mercos_id, numero, cliente, valor, cidade, bairro, rua, numero_end, recebido_em, status_fluxo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'recebido')
+        """, (mercos_id, str(numero), cliente, valor, cidade or "", bairro or "", rua or "", numero_end or "", agora))
+        # Atualiza campos de endereço mesmo se row já existia
+        if valor > 0 or cidade or bairro or rua or numero_end:
             conn.execute("""
                 UPDATE pedidos_fluxo
-                SET valor  = CASE WHEN ? > 0 THEN ? ELSE valor END,
-                    cidade = CASE WHEN ? != '' THEN ? ELSE cidade END,
-                    bairro = CASE WHEN ? != '' THEN ? ELSE bairro END
+                SET valor      = CASE WHEN ? > 0  THEN ? ELSE valor      END,
+                    cidade     = CASE WHEN ? != '' THEN ? ELSE cidade     END,
+                    bairro     = CASE WHEN ? != '' THEN ? ELSE bairro     END,
+                    rua        = CASE WHEN ? != '' THEN ? ELSE rua        END,
+                    numero_end = CASE WHEN ? != '' THEN ? ELSE numero_end END
                 WHERE mercos_id = ?
-            """, (valor, valor, cidade or "", cidade or "", bairro or "", bairro or "", mercos_id))
+            """, (valor, valor,
+                  cidade or "", cidade or "",
+                  bairro or "", bairro or "",
+                  rua or "", rua or "",
+                  numero_end or "", numero_end or "",
+                  mercos_id))
 
 
 def fluxo_marcar_processado(mercos_id: int):

@@ -1097,7 +1097,7 @@
         <button onclick="document.getElementById('modal-guia').style.display='none'" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted2);font-size:20px;cursor:pointer">✕</button>
         <div id="guia-conteudo"></div>
         <div style="display:flex;gap:12px;margin-top:24px;justify-content:flex-end" class="no-print">
-          <button class="btn-action" onclick="window.print()">🖨️ Imprimir / PDF</button>
+          <button class="btn-action" onclick="imprimirGuiaLimpo()">🖨️ Imprimir / PDF</button>
           <button class="btn-action" onclick="document.getElementById('modal-guia').style.display='none'">Fechar</button>
         </div>
       </div>
@@ -1653,34 +1653,26 @@
 
     const segs = gerarSegmentosRota(pedidos, origem);
 
-    document.getElementById('modal-qr-body').innerHTML = segs.map((s, i) => `
+    document.getElementById('modal-qr-body').innerHTML = segs.map((s) => `
       <div class="qr-segmento">
         <div class="qr-seg-header">🗺️ Parte ${s.parte} de ${s.total} — ${s.qtd_paradas} parada(s)</div>
         <div class="qr-seg-body">
-          <canvas class="qr-canvas" id="qrc-${i}" width="200" height="200"></canvas>
           <div style="flex:1">
             <div class="qr-paradas">
-              ${s.paradas.map((p, j) => `${j+1}. <strong>${escHtml(p.cliente || '—')}</strong>`).join('<br>')}
-            </div>
-            <div class="qr-link">
-              <a href="${escHtml(s.link)}" target="_blank">↗ Abrir esta parte no Google Maps</a>
+              ${s.paradas.map((p, j) =>
+                `${j+1}. <strong>${escHtml(p.cliente||'—')}</strong><br>
+                 <small style="color:var(--muted2)">${[p.rua ? p.rua+(p.numero_end?', '+p.numero_end:'') : '', p.bairro, p.cidade].filter(Boolean).join(' — ')}</small>`
+              ).join('<br>')}
             </div>
           </div>
         </div>
+        <a href="${escHtml(s.link)}" target="_blank"
+          style="display:block;margin-top:12px;padding:10px 18px;background:var(--accent);color:#000;font-weight:700;border-radius:6px;text-align:center;text-decoration:none;font-size:13px;">
+          ↗ Abrir no Google Maps (parte ${s.parte})
+        </a>
       </div>`).join('');
 
     document.getElementById('modal-qr').classList.add('show');
-
-    // Renderiza QR codes após o DOM ser atualizado
-    setTimeout(() => {
-      segs.forEach((s, i) => {
-        const canvas = document.getElementById(`qrc-${i}`);
-        if (canvas && typeof QRCode !== 'undefined') {
-          QRCode.toCanvas(canvas, s.link, { width: 200, margin: 2,
-            color: { dark: '#000000', light: '#ffffff' } }, () => {});
-        }
-      });
-    }, 60);
   }
 
   function fecharModalRota() {
@@ -1694,7 +1686,14 @@
     const chunks = [];
     for (let i = 0; i < pedidos.length; i += MAX) chunks.push(pedidos.slice(i, i + MAX));
 
-    const endPedido = p => enc([p.bairro, p.cidade, 'MG', 'Brasil'].filter(Boolean).join(', '));
+    const endPedido = p => {
+      const partes = [];
+      if (p.rua) { partes.push(p.rua + (p.numero_end ? ', ' + p.numero_end : '')); }
+      if (p.bairro) partes.push(p.bairro);
+      if (p.cidade) partes.push(p.cidade);
+      partes.push('MG', 'Brasil');
+      return enc(partes.join(', '));
+    };
     return chunks.map((chunk, idx) => {
       const total = chunks.length;
       const parte = idx + 1;
@@ -2426,34 +2425,62 @@
 
   function abrirModalRotaSep(origem, pedidos) {
     const segmentos = gerarSegmentosRota(pedidos, origem);
-    document.getElementById('modal-qr-body').innerHTML = segmentos.map((s, i) => `
+    document.getElementById('modal-qr-body').innerHTML = segmentos.map((s) => `
       <div class="qr-segmento">
         <div class="qr-seg-header">🗺️ Parte ${s.parte} de ${s.total} — ${s.qtd_paradas} parada(s)</div>
         <div class="qr-seg-body">
-          <canvas class="qr-canvas" id="qrc-sep-${i}" width="200" height="200"></canvas>
           <div style="flex:1">
             <div class="qr-paradas">
               ${s.paradas.map((p, j) =>
                 `${j+1}. <strong>${escHtml(p.cliente||'—')}</strong><br>
-                 <small style="color:var(--muted2)">${escHtml(p.bairro||'')} ${escHtml(p.cidade||'')}</small>`
+                 <small style="color:var(--muted2)">${[p.rua ? p.rua+(p.numero_end?', '+p.numero_end:'') : '', p.bairro, p.cidade].filter(Boolean).join(' — ')}</small>`
               ).join('<br>')}
-            </div>
-            <div class="qr-link">
-              <a href="${escHtml(s.link)}" target="_blank">↗ Abrir no Google Maps</a>
             </div>
           </div>
         </div>
+        <a href="${escHtml(s.link)}" target="_blank"
+          style="display:block;margin-top:12px;padding:10px 18px;background:var(--accent);color:#000;font-weight:700;border-radius:6px;text-align:center;text-decoration:none;font-size:13px;">
+          ↗ Abrir no Google Maps (parte ${s.parte})
+        </a>
       </div>`).join('');
     document.getElementById('modal-qr').classList.add('show');
-    setTimeout(() => {
-      segmentos.forEach((s, i) => {
-        const canvas = document.getElementById(`qrc-sep-${i}`);
-        if (canvas && typeof QRCode !== 'undefined') {
-          QRCode.toCanvas(canvas, s.link, { width: 200, margin: 2,
-            color: { dark: '#000000', light: '#ffffff' } }, () => {});
-        }
-      });
-    }, 60);
+  }
+
+  // ════════════════════════════════════════════════
+  // Impressão limpa — apenas QTD + NOME
+  // ════════════════════════════════════════════════
+  function imprimirGuiaLimpo() {
+    const titulo = document.querySelector('#guia-conteudo [style*="font-size:22px"], #guia-conteudo [style*="font-size:20px"]')?.textContent?.trim() || 'GUIA DE SEPARAÇÃO';
+    const itens = [];
+    document.querySelectorAll('#guia-conteudo .guia-lote-item').forEach(el => {
+      const nome = el.querySelector('.info > div:first-child')?.textContent?.trim() || '';
+      const qtd  = el.querySelector('.qtd-total')?.textContent?.trim() || '';
+      if (nome) itens.push({ nome, qtd });
+    });
+    document.querySelectorAll('#guia-conteudo .guia-item').forEach(el => {
+      const nome = el.querySelector('.nome')?.textContent?.trim() || '';
+      const qtd  = el.querySelector('.qtd')?.textContent?.trim() || '';
+      if (nome) itens.push({ nome, qtd });
+    });
+    if (!itens.length) { window.print(); return; }
+    const linhas = itens.map(it =>
+      `<tr><td style="padding:6px 8px;border-bottom:1px solid #ddd;font-size:14px;">${it.nome}</td>` +
+      `<td style="padding:6px 8px;border-bottom:1px solid #ddd;font-size:18px;font-weight:bold;text-align:right;min-width:60px;">${it.qtd}</td></tr>`
+    ).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>body{font-family:Arial,sans-serif;padding:24px;color:#000;background:#fff}
+        h2{font-size:16px;margin-bottom:4px}p{font-size:11px;color:#555;margin-bottom:16px}
+        table{width:100%;border-collapse:collapse}
+        @media print{body{padding:0}h2,p{margin:8px 0}}</style>
+      </head><body>
+      <h2>${titulo}</h2>
+      <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+      <table><tbody>${linhas}</tbody></table>
+      <script>window.onload=()=>{window.print();}<\/script>
+      </body></html>`;
+    const w = window.open('', '_blank', 'width=700,height=800');
+    if (w) { w.document.write(html); w.document.close(); }
+    else toast('Popup bloqueado — permita popups e tente novamente', 'warn');
   }
 
   // Auto-refresh a cada 30s
