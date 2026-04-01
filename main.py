@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 import logging
 import logging.handlers
@@ -401,15 +402,9 @@ scheduler.add_job(_job_processar_compras,"interval", minutes=COMPRAS_WORKER_MIN,
 # FastAPI
 # ──────────────────────────────────────────────────────────────────────────────
 
-app = FastAPI()
-app.include_router(admin_router)
-
-from compras.admin_routes import router as compras_router
-app.include_router(compras_router)
-
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── startup ──
     # Limpa falsos positivos de auditoria gerados com mercos_id global (bug antigo)
     # IDs globais Mercos são muito maiores que números de pedido (~9 dígitos vs ~4)
     with db.get_conn() as conn:
@@ -446,11 +441,18 @@ async def startup_event():
     asyncio.create_task(_job_recuperar_historico())
     logger.info("[HistoricoRecuperacao] Agendado para rodar após caches carregarem.")
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown_event():
+    # ── shutdown ──
     scheduler.shutdown(wait=False)
     logger.info("[Scheduler] Encerrado.")
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(admin_router)
+
+from compras.admin_routes import router as compras_router
+app.include_router(compras_router)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
