@@ -17,14 +17,15 @@ logger = logging.getLogger(__name__)
 
 def atualizar_custo_produto(vhsys_id: int, valor_unitario: float) -> bool:
     """
-    Atualiza o custo (valor_produto) de um produto no VHSys.
-    Usa atualizar_produto() do adapter compartilhado.
+    Atualiza o custo (valor_custo_produto) de um produto no VHSys.
+    Usa valor_custo_produto — não toca no preço de venda (valor_produto).
     """
-    ok = atualizar_produto(vhsys_id, valor_unitario)
+    data = requisitar("PUT", f"produtos/{vhsys_id}", body={"valor_custo_produto": valor_unitario})
+    ok = data is not None and data.get("code") in (200, 201)
     if ok:
         logger.info("[Compras] Custo atualizado vhsys_id=%d → R$ %.4f", vhsys_id, valor_unitario)
     else:
-        logger.error("[Compras] Falha ao atualizar custo vhsys_id=%d", vhsys_id)
+        logger.error("[Compras] Falha ao atualizar custo vhsys_id=%d: %s", vhsys_id, data)
     return ok
 
 

@@ -452,7 +452,7 @@
     <!-- Coleta manual -->
     <div class="toolbar">
       <button class="refresh" id="btn-coletar-sefaz" onclick="coletarAgora()">▶ Coletar NF-e Agora (SEFAZ)</button>
-      <small style="color:var(--muted2);">Coleta automática a cada 1h30. Limite SEFAZ: 1 req/hora.</small>
+      <small style="color:var(--muted2);">Coleta automática a cada 3h. Limite SEFAZ: 1 req/hora.</small>
     </div>
     <!-- Resultado da última coleta -->
     <div id="sefaz-resultado" style="display:none;margin-top:12px;" class="card">
@@ -788,12 +788,18 @@
           borderColor = 'var(--ok)';
         } else if (sug) {
           inputVal = sug.nome || ('ID ' + sug.vhsys_id);
-          borderColor = 'var(--warn)';
-          badgeVia = `<span style="font-size:10px;color:var(--warn);margin-left:6px;">sugestão via ${sug.via}</span>`;
+          if (sug.via === 'nome_similar') {
+            borderColor = 'var(--warn)';
+            const pct = Math.round((sug.similaridade || 0) * 100);
+            badgeVia = `<span style="font-size:10px;color:var(--warn);margin-left:6px;" title="Nome NF-e vs VHSys: ${pct}% de similaridade">⚠️ ~${pct}% similar</span>`;
+          } else {
+            borderColor = 'var(--warn)';
+            badgeVia = `<span style="font-size:10px;color:var(--warn);margin-left:6px;">sugestão via ${sug.via}</span>`;
+          }
         }
 
         const statusIcon = map
-          ? `<span style="color:var(--ok);font-size:13px" title="Mapeado">✓</span>`
+          ? `<span style="color:var(--ok);font-size:13px" title="Mapeado" data-mapeado="1">✓</span>`
           : sug
             ? `<span style="color:var(--warn);font-size:13px" title="Sugestão automática">?</span>`
             : `<span style="color:var(--erro);font-size:13px" title="Sem mapeamento">✕</span>`;
@@ -828,6 +834,13 @@
             <input type="number" class="fator-input" value="${fatorInicial}" min="0.001" step="0.001"
               style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 6px;color:var(--text);font-size:12px;">
           </td>
+          <td>
+            <select class="categoria-select"
+              style="width:130px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 6px;color:var(--text);font-size:11px;"
+              title="Categoria (opcional — atualiza no VHSys ao mapear)">
+              <option value="">— Categoria —</option>
+            </select>
+          </td>
           <td style="white-space:nowrap">
             ${sug && !map
               ? `<button class="btn-ok" style="font-size:11px;padding:4px 10px;" onclick="confirmarSugestao(this)">✓ Confirmar</button>`
@@ -841,7 +854,7 @@
         </tr>`;
       }).join('');
 
-      return `<div class="card" style="margin-bottom:16px;">
+      return `<div class="card" style="margin-bottom:16px;" data-chave="${nota.chave_nfe}">
         <div class="card-header" style="border-bottom:1px solid var(--border);">
           <span>NF ${nota.numero}/${nota.serie} — <span style="color:var(--accent)">${nota.fornecedor_nome}</span></span>
           <span style="font-size:11px;color:${statusCor};margin-left:12px;">${nota.status}</span>
@@ -856,7 +869,7 @@
         <table style="width:100%">
           <thead><tr>
             <th>Produto na Nota</th><th>Qtd</th><th>Vlr Unit.</th>
-            <th style="text-align:center">Status</th><th>Produto VHSys</th><th>Fator</th><th></th>
+            <th style="text-align:center">Status</th><th>Produto VHSys</th><th>Fator</th><th>Categoria</th><th></th>
           </tr></thead>
           <tbody>${linhas}</tbody>
         </table>
@@ -864,6 +877,23 @@
     }).join('');
 
     container.innerHTML = blocos;
+    _preencherCategoriaSelects();
+  }
+
+  async function _preencherCategoriaSelects() {
+    if (!_categorias_cache.length) {
+      try {
+        const r = await fetch('/compras/api/categorias');
+        const d = await r.json();
+        _categorias_cache = d.categorias || [];
+      } catch(e) { return; }
+    }
+    document.querySelectorAll('.categoria-select').forEach(sel => {
+      const opts = _categorias_cache.map(c =>
+        `<option value="${c.id_categoria}">${c.nome_categoria}</option>`
+      ).join('');
+      sel.innerHTML = '<option value="">— Categoria —</option>' + opts;
+    });
   }
 
   async function buscaProduto(input) {
@@ -933,6 +963,8 @@
     const cnpj  = input.dataset.cnpj;
     const desc  = decodeURIComponent(input.dataset.desc);
     const un    = input.dataset.un;
+    const catSel = tr.querySelector('.categoria-select');
+    const idCategoria = catSel ? (parseInt(catSel.value) || null) : null;
 
     const body = {
       fornecedor_cnpj: cnpj,
@@ -943,6 +975,8 @@
       fator_conversao: fator,
       unidade_estoque: un,
     };
+    if (idCategoria) body.id_categoria = idCategoria;
+
     try {
       const r = await fetch('/compras/api/mapeamentos', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -953,10 +987,18 @@
         // atualiza visual inline: borda verde, ícone ✓, troca botão por "Alterar"
         input.style.borderColor = 'var(--ok)';
         const tdStatus = tr.querySelectorAll('td')[3];
-        tdStatus.innerHTML = `<span style="color:var(--ok);font-size:13px">✓</span>`;
-        const tdBtn = tr.querySelectorAll('td')[6];
+        tdStatus.innerHTML = `<span style="color:var(--ok);font-size:13px" data-mapeado="1">✓</span>`;
+        const tdBtn = tr.querySelectorAll('td')[7];
         tdBtn.innerHTML = `<button class="btn-action" style="font-size:11px;padding:4px 8px;"
           onclick="this.closest('tr').querySelector('.busca-produto-input').value='';this.closest('tr').querySelector('.busca-produto-input').focus();">✎ Alterar</button>`;
+        // Verifica se todos os itens da nota foram mapeados
+        const card = tr.closest('[data-chave]');
+        if (card) {
+          const pendentes = card.querySelectorAll('span[title="Sem mapeamento"], span[title="Sugestão automática"]');
+          if (pendentes.length === 0) {
+            _mostrarModalEstoque(card.dataset.chave);
+          }
+        }
       } else {
         const e = await r.json();
         toast('Erro: ' + (e.detail||'falha ao salvar'), 'erro');
@@ -1355,5 +1397,66 @@
     </div>
   </div>
 </div>
+<!-- Modal confirmação de estoque -->
+<div id="modal-estoque" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;align-items:center;justify-content:center;">
+  <div style="background:#1a1f2e;border:1px solid var(--accent);border-radius:8px;padding:28px 32px;min-width:420px;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.9);position:relative;z-index:10001;">
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px;color:var(--ok)">🏁 Nota completa!</div>
+    <div style="font-size:13px;color:var(--muted2);margin-bottom:16px;">Todos os itens foram mapeados. Deseja lançar entrada no estoque do VHSys?</div>
+    <div id="modal-estoque-itens" style="background:var(--surface2);border-radius:6px;padding:12px;margin-bottom:20px;font-size:12px;max-height:200px;overflow-y:auto;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn-action" onclick="fecharModalEstoque()" style="padding:8px 18px;">Não por enquanto</button>
+      <button id="btn-lancar-estoque" class="btn-ok" onclick="confirmarEstoque()" style="padding:8px 18px;">✔ Lançar Estoque</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let _chaveNfeEstoque = null;
+
+  async function _mostrarModalEstoque(chaveNfe) {
+    _chaveNfeEstoque = chaveNfe;
+    try {
+      const r = await fetch(`/compras/api/notas/${chaveNfe}/itens`);
+      const d = await r.json();
+      const itens = (d.itens || []).filter(it => it.mapeado && !it.ignorado);
+      document.getElementById('modal-estoque-itens').innerHTML = itens.length
+        ? itens.map(it => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">
+            <span>${it.descricao}</span>
+            <span style="color:var(--accent);font-weight:600;">${it.quantidade} ${it.unidade||''}</span>
+          </div>`).join('')
+        : '<span style="color:var(--muted2)">Nenhum item mapeado encontrado.</span>';
+    } catch(e) {
+      document.getElementById('modal-estoque-itens').innerHTML = '<span style="color:var(--muted2)">Erro ao carregar itens.</span>';
+    }
+    document.getElementById('modal-estoque').style.display = 'flex';
+  }
+
+  function fecharModalEstoque() {
+    document.getElementById('modal-estoque').style.display = 'none';
+    _chaveNfeEstoque = null;
+  }
+
+  async function confirmarEstoque() {
+    if (!_chaveNfeEstoque) return;
+    const btn = document.getElementById('btn-lancar-estoque');
+    btn.disabled = true;
+    btn.textContent = '⏳ Lançando…';
+    try {
+      const r = await fetch(`/compras/api/notas/${_chaveNfeEstoque}/lancar-estoque`, {method: 'POST'});
+      const d = await r.json();
+      if (d.ok) {
+        toast(`Estoque lançado: ${d.lancados.length} item(s)`, 'ok');
+      } else {
+        toast(`Erros ao lançar: ${d.erros.join(', ')}`, 'erro');
+      }
+    } catch(e) {
+      toast('Erro: ' + e.message, 'erro');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✔ Lançar Estoque';
+      fecharModalEstoque();
+    }
+  }
+</script>
 </body>
 </html>

@@ -736,8 +736,17 @@
 
     /* ── Guia de separação (impressão) ── */
     @media print {
-      body > *:not(#modal-guia) { display: none !important; }
-      #modal-guia { position: static !important; background: #fff !important; }
+      body * { display: none !important; }
+      #modal-guia, #modal-guia * { display: block !important; }
+      #modal-guia {
+        position: static !important;
+        background: #fff !important;
+        color: #000 !important;
+        box-shadow: none !important;
+        border: none !important;
+        z-index: auto !important;
+        overflow: visible !important;
+      }
       #modal-guia > div { border: none !important; box-shadow: none !important; max-width: 100% !important; }
       .no-print { display: none !important; }
       body { background: #fff !important; color: #000 !important; }
@@ -793,11 +802,11 @@
 
 <!-- Tabs -->
 <div class="tabs">
-  <div class="tab active" onclick="trocarAba('pedidos')">📦 Pedidos</div>
-  <div class="tab" onclick="trocarAba('fluxo')" id="tab-fluxo">🔄 Fluxo Operacional</div>
-  <div class="tab" onclick="trocarAba('sequencia')" id="tab-seq">🔍 Auditoria de Sequência</div>
+  <div class="tab active" onclick="trocarAba('fluxo')" id="tab-fluxo">🔄 Fluxo Operacional</div>
   <div class="tab" onclick="trocarAba('separacao')">🗂️ Separação</div>
   <div class="tab" onclick="trocarAba('analytics')">📊 Analytics</div>
+  <div class="tab" onclick="trocarAba('pedidos')">📦 Pedidos</div>
+  <div class="tab" onclick="trocarAba('sequencia')" id="tab-seq">🔍 Auditoria de Sequência</div>
 </div>
 
 <main>
@@ -805,7 +814,7 @@
   <!-- ══════════════════════════════════════════════
        ABA 1 — PEDIDOS
   ══════════════════════════════════════════════ -->
-  <div class="tab-content active" id="aba-pedidos">
+  <div class="tab-content" id="aba-pedidos">
     <div class="stats">
       <div class="stat-card hoje">
         <div class="label">Hoje</div>
@@ -863,7 +872,7 @@
   <!-- ══════════════════════════════════════════════
        ABA 2 — FLUXO OPERACIONAL
   ══════════════════════════════════════════════ -->
-  <div class="tab-content" id="aba-fluxo">
+  <div class="tab-content active" id="aba-fluxo">
     <div class="stats">
       <div class="stat-card total">
         <div class="label">Total</div>
@@ -1017,8 +1026,11 @@
     <div id="sep-sec-fila">
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
         <input type="text" id="sep-busca" placeholder="Buscar cliente ou pedido…" oninput="filtrarSep()" style="flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono)">
-        <select id="sep-filtro-cidade" onchange="filtrarSep()" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono)">
+        <select id="sep-filtro-cidade" onchange="_onCidadeFiltroChange()" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono)">
           <option value="">Todas as cidades</option>
+        </select>
+        <select id="sep-filtro-bairro" onchange="filtrarSep()" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono)">
+          <option value="">Todos os bairros</option>
         </select>
         <button class="btn-action" onclick="selecionarTodosSep()">☑ Selecionar Todos</button>
       </div>
@@ -2125,9 +2137,23 @@
     document.getElementById('stab-separados').classList.toggle('active',  nome === 'separados');
   }
 
+  function normalizarCidade(s) {
+    if (!s) return '';
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      .toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
   function _atualizarCidadesFiltro() {
-    const sel    = document.getElementById('sep-filtro-cidade');
-    const cidades = [...new Set(_sepFila.map(p => p.cidade || '').filter(Boolean))].sort();
+    const sel = document.getElementById('sep-filtro-cidade');
+    // Agrupa por cidade normalizada, guarda o nome normalizado
+    const cidadeMap = {};
+    _sepFila.forEach(p => {
+      if (p.cidade) {
+        const norm = normalizarCidade(p.cidade);
+        if (!cidadeMap[norm]) cidadeMap[norm] = norm;
+      }
+    });
+    const cidades = Object.keys(cidadeMap).sort();
     sel.innerHTML = '<option value="">Todas as cidades</option>' +
       cidades.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
 
@@ -2135,8 +2161,8 @@
     if (cidades.length > 1) {
       document.getElementById('sep-por-cidade').style.display = 'block';
       listEl.innerHTML = cidades.map(c => {
-        const cnt = _sepFila.filter(p => p.cidade === c).length;
-        const fat = _sepFila.filter(p => p.cidade === c).reduce((s, p) => s + (p.valor||0), 0);
+        const cnt = _sepFila.filter(p => normalizarCidade(p.cidade) === c).length;
+        const fat = _sepFila.filter(p => normalizarCidade(p.cidade) === c).reduce((s, p) => s + (p.valor||0), 0);
         return `<div class="cidade-badge" onclick="filtrarCidade('${escHtml(c)}')">${escHtml(c)} · ${cnt} pedidos · ${brl(fat)}</div>`;
       }).join('');
     } else {
@@ -2144,17 +2170,36 @@
     }
   }
 
+  function _atualizarBairrosFiltro(cidadeNorm) {
+    const sel = document.getElementById('sep-filtro-bairro');
+    const lista = cidadeNorm
+      ? _sepFila.filter(p => normalizarCidade(p.cidade) === cidadeNorm)
+      : _sepFila;
+    const bairros = [...new Set(lista.map(p => p.bairro || '').filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">Todos os bairros</option>' +
+      bairros.map(b => `<option value="${escHtml(b)}">${escHtml(b)}</option>`).join('');
+  }
+
+  function _onCidadeFiltroChange() {
+    const cidade = document.getElementById('sep-filtro-cidade').value;
+    _atualizarBairrosFiltro(cidade);
+    filtrarSep();
+  }
+
   function filtrarCidade(cidade) {
     document.getElementById('sep-filtro-cidade').value = cidade;
+    _atualizarBairrosFiltro(cidade);
     filtrarSep();
   }
 
   function filtrarSep() {
     const busca  = document.getElementById('sep-busca').value.toLowerCase();
     const cidade = document.getElementById('sep-filtro-cidade').value;
+    const bairro = document.getElementById('sep-filtro-bairro').value;
     const filtrado = _sepFila.filter(p =>
       (!busca  || (p.cliente||'').toLowerCase().includes(busca) || String(p.numero||p.mercos_id).includes(busca)) &&
-      (!cidade || p.cidade === cidade)
+      (!cidade || normalizarCidade(p.cidade) === cidade) &&
+      (!bairro || p.bairro === bairro)
     );
     _renderSepFilaRows(filtrado);
   }
@@ -2369,10 +2414,7 @@
   }
 
   function abrirModalRotaSep(origem, pedidos) {
-    const destinos = pedidos.map(p =>
-      [p.cidade, p.bairro].filter(Boolean).join(', ') + ', Brasil'
-    );
-    const segmentos = gerarSegmentosRota(origem, destinos, pedidos);
+    const segmentos = gerarSegmentosRota(pedidos, origem);
     const corpo = document.getElementById('modal-qr-body');
     corpo.innerHTML = '';
     segmentos.forEach((seg, i) => {
@@ -2386,13 +2428,13 @@
       body.className = 'qr-seg-body';
       const canvas = document.createElement('canvas');
       canvas.className = 'qr-canvas';
-      QRCode.toCanvas(canvas, seg.url, { width: 160, margin: 1 }, () => {});
+      QRCode.toCanvas(canvas, seg.link, { width: 160, margin: 1 }, () => {});
       const paradas = document.createElement('div');
       paradas.className = 'qr-paradas';
       paradas.innerHTML = seg.paradas.map((p, j) => `${j + 1}. ${escHtml(p.cliente)}<br><small style="color:var(--muted2)">${escHtml(p.cidade||'')} ${escHtml(p.bairro||'')}</small>`).join('<br>');
       const link = document.createElement('div');
       link.className = 'qr-link';
-      link.innerHTML = `<a href="${seg.url}" target="_blank">Abrir no Google Maps ↗</a>`;
+      link.innerHTML = `<a href="${seg.link}" target="_blank">Abrir no Google Maps ↗</a>`;
       body.appendChild(canvas); body.appendChild(paradas);
       div.appendChild(body); div.appendChild(link);
       corpo.appendChild(div);

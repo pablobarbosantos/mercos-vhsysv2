@@ -356,6 +356,16 @@ def mapeamento_upsert(fornecedor_cnpj: str, descricao_nota: str, vhsys_id: int,
         )
 
 
+def mapeamento_get_por_vhsys_id(vhsys_id: int) -> dict | None:
+    """Retorna o primeiro mapeamento encontrado para este vhsys_id (para obter fator_conversao)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM mapeamento_produtos_compra WHERE vhsys_id=? LIMIT 1",
+            (vhsys_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def mapeamento_listar() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(

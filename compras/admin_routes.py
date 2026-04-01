@@ -3,6 +3,7 @@ Rotas admin do módulo Compras.
 Prefixo: /compras
 """
 
+import difflib
 import logging
 import os
 import threading
@@ -160,6 +161,30 @@ async def api_itens_nota(chave: str):
     return {"itens": itens}
 
 
+@router.post("/api/notas/{chave}/lancar-estoque")
+async def api_lancar_estoque_nota(chave: str):
+    """Lança entrada de estoque no VHSys para todos os itens mapeados da nota."""
+    from compras.vhsys_adapter import lancar_entrada_compra
+    itens = db.item_listar_por_nota(chave)
+    lancados = []
+    erros = []
+    for it in itens:
+        if not it.get("mapeado") or it.get("ignorado"):
+            continue
+        vhsys_id = it.get("vhsys_id")
+        if not vhsys_id:
+            continue
+        mapa = db.mapeamento_get_por_vhsys_id(vhsys_id)
+        fator = (mapa.get("fator_conversao") or 1.0) if mapa else 1.0
+        qtd = it["quantidade"] * fator
+        ok = lancar_entrada_compra(vhsys_id, qtd, chave, it["descricao"])
+        if ok:
+            lancados.append({"descricao": it["descricao"], "quantidade": qtd, "vhsys_id": vhsys_id})
+        else:
+            erros.append(it["descricao"])
+    return {"ok": not erros, "lancados": lancados, "erros": erros}
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Fila
 # ──────────────────────────────────────────────────────────────────────────────
@@ -235,9 +260,27 @@ def _auto_match(codigo_fornecedor: str, descricao: str) -> dict | None:
         "SELECT vhsys_id, nome, ean, preco FROM produtos WHERE ativo=1 AND lower(nome)=? LIMIT 1",
         (desc,)
     ).fetchone()
-    conn.close()
     if row:
+        conn.close()
         return {**dict(row), "via": "nome"}
+
+    # 4. Nome similar (fuzzy) — pré-filtra por primeira palavra antes de calcular score
+    primeiro_termo = desc.split()[0] if desc.split() else desc
+    candidates = conn.execute(
+        "SELECT vhsys_id, nome, ean, preco FROM produtos WHERE ativo=1 AND lower(nome) LIKE ?",
+        (f"%{primeiro_termo}%",)
+    ).fetchall()
+    conn.close()
+
+    if candidates:
+        scored = [
+            (difflib.SequenceMatcher(None, desc, r["nome"].lower()).ratio(), r)
+            for r in candidates
+        ]
+        scored.sort(key=lambda x: -x[0])
+        best_score, best_row = scored[0]
+        if best_score >= 0.70:
+            return {**dict(best_row), "via": "nome_similar", "similaridade": round(best_score, 2)}
 
     return None
 
@@ -357,15 +400,21 @@ async def api_criar_mapeamento(request: Request):
         if not body.get(campo):
             raise HTTPException(status_code=400, detail=f"Campo obrigatório: {campo}")
 
+    vhsys_id = int(body["vhsys_id"])
     db.mapeamento_upsert(
         fornecedor_cnpj = str(body["fornecedor_cnpj"]).strip(),
         descricao_nota  = str(body["descricao_nota"]).strip(),
-        vhsys_id        = int(body["vhsys_id"]),
+        vhsys_id        = vhsys_id,
         nome_vhsys      = body.get("nome_vhsys", ""),
         unidade_compra  = body.get("unidade_compra", ""),
         fator_conversao = float(body.get("fator_conversao", 1.0)),
         unidade_estoque = body.get("unidade_estoque", ""),
     )
+
+    # Atualiza categoria no VHSys se informada
+    id_categoria = body.get("id_categoria")
+    if id_categoria:
+        _vhsys_req("PUT", f"produtos/{vhsys_id}", body={"id_categoria": int(id_categoria)})
 
     # Se houver notas aguardando mapeamento, re-enfileira automaticamente
     _reenfileirar_aguardando(str(body["fornecedor_cnpj"]).strip())

@@ -100,10 +100,13 @@ def verificar_sequencia() -> list[dict]:
 
 
 def _buraco_ja_alertado(mercos_id: int) -> bool:
-    """Retorna True se este buraco foi alertado dentro do cooldown."""
+    """Retorna True se este buraco foi alertado ou resolvido dentro do cooldown.
+    Usa MAX(detectado_em, resolvido_em) para que "resolver todos" suprima
+    re-detecções pelo período de cooldown.
+    """
     with db.get_conn() as conn:
         row = conn.execute(
-            """SELECT detectado_em FROM auditoria_sequencia
+            """SELECT detectado_em, resolvido_em FROM auditoria_sequencia
                WHERE mercos_id = ?
                ORDER BY detectado_em DESC LIMIT 1""",
             (mercos_id,)
@@ -113,8 +116,12 @@ def _buraco_ja_alertado(mercos_id: int) -> bool:
     ultima = datetime.fromisoformat(row["detectado_em"])
     if ultima.tzinfo is None:
         ultima = ultima.replace(tzinfo=timezone.utc)
-    delta_horas = (datetime.now(timezone.utc) - ultima).total_seconds() / 3600
-    return delta_horas < COOLDOWN_ALERTA_HORAS
+    if row["resolvido_em"]:
+        resolvido = datetime.fromisoformat(row["resolvido_em"])
+        if resolvido.tzinfo is None:
+            resolvido = resolvido.replace(tzinfo=timezone.utc)
+        ultima = max(ultima, resolvido)
+    return (datetime.now(timezone.utc) - ultima).total_seconds() / 3600 < COOLDOWN_ALERTA_HORAS
 
 
 def _registrar_buracos(buracos: list[dict]):

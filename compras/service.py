@@ -128,8 +128,14 @@ def _processar_nota(fila_id: int, chave_nfe: str) -> str:
         qtd_estoque    = item_db["quantidade"] * fator
         valor_unitario = item_db["valor_unitario"]
 
-        # Atualiza custo no VHSys
+        # Atualiza custo no VHSys (valor_custo_produto — não toca no preço de venda)
         atualizar_custo_produto(vhsys_id, valor_unitario)
+
+        # Atualiza unidade no VHSys se a NF-e trouxer uma
+        unidade_nfe = item_db.get("unidade", "")
+        if unidade_nfe:
+            _vhsys_requisitar("PUT", f"produtos/{vhsys_id}", body={"unidade_produto": unidade_nfe})
+            logger.info("[Compras] Unidade atualizada vhsys_id=%d → %s", vhsys_id, unidade_nfe)
 
         # Atualiza EAN se a NF-e trouxer um e for diferente do cadastrado
         ean_nfe = ean_por_codigo.get(item_db["codigo_fornecedor"], "")
