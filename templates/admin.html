@@ -2168,6 +2168,9 @@
     } else {
       document.getElementById('sep-por-cidade').style.display = 'none';
     }
+    // Repopula bairros baseado na cidade atualmente selecionada
+    const cidadeAtual = document.getElementById('sep-filtro-cidade').value;
+    _atualizarBairrosFiltro(cidadeAtual);
   }
 
   function _atualizarBairrosFiltro(cidadeNorm) {
@@ -2439,7 +2442,7 @@
       div.appendChild(body); div.appendChild(link);
       corpo.appendChild(div);
     });
-    document.getElementById('modal-qr').style.display = 'flex';
+    document.getElementById('modal-qr').classList.add('show');
   }
 
   // Auto-refresh a cada 30s
