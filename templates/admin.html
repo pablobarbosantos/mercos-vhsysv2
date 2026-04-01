@@ -1306,10 +1306,14 @@
 <div id="modal-qr">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-title">🗺️ Roteirização — QR Codes Google Maps</div>
+      <div class="modal-title">🗺️ Roteirização — Google Maps</div>
       <button class="modal-close" onclick="fecharModalRota()">✕ Fechar</button>
     </div>
     <div id="modal-qr-body"></div>
+    <div style="padding:12px 16px;border-top:1px solid var(--brd);display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="imprimirParadas()" style="padding:6px 14px;border-radius:5px;border:1px solid var(--brd);background:var(--card);color:var(--fg);cursor:pointer;font-size:12px">🖨️ Imprimir paradas</button>
+      <button onclick="fecharModalRota()" style="padding:6px 14px;border-radius:5px;border:1px solid var(--brd);background:var(--card);color:var(--fg);cursor:pointer;font-size:12px">✕ Fechar</button>
+    </div>
   </div>
 </div>
 
@@ -1321,6 +1325,7 @@
   let _fluxo       = [];
   let _buracos     = [];
   let _selecionados = new Set();
+  let _segmentosRotaAtivos = [];
 
   // ════════════════════════════════════════════════
   // Tabs
@@ -1672,11 +1677,32 @@
         </a>
       </div>`).join('');
 
+    _segmentosRotaAtivos = segs;
     document.getElementById('modal-qr').classList.add('show');
   }
 
   function fecharModalRota() {
     document.getElementById('modal-qr').classList.remove('show');
+  }
+
+  function imprimirParadas() {
+    if (!_segmentosRotaAtivos.length) return;
+    const linhas = [];
+    _segmentosRotaAtivos.forEach(seg => {
+      if (_segmentosRotaAtivos.length > 1)
+        linhas.push(`<tr><td colspan="2" style="background:#eee;font-weight:700;padding:6px">Parte ${seg.parte} de ${seg.total}</td></tr>`);
+      seg.paradas.forEach((p, i) => {
+        const end = [p.rua ? p.rua + (p.numero_end ? ', ' + p.numero_end : '') : '', p.bairro, p.cidade].filter(Boolean).join(' — ');
+        linhas.push(`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;font-weight:600">${i+1}. ${p.cliente||'—'}</td><td style="padding:6px 4px;border-bottom:1px solid #ddd;color:#555">${end}</td></tr>`);
+      });
+    });
+    const html = `<!DOCTYPE html><html><head><title>Paradas</title>
+      <style>body{font-family:sans-serif;font-size:13px;margin:20px}table{width:100%;border-collapse:collapse}h2{margin-bottom:12px}</style></head>
+      <body><h2>Lista de Paradas</h2><table>${linhas.join('')}</table></body></html>`;
+    const w = window.open('','_blank','width=600,height=700');
+    if (!w) { toast('Popup bloqueado. Permita popups para imprimir.','erro'); return; }
+    w.document.write(html); w.document.close();
+    w.onload = () => w.print();
   }
 
   function gerarSegmentosRota(pedidos, enderecoEmpresa) {
@@ -1701,7 +1727,7 @@
       const dest  = parte === total ? orig : endPedido(chunks[idx + 1][0]);
       const link  = `https://www.google.com/maps/dir/?api=1` +
                     `&origin=${orig}&destination=${dest}` +
-                    `&waypoints=${wps}&travelmode=driving`;
+                    `&waypoints=optimize:true|${wps}&travelmode=driving`;
       return { parte, total, link, qtd_paradas: chunk.length, paradas: chunk };
     });
   }
@@ -2419,12 +2445,15 @@
       cliente: p.cliente,
       cidade: p.cidade,
       bairro: p.bairro,
+      rua: p.rua || '',
+      numero_end: p.numero_end || '',
     }));
     abrirModalRotaSep(origem, pedidosFluxoFmt);
   }
 
   function abrirModalRotaSep(origem, pedidos) {
     const segmentos = gerarSegmentosRota(pedidos, origem);
+    _segmentosRotaAtivos = segmentos;
     document.getElementById('modal-qr-body').innerHTML = segmentos.map((s) => `
       <div class="qr-segmento">
         <div class="qr-seg-header">🗺️ Parte ${s.parte} de ${s.total} — ${s.qtd_paradas} parada(s)</div>
