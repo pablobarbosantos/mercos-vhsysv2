@@ -666,6 +666,7 @@
         toast(msg, data.status === 'concluido' ? 'ok' : 'warn');
         await carregarMapeamentos();
         await carregarNotas();
+        if (data.status === 'concluido') _mostrarModalEstoque(chave);
       }
       else toast(data.detail || 'Erro ao processar', 'erro');
     } catch(e) { toast('Erro: ' + e.message, 'erro'); }
@@ -1025,14 +1026,6 @@
         const tdBtn = tr.querySelectorAll('td')[7];
         tdBtn.innerHTML = `<button class="btn-action" style="font-size:11px;padding:4px 8px;"
           onclick="this.closest('tr').querySelector('.busca-produto-input').value='';this.closest('tr').querySelector('.busca-produto-input').focus();">✎ Alterar</button>`;
-        // Verifica se todos os itens da nota foram mapeados
-        const card = tr.closest('[data-chave]');
-        if (card) {
-          const pendentes = card.querySelectorAll('span[title="Sem mapeamento"], span[title="Sugestão automática"]');
-          if (pendentes.length === 0) {
-            _mostrarModalEstoque(card.dataset.chave);
-          }
-        }
       } else {
         const e = await r.json();
         toast('Erro: ' + (e.detail||'falha ao salvar'), 'erro');

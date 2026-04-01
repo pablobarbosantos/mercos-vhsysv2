@@ -736,10 +736,13 @@
 
     /* ── Guia de separação (impressão) ── */
     @media print {
-      body * { display: none !important; }
-      #modal-guia, #modal-guia * { display: block !important; }
+      body * { visibility: hidden !important; }
       #modal-guia {
-        position: static !important;
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 100% !important;
         background: #fff !important;
         color: #000 !important;
         box-shadow: none !important;
@@ -747,6 +750,7 @@
         z-index: auto !important;
         overflow: visible !important;
       }
+      #modal-guia * { visibility: visible !important; }
       #modal-guia > div { border: none !important; box-shadow: none !important; max-width: 100% !important; }
       .no-print { display: none !important; }
       body { background: #fff !important; color: #000 !important; }
@@ -917,7 +921,7 @@
     <!-- Barra de seleção para rota -->
     <div id="rota-bar">
       <span id="rota-count">0 pedido(s) selecionado(s)</span>
-      <input type="text" id="rota-endereco" placeholder="Endereço da empresa (origem da rota)…" />
+      <input type="text" id="rota-endereco" value="Rua Flamingos, 870, Jardim das Palmeiras, Uberlândia, MG, 38412-248" placeholder="Endereço da empresa (origem da rota)…" />
       <button class="gerar-rota" onclick="abrirModalRota()">🗺️ Gerar Rota + QR</button>
       <button class="action-res" onclick="limparSelecao()" style="margin-left:auto;padding:5px 12px">✕ Limpar seleção</button>
     </div>
@@ -2407,11 +2411,9 @@
 
   function gerarRotaSep() {
     if (!_sepSelecionados.size) return;
+    const origem = document.getElementById('rota-endereco')?.value?.trim();
+    if (!origem) { toast('Informe o endereço da empresa (origem).', 'erro'); return; }
     const pedidos = _sepFila.filter(p => _sepSelecionados.has(p.mercos_id));
-    // Reutiliza a lógica do kanban — monta _selecionados e abre modal
-    _selecionados = new Set(pedidos.map(p => p.mercos_id));
-    const origem = (document.getElementById('rota-endereco')?.value?.trim()) ||
-                   prompt('Endereço de origem (empresa):', 'Uberlândia, MG') || 'Uberlândia, MG';
     const pedidosFluxoFmt = pedidos.map(p => ({
       mercos_id: p.mercos_id,
       numero: p.numero || p.mercos_id,
@@ -2424,31 +2426,34 @@
 
   function abrirModalRotaSep(origem, pedidos) {
     const segmentos = gerarSegmentosRota(pedidos, origem);
-    const corpo = document.getElementById('modal-qr-body');
-    corpo.innerHTML = '';
-    segmentos.forEach((seg, i) => {
-      const div = document.createElement('div');
-      div.className = 'qr-seg';
-      const titulo = document.createElement('div');
-      titulo.className = 'qr-seg-header';
-      titulo.textContent = `SEGMENTO ${i + 1} — ${seg.paradas.length} parada(s)`;
-      div.appendChild(titulo);
-      const body = document.createElement('div');
-      body.className = 'qr-seg-body';
-      const canvas = document.createElement('canvas');
-      canvas.className = 'qr-canvas';
-      QRCode.toCanvas(canvas, seg.link, { width: 160, margin: 1 }, () => {});
-      const paradas = document.createElement('div');
-      paradas.className = 'qr-paradas';
-      paradas.innerHTML = seg.paradas.map((p, j) => `${j + 1}. ${escHtml(p.cliente)}<br><small style="color:var(--muted2)">${escHtml(p.cidade||'')} ${escHtml(p.bairro||'')}</small>`).join('<br>');
-      const link = document.createElement('div');
-      link.className = 'qr-link';
-      link.innerHTML = `<a href="${seg.link}" target="_blank">Abrir no Google Maps ↗</a>`;
-      body.appendChild(canvas); body.appendChild(paradas);
-      div.appendChild(body); div.appendChild(link);
-      corpo.appendChild(div);
-    });
+    document.getElementById('modal-qr-body').innerHTML = segmentos.map((s, i) => `
+      <div class="qr-segmento">
+        <div class="qr-seg-header">🗺️ Parte ${s.parte} de ${s.total} — ${s.qtd_paradas} parada(s)</div>
+        <div class="qr-seg-body">
+          <canvas class="qr-canvas" id="qrc-sep-${i}" width="200" height="200"></canvas>
+          <div style="flex:1">
+            <div class="qr-paradas">
+              ${s.paradas.map((p, j) =>
+                `${j+1}. <strong>${escHtml(p.cliente||'—')}</strong><br>
+                 <small style="color:var(--muted2)">${escHtml(p.bairro||'')} ${escHtml(p.cidade||'')}</small>`
+              ).join('<br>')}
+            </div>
+            <div class="qr-link">
+              <a href="${escHtml(s.link)}" target="_blank">↗ Abrir no Google Maps</a>
+            </div>
+          </div>
+        </div>
+      </div>`).join('');
     document.getElementById('modal-qr').classList.add('show');
+    setTimeout(() => {
+      segmentos.forEach((s, i) => {
+        const canvas = document.getElementById(`qrc-sep-${i}`);
+        if (canvas && typeof QRCode !== 'undefined') {
+          QRCode.toCanvas(canvas, s.link, { width: 200, margin: 2,
+            color: { dark: '#000000', light: '#ffffff' } }, () => {});
+        }
+      });
+    }, 60);
   }
 
   // Auto-refresh a cada 30s
