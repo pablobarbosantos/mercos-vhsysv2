@@ -122,10 +122,10 @@ async def painel_auditoria(request: Request):
 
 
 @router.get("/api/auditoria/sequencia")
-async def api_auditoria_sequencia(apenas_abertos: bool = True):
+async def api_auditoria_sequencia(apenas_abertos: bool = True, horas_recentes: int = 72):
     """Lista buracos na sequência de pedidos."""
-    buracos = db.auditoria_listar_buracos(apenas_abertos=apenas_abertos)
-    return {"buracos": buracos, "total": len(buracos)}
+    buracos = db.auditoria_listar_buracos(apenas_abertos=apenas_abertos, horas_recentes=horas_recentes)
+    return {"buracos": buracos, "total": len(buracos), "horas_recentes": horas_recentes}
 
 
 @router.get("/api/auditoria/fluxo")

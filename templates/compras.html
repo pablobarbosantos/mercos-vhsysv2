@@ -826,9 +826,10 @@
                 data-un="${it.unidade}"
                 data-custo="${it.valor_unitario||0}"
                 data-ean="${it.ean||''}"
-                ${sug && !map ? `data-sug-id="${sug.vhsys_id}" data-sug-nome="${(sug.nome||'').replace(/"/g,'&quot;')}" data-sug-preco="${sug.preco||0}"` : ''}
+                ${sug && !map ? `data-sug-id="${sug.vhsys_id}" data-sug-nome="${(sug.nome||'').replace(/"/g,'&quot;')}" data-sug-preco="${sug.preco||0}" data-sug-via="${sug.via||''}"` : ''}
               >
               <div class="busca-dropdown" style="display:none;position:fixed;z-index:9999;background:#1a1f2e;border:1px solid var(--accent);border-radius:4px;max-height:220px;overflow-y:auto;box-shadow:0 4px 24px rgba(0,0,0,.8);min-width:300px;"></div>
+              <div class="preco-vhsys-display" style="font-size:10px;color:var(--muted2);margin-top:2px;display:none;">Preço venda VHSys: <b class="preco-valor"></b></div>
             </div>
           </td>
           <td>
@@ -846,7 +847,8 @@
             ${sug && !map
               ? `<button class="btn-ok" style="font-size:11px;padding:4px 10px;" onclick="confirmarSugestao(this)">✓ Confirmar</button>`
               : map
-                ? `<button class="btn-action" style="font-size:11px;padding:4px 8px;" onclick="this.closest('tr').querySelector('.busca-produto-input').value='';this.closest('tr').querySelector('.busca-produto-input').focus();">✎ Alterar</button>`
+                ? `<button class="btn-action" style="font-size:11px;padding:4px 8px;" onclick="this.closest('tr').querySelector('.busca-produto-input').value='';this.closest('tr').querySelector('.busca-produto-input').focus();">✎ Alterar</button>
+                   <button class="btn-action" style="font-size:11px;padding:4px 8px;margin-left:4px;opacity:.7;" title="Histórico de custo" onclick="verHistoricoCusto(${map.vhsys_id}, this)">📈</button>`
                 : ''
             }
             ${!it.ignorado ? `<button class="btn-ignorar" style="font-size:11px;padding:4px 8px;margin-left:4px;"
@@ -879,6 +881,8 @@
 
     container.innerHTML = blocos;
     _preencherCategoriaSelects();
+    _mostrarPrecosIniciais();
+    _autoConfirmarSugestoesExatas();
   }
 
   async function _preencherCategoriaSelects() {
@@ -895,6 +899,33 @@
       ).join('');
       sel.innerHTML = '<option value="">— Categoria —</option>' + opts;
     });
+  }
+
+  function _mostrarPrecoVhsys(wrap, preco) {
+    const disp = wrap.querySelector('.preco-vhsys-display');
+    if (!disp || preco == null || isNaN(preco)) return;
+    disp.querySelector('.preco-valor').textContent = `R$ ${parseFloat(preco).toFixed(2)}`;
+    disp.style.display = 'block';
+  }
+
+  function _mostrarPrecosIniciais() {
+    document.querySelectorAll('.busca-produto-input[data-sug-preco]').forEach(input => {
+      const preco = parseFloat(input.dataset.sugPreco);
+      if (!isNaN(preco) && preco > 0) {
+        _mostrarPrecoVhsys(input.closest('.busca-produto-wrap'), preco);
+      }
+    });
+  }
+
+  async function _autoConfirmarSugestoesExatas() {
+    const inputs = document.querySelectorAll('.busca-produto-input[data-sug-via="EAN"], .busca-produto-input[data-sug-via="SKU"]');
+    for (const input of inputs) {
+      const vhsysId = parseInt(input.dataset.sugId);
+      if (!vhsysId) continue;
+      const nomeVhsys = input.dataset.sugNome || '';
+      const preco = parseFloat(input.dataset.sugPreco) || 0;
+      await _salvarMapeamento(input, vhsysId, nomeVhsys, preco);
+    }
   }
 
   async function buscaProduto(input) {
@@ -944,6 +975,7 @@
     const vhsysId = parseInt(input.dataset.sugId);
     const nomeVhsys = input.dataset.sugNome;
     const preco = parseFloat(input.dataset.sugPreco) || 0;
+    _mostrarPrecoVhsys(input.closest('.busca-produto-wrap'), preco);
     await _salvarMapeamento(input, vhsysId, nomeVhsys, preco);
   }
 
@@ -955,6 +987,7 @@
     const input = wrap ? wrap.querySelector('.busca-produto-input') : el;
     if (wrap) wrap.querySelector('.busca-dropdown').style.display = 'none';
     input.value = nomeVhsys;
+    _mostrarPrecoVhsys(wrap, preco);
     await _salvarMapeamento(input, vhsysId, nomeVhsys, preco);
   }
 
@@ -1014,6 +1047,42 @@
       if (r.ok) { toast('Mapeamento removido', 'ok'); await carregarMapeamentos(); }
       else toast('Erro ao remover', 'erro');
     } catch(e) { toast('Erro: ' + e.message, 'erro'); }
+  }
+
+  async function verHistoricoCusto(vhsysId, btn) {
+    const tr = btn.closest('tr');
+    const existente = tr.nextElementSibling;
+    if (existente && existente.classList.contains('historico-custo-row')) {
+      existente.remove();
+      return;
+    }
+    btn.textContent = '⏳';
+    try {
+      const r = await fetch(`/compras/api/produtos/${vhsysId}/historico-custo`);
+      const d = await r.json();
+      const hist = d.historico || [];
+      const linhas = hist.length
+        ? hist.map(h => `<tr style="font-size:11px;">
+            <td style="padding:3px 8px;color:var(--muted2);">${h.registrado_em ? h.registrado_em.slice(0,10) : '—'}</td>
+            <td style="padding:3px 8px;color:var(--text);font-weight:700;">R$ ${parseFloat(h.custo_novo).toFixed(4)}</td>
+            <td style="padding:3px 8px;color:var(--muted2);font-size:10px;">${h.chave_nfe ? '…'+h.chave_nfe.slice(-8) : '—'}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="3" style="padding:6px 8px;color:var(--muted2);font-size:11px;">Sem histórico</td></tr>`;
+      const row = document.createElement('tr');
+      row.className = 'historico-custo-row';
+      row.innerHTML = `<td colspan="8" style="background:var(--bg2);padding:0;">
+        <table style="width:auto;margin:4px 16px 4px 40px;">
+          <thead><tr>
+            <th style="font-size:10px;padding:2px 8px;">Data</th>
+            <th style="font-size:10px;padding:2px 8px;">Custo</th>
+            <th style="font-size:10px;padding:2px 8px;">NF-e</th>
+          </tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </td>`;
+      tr.after(row);
+    } catch(e) { toast('Erro ao carregar histórico: ' + e.message, 'erro'); }
+    finally { btn.textContent = '📈'; }
   }
 
   // ════════════════════════════════════════════════

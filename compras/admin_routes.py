@@ -161,6 +161,12 @@ async def api_itens_nota(chave: str):
     return {"itens": itens}
 
 
+@router.get("/api/produtos/{vhsys_id}/historico-custo")
+async def api_historico_custo(vhsys_id: int):
+    historico = db.historico_custo_listar(vhsys_id)
+    return {"vhsys_id": vhsys_id, "historico": historico}
+
+
 @router.post("/api/notas/{chave}/lancar-estoque")
 async def api_lancar_estoque_nota(chave: str):
     """Lança entrada de estoque no VHSys para todos os itens mapeados da nota."""
@@ -278,9 +284,21 @@ def _auto_match(codigo_fornecedor: str, descricao: str) -> dict | None:
             for r in candidates
         ]
         scored.sort(key=lambda x: -x[0])
-        best_score, best_row = scored[0]
-        if best_score >= 0.70:
-            return {**dict(best_row), "via": "nome_similar", "similaridade": round(best_score, 2)}
+        # Candidatos com ≥60% de similaridade
+        bons = [(s, r) for s, r in scored if s >= 0.60]
+        if bons:
+            best_score, best_row = bons[0]
+            alternativas = [
+                {**dict(r), "similaridade": round(s, 2)}
+                for s, r in bons[1:3]
+            ]
+            if best_score >= 0.70:
+                return {
+                    **dict(best_row),
+                    "via": "nome_similar",
+                    "similaridade": round(best_score, 2),
+                    "alternativas": alternativas,
+                }
 
     return None
 

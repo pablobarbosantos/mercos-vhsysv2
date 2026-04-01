@@ -130,6 +130,7 @@ def _processar_nota(fila_id: int, chave_nfe: str) -> str:
 
         # Atualiza custo no VHSys (valor_custo_produto — não toca no preço de venda)
         atualizar_custo_produto(vhsys_id, valor_unitario)
+        db.registrar_historico_custo(vhsys_id, valor_unitario, chave_nfe)
 
         # Atualiza unidade no VHSys se a NF-e trouxer uma
         unidade_nfe = item_db.get("unidade", "")

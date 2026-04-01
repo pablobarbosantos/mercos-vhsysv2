@@ -115,6 +115,16 @@ def init_db():
                 chave TEXT PRIMARY KEY,
                 valor TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS historico_custo (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                vhsys_id    INTEGER NOT NULL,
+                custo_novo  REAL NOT NULL,
+                chave_nfe   TEXT,
+                registrado_em TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_historico_custo_vhsys
+                ON historico_custo(vhsys_id, registrado_em DESC);
         """)
     # Migrações para colunas adicionadas após criação inicial
     with get_conn() as conn:
@@ -370,6 +380,29 @@ def mapeamento_listar() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM mapeamento_produtos_compra ORDER BY fornecedor_cnpj, descricao_nota"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Histórico de custo
+# ──────────────────────────────────────────────────────────────────────────────
+
+def registrar_historico_custo(vhsys_id: int, custo_novo: float, chave_nfe: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO historico_custo (vhsys_id, custo_novo, chave_nfe, registrado_em) VALUES (?, ?, ?, ?)",
+            (vhsys_id, custo_novo, chave_nfe, _now())
+        )
+
+
+def historico_custo_listar(vhsys_id: int, limit: int = 20) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT custo_novo, chave_nfe, registrado_em
+               FROM historico_custo WHERE vhsys_id = ?
+               ORDER BY registrado_em DESC LIMIT ?""",
+            (vhsys_id, limit)
         ).fetchall()
     return [dict(r) for r in rows]
 

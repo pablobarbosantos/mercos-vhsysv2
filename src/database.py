@@ -347,13 +347,23 @@ def reconciliar_pendentes_hoje() -> dict:
 # NOVO: Auditoria de sequência
 # ──────────────────────────────────────────────────────────────
 
-def auditoria_listar_buracos(apenas_abertos: bool = True) -> list[dict]:
+def auditoria_listar_buracos(apenas_abertos: bool = True, horas_recentes: int = 0) -> list[dict]:
+    """Lista buracos de sequência.
+    horas_recentes > 0 → só retorna buracos detectados nas últimas N horas (0 = sem filtro).
+    """
     with get_conn() as conn:
-        query = "SELECT * FROM auditoria_sequencia"
+        conditions = []
+        params: list = []
         if apenas_abertos:
-            query += " WHERE resolvido = 0"
+            conditions.append("resolvido = 0")
+        if horas_recentes > 0:
+            conditions.append("detectado_em >= datetime('now', ?)")
+            params.append(f"-{horas_recentes} hours")
+        query = "SELECT * FROM auditoria_sequencia"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY mercos_id DESC"
-        rows = conn.execute(query).fetchall()
+        rows = conn.execute(query, params).fetchall()
     return [dict(r) for r in rows]
 
 

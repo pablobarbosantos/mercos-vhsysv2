@@ -979,9 +979,13 @@
     </div>
 
     <div class="toolbar">
-      <select id="filtro-seq" onchange="filtrarSequencia()">
+      <select id="filtro-seq" onchange="carregarSequencia()">
         <option value="abertos">⚠️ Apenas abertos</option>
         <option value="todos">Todos</option>
+      </select>
+      <select id="filtro-seq-periodo" onchange="carregarSequencia()">
+        <option value="72">Recentes (72h)</option>
+        <option value="0">Todos os períodos</option>
       </select>
       <span id="contagem-seq">— registros</span>
       <button class="btn-action" onclick="resolverTodosBuracos()" style="margin-left:auto;background:var(--ok);color:#000">✔ Resolver Todos</button>
@@ -1686,11 +1690,12 @@
     const chunks = [];
     for (let i = 0; i < pedidos.length; i += MAX) chunks.push(pedidos.slice(i, i + MAX));
 
+    const endPedido = p => enc([p.bairro, p.cidade, 'MG', 'Brasil'].filter(Boolean).join(', '));
     return chunks.map((chunk, idx) => {
       const total = chunks.length;
       const parte = idx + 1;
-      const wps   = chunk.map(p => enc(p.cliente || '')).join('|');
-      const dest  = parte === total ? orig : enc(chunks[idx + 1][0].cliente || '');
+      const wps   = chunk.map(p => endPedido(p)).join('|');
+      const dest  = parte === total ? orig : endPedido(chunks[idx + 1][0]);
       const link  = `https://www.google.com/maps/dir/?api=1` +
                     `&origin=${orig}&destination=${dest}` +
                     `&waypoints=${wps}&travelmode=driving`;
@@ -1727,7 +1732,8 @@
   async function carregarSequencia() {
     try {
       const apenasAbertos = document.getElementById('filtro-seq')?.value !== 'todos';
-      const res  = await fetch(`/admin/api/auditoria/sequencia?apenas_abertos=${apenasAbertos}`);
+      const horasRecentes = parseInt(document.getElementById('filtro-seq-periodo')?.value || '72', 10);
+      const res  = await fetch(`/admin/api/auditoria/sequencia?apenas_abertos=${apenasAbertos}&horas_recentes=${horasRecentes}`);
       const data = await res.json();
       _buracos = data.buracos || [];
 
