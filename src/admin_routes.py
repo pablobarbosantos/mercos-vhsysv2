@@ -660,6 +660,61 @@ async def api_backfill_enderecos(request: Request):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Roteirização TSP
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/api/rota/otimizar")
+async def api_rota_otimizar(request: Request):
+    """
+    Recebe lista de mercos_ids + endereço de origem, retorna rota TSP otimizada.
+    Body: {"mercos_ids": [123, 456], "origem": "Rua X, 100, Uberlândia"}
+    """
+    import asyncio
+    from src.routing import otimizar_rota
+
+    body = await request.json()
+    mercos_ids = body.get("mercos_ids", [])
+    origem     = body.get("origem", "").strip()
+
+    if not origem:
+        return {"ok": False, "erro": "Informe o endereço de origem."}
+    if not mercos_ids:
+        return {"ok": False, "erro": "Nenhum pedido selecionado."}
+
+    with db.get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT mercos_id, cliente, rua, numero_end, bairro, cidade, cep "
+            f"FROM pedidos_fluxo WHERE mercos_id IN ({','.join('?'*len(mercos_ids))})",
+            mercos_ids,
+        ).fetchall()
+
+    entradas = []
+    for r in rows:
+        partes = []
+        if r["rua"]:
+            partes.append(r["rua"].strip().title())
+            if r["numero_end"]:
+                partes.append(r["numero_end"].strip())
+        if r["bairro"]:
+            partes.append(r["bairro"].strip().title())
+        partes.append((r["cidade"] or "Uberlândia").strip().title())
+        entradas.append({
+            "endereco": ", ".join(partes),
+            "cep": (r["cep"] or "").replace(".", "").replace("-", "").strip(),
+            "label": r["cliente"] or str(r["mercos_id"]),
+        })
+
+    try:
+        resultado = await asyncio.get_event_loop().run_in_executor(
+            None, otimizar_rota, entradas, origem
+        )
+        return {"ok": True, **resultado}
+    except Exception as e:
+        logger.error(f"[RotaOtimizar] {e}")
+        return {"ok": False, "erro": str(e)}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Diagnóstico: inspeciona resposta bruta do VHSys para um pedido
 # ──────────────────────────────────────────────────────────────────────────────
 

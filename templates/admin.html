@@ -1648,37 +1648,65 @@
   }
 
   // ════════════════════════════════════════════════
-  // Roteirização — QR Codes Google Maps
+  // Roteirização — TSP via backend
   // ════════════════════════════════════════════════
+  function _renderModalRota(res) {
+    const falhasHtml = res.falhas && res.falhas.length
+      ? `<div style="margin-bottom:12px;padding:8px 12px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404">
+           Não geocodificados (ignorados): ${res.falhas.map(f => escHtml(f)).join(', ')}
+         </div>` : '';
+
+    const paradasHtml = res.paradas.map((p, i) =>
+      `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
+         <span style="font-weight:700;color:var(--accent)">${p.seq}.</span>
+         ${escHtml(p.label)}
+       </div>`
+    ).join('');
+
+    document.getElementById('modal-qr-body').innerHTML = `
+      ${falhasHtml}
+      <div class="qr-segmento">
+        <div class="qr-seg-header">Rota otimizada — ${res.paradas.length} parada(s) · ~${res.tempo_min} min</div>
+        <div class="qr-paradas" style="margin:12px 0">${paradasHtml}</div>
+        <a href="${escHtml(res.link)}" target="_blank"
+          style="display:block;margin-top:12px;padding:10px 18px;background:var(--accent);color:#000;font-weight:700;border-radius:6px;text-align:center;text-decoration:none;font-size:13px;">
+          ↗ Abrir rota otimizada no Google Maps
+        </a>
+      </div>`;
+
+    _segmentosRotaAtivos = [{ parte: 1, total: 1, link: res.link, qtd_paradas: res.paradas.length, paradas: res.paradas }];
+    document.getElementById('modal-qr').classList.add('show');
+  }
+
+  async function _chamarRotaOtimizar(mercos_ids) {
+    const origem = document.getElementById('rota-endereco')?.value?.trim();
+    if (!origem) { toast('Informe o endereço da empresa (origem).', 'erro'); return; }
+
+    const body = document.getElementById('modal-qr-body');
+    document.getElementById('modal-qr').classList.add('show');
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted2)">Calculando rota otimizada…</div>';
+
+    try {
+      const res = await fetch('/admin/api/rota/otimizar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mercos_ids, origem })
+      }).then(r => r.json());
+
+      if (!res.ok) { toast('Erro: ' + res.erro, 'erro'); fecharModalRota(); return; }
+      _renderModalRota(res);
+    } catch(e) {
+      toast('Erro ao calcular rota: ' + e.message, 'erro');
+      fecharModalRota();
+    }
+  }
+
   function abrirModalRota() {
     const origem = document.getElementById('rota-endereco').value.trim();
     if (!origem) { toast('Informe o endereço da empresa (origem).', 'erro'); return; }
     const pedidos = _fluxo.filter(p => _selecionados.has(p.mercos_id));
     if (!pedidos.length) { toast('Selecione ao menos um pedido separado.', 'erro'); return; }
-
-    const segs = gerarSegmentosRota(pedidos, origem);
-
-    document.getElementById('modal-qr-body').innerHTML = segs.map((s) => `
-      <div class="qr-segmento">
-        <div class="qr-seg-header">🗺️ Parte ${s.parte} de ${s.total} — ${s.qtd_paradas} parada(s)</div>
-        <div class="qr-seg-body">
-          <div style="flex:1">
-            <div class="qr-paradas">
-              ${s.paradas.map((p, j) =>
-                `${j+1}. <strong>${escHtml(p.cliente||'—')}</strong><br>
-                 <small style="color:var(--muted2)">${[p.rua ? p.rua+(p.numero_end?', '+p.numero_end:'') : '', p.bairro, p.cidade].filter(Boolean).join(' — ')}</small>`
-              ).join('<br>')}
-            </div>
-          </div>
-        </div>
-        <a href="${escHtml(s.link)}" target="_blank"
-          style="display:block;margin-top:12px;padding:10px 18px;background:var(--accent);color:#000;font-weight:700;border-radius:6px;text-align:center;text-decoration:none;font-size:13px;">
-          ↗ Abrir no Google Maps (parte ${s.parte})
-        </a>
-      </div>`).join('');
-
-    _segmentosRotaAtivos = segs;
-    document.getElementById('modal-qr').classList.add('show');
+    _chamarRotaOtimizar(pedidos.map(p => p.mercos_id));
   }
 
   function fecharModalRota() {
@@ -2436,19 +2464,8 @@
 
   function gerarRotaSep() {
     if (!_sepSelecionados.size) return;
-    const origem = document.getElementById('rota-endereco')?.value?.trim();
-    if (!origem) { toast('Informe o endereço da empresa (origem).', 'erro'); return; }
     const pedidos = _sepFila.filter(p => _sepSelecionados.has(p.mercos_id));
-    const pedidosFluxoFmt = pedidos.map(p => ({
-      mercos_id: p.mercos_id,
-      numero: p.numero || p.mercos_id,
-      cliente: p.cliente,
-      cidade: p.cidade,
-      bairro: p.bairro,
-      rua: p.rua || '',
-      numero_end: p.numero_end || '',
-    }));
-    abrirModalRotaSep(origem, pedidosFluxoFmt);
+    _chamarRotaOtimizar(pedidos.map(p => p.mercos_id));
   }
 
   function abrirModalRotaSep(origem, pedidos) {
