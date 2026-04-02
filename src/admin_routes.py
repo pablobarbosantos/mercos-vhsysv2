@@ -708,7 +708,28 @@ async def api_rota_otimizar(request: Request):
         resultado = await asyncio.get_event_loop().run_in_executor(
             None, otimizar_rota, entradas, origem
         )
-        return {"ok": True, **resultado}
+
+        if resultado.get("status") == "erro":
+            return {"ok": False, "erro": resultado.get("erro", "Erro desconhecido")}
+
+        # Normaliza para o formato esperado pelo frontend
+        pontos = resultado.get("pontos", [])
+        ordem  = resultado.get("ordem", list(range(len(pontos))))
+        paradas = [
+            {"seq": seq + 1, "label": pontos[idx].get("label", f"Parada {idx+1}"),
+             "lat": pontos[idx]["lat"], "lon": pontos[idx]["lon"]}
+            for seq, idx in enumerate(ordem)
+        ]
+        duracao_s = resultado.get("duracao_segundos", 0)
+        link = resultado.get("link_maps") or resultado.get("link", "")
+
+        return {
+            "ok": True,
+            "link": link,
+            "paradas": paradas,
+            "tempo_min": int(duracao_s // 60),
+            "falhas": resultado.get("falhas", []),
+        }
     except Exception as e:
         logger.error(f"[RotaOtimizar] {e}")
         return {"ok": False, "erro": str(e)}
