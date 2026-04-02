@@ -81,7 +81,8 @@ class MercosService:
                     bairro     = pedido_data.get("_bairro_cliente", "") or dados_mercos.get("cliente_bairro", "")
                     rua        = dados_mercos.get("cliente_rua", "")
                     numero_end = dados_mercos.get("cliente_numero", "")
-                    if cidade or bairro or rua:
+                    cep        = dados_mercos.get("cliente_cep", "")
+                    if cidade or bairro or rua or cep:
                         db.fluxo_registrar_recebido(
                             mercos_id=mercos_id,
                             numero=str(numero or mercos_id),
@@ -91,6 +92,7 @@ class MercosService:
                             bairro=bairro,
                             rua=rua,
                             numero_end=numero_end,
+                            cep=cep,
                         )
                 except Exception as e:
                     logger.warning(f"[MercosService] Falha ao salvar endereço (não crítico): {e}")
@@ -218,6 +220,7 @@ class MercosService:
             "cliente_bairro":        dados.get("cliente_bairro", ""),
             "cliente_cidade":        dados.get("cliente_cidade", ""),
             "cliente_estado":        dados.get("cliente_estado", ""),
+            "cliente_cep":           dados.get("cliente_cep", ""),
         }
 
     def limpar_locks_antigos(self):

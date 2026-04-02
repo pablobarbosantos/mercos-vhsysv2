@@ -7,3 +7,5 @@ lxml
 cryptography
 zeep
 python-multipart
+geopy
+python-tsp

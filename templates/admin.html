@@ -1707,27 +1707,27 @@
 
   function gerarSegmentosRota(pedidos, enderecoEmpresa) {
     const enc  = s => encodeURIComponent((s || '').trim());
-    const orig = enc(enderecoEmpresa);
     const MAX  = 9;
     const chunks = [];
     for (let i = 0; i < pedidos.length; i += MAX) chunks.push(pedidos.slice(i, i + MAX));
 
     const endPedido = p => {
       const partes = [];
-      if (p.rua) { partes.push(p.rua + (p.numero_end ? ', ' + p.numero_end : '')); }
+      if (p.rua) partes.push(p.rua + (p.numero_end ? ', ' + p.numero_end : ''));
       if (p.bairro) partes.push(p.bairro);
-      if (p.cidade) partes.push(p.cidade);
+      partes.push(p.cidade || 'Uberlândia');
       partes.push('MG', 'Brasil');
       return enc(partes.join(', '));
     };
+
     return chunks.map((chunk, idx) => {
       const total = chunks.length;
       const parte = idx + 1;
-      const wps   = chunk.map(p => endPedido(p)).join('|');
-      const dest  = parte === total ? orig : endPedido(chunks[idx + 1][0]);
-      const link  = `https://www.google.com/maps/dir/?api=1` +
-                    `&origin=${orig}&destination=${dest}` +
-                    `&waypoints=optimize:true|${wps}&travelmode=driving`;
+      // Formato /maps/dir/end1/end2/... — funciona sem chave de API
+      const endsDaChunk = chunk.map(p => endPedido(p));
+      const dest  = parte === total ? enc(enderecoEmpresa) : endPedido(chunks[idx + 1][0]);
+      const todos  = [enc(enderecoEmpresa), ...endsDaChunk, dest];
+      const link  = `https://www.google.com/maps/dir/${todos.join('/')}`;
       return { parte, total, link, qtd_paradas: chunk.length, paradas: chunk };
     });
   }

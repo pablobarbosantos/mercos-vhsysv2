@@ -568,10 +568,10 @@ async def api_corrigir_pedidos(request: Request):
 @router.post("/api/dados/backfill-enderecos")
 async def api_backfill_enderecos(request: Request):
     """
-    Para cada pedido com cidade IS NULL em pedidos_fluxo:
+    Para cada pedido sem rua/cep em pedidos_fluxo:
       1. GET /pedidos/{vhsys_id}  → extrai id_cliente
-      2. GET /clientes/{id_cliente} → extrai cidade_cliente, bairro_cliente
-      3. UPDATE pedidos_fluxo SET cidade, bairro
+      2. GET /clientes/{id_cliente} → extrai endereco, numero, bairro, cidade, cep
+      3. UPDATE pedidos_fluxo SET rua, numero_end, bairro, cidade, cep
     """
     import time as _time
     from vhsys_service import VhsysService
@@ -586,14 +586,14 @@ async def api_backfill_enderecos(request: Request):
             SELECT f.mercos_id, p.vhsys_id
             FROM pedidos_fluxo f
             JOIN pedidos_processados p ON p.mercos_id = f.mercos_id
-            WHERE (f.cidade IS NULL OR f.cidade = '')
+            WHERE (f.rua IS NULL OR f.rua = '' OR f.cep IS NULL OR f.cep = '')
               AND p.status = 'ok'
               AND p.vhsys_id NOT IN ('', 'erro')
               AND p.vhsys_id IS NOT NULL
         """).fetchall()
 
     if not pares:
-        return {"ok": True, "atualizados": 0, "sem_endereco": 0, "erros": 0, "msg": "Nenhum pedido sem endereço"}
+        return {"ok": True, "atualizados": 0, "sem_endereco": 0, "erros": 0, "msg": "Nenhum pedido sem endereço completo"}
 
     try:
         vhsys = VhsysService()
@@ -625,19 +625,29 @@ async def api_backfill_enderecos(request: Request):
             dados_cli = resp_cli.json().get("data", {})
             if isinstance(dados_cli, list):
                 dados_cli = dados_cli[0] if dados_cli else {}
-            cidade = dados_cli.get("cidade_cliente", "") or ""
-            bairro = dados_cli.get("bairro_cliente", "") or ""
 
-            if not cidade and not bairro:
+            rua        = dados_cli.get("endereco_cliente", "") or ""
+            numero_end = dados_cli.get("numero_cliente", "") or ""
+            bairro     = dados_cli.get("bairro_cliente", "") or ""
+            cidade     = dados_cli.get("cidade_cliente", "") or ""
+            cep        = dados_cli.get("cep_cliente", "") or ""
+
+            if not cidade and not bairro and not rua and not cep:
                 sem_endereco += 1
                 continue
 
-            # Passo 3: atualizar pedidos_fluxo
+            # Passo 3: atualizar pedidos_fluxo (preserva valores já existentes)
             with db.get_conn() as conn:
-                conn.execute(
-                    "UPDATE pedidos_fluxo SET cidade=?, bairro=? WHERE mercos_id=?",
-                    (cidade, bairro, mercos_id)
-                )
+                conn.execute("""
+                    UPDATE pedidos_fluxo SET
+                        rua        = CASE WHEN ? != '' THEN ? ELSE rua        END,
+                        numero_end = CASE WHEN ? != '' THEN ? ELSE numero_end END,
+                        bairro     = CASE WHEN ? != '' THEN ? ELSE bairro     END,
+                        cidade     = CASE WHEN ? != '' THEN ? ELSE cidade     END,
+                        cep        = CASE WHEN ? != '' THEN ? ELSE cep        END
+                    WHERE mercos_id = ?
+                """, (rua, rua, numero_end, numero_end, bairro, bairro,
+                      cidade, cidade, cep, cep, mercos_id))
             atualizados += 1
             _time.sleep(0.3)
         except Exception as e:
