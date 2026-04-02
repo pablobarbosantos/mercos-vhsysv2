@@ -18,31 +18,86 @@ def normalizar_endereco(end):
         end = re.sub(sigla, extensao, end, flags=re.IGNORECASE)
     return end
 
+def _via_cep(cep: str) -> dict | None:
+    cep_limpo = "".join(c for c in cep if c.isdigit())
+    if len(cep_limpo) != 8:
+        return None
+    try:
+        resp = requests.get(f"https://viacep.com.br/ws/{cep_limpo}/json/", timeout=10)
+        data = resp.json()
+        return None if data.get("erro") else data
+    except Exception:
+        return None
+
+
+def _tentar(nom, pho, candidatos: list[str]):
+    """Tenta geocodificar cada candidato: Nominatim depois Photon. Retorna primeiro resultado."""
+    for q in candidatos:
+        try:
+            loc = nom.geocode(q)
+            time.sleep(0.35)
+            if loc:
+                return loc, q
+        except Exception:
+            time.sleep(0.35)
+        try:
+            loc = pho.geocode(q)
+            if loc:
+                return loc, q
+        except Exception:
+            pass
+    return None, None
+
+
 def geocodificar(enderecos):
-    geolocator = Nominatim(user_agent=USER_AGENT, timeout=10)
-    photon = Photon(user_agent=USER_AGENT, timeout=10)
+    nom = Nominatim(user_agent=USER_AGENT, timeout=10)
+    pho = Photon(user_agent=USER_AGENT, timeout=10)
     resultados = []
+
     for item in enderecos:
         end_original = item if isinstance(item, str) else item.get("endereco", "")
+        cep          = "" if isinstance(item, str) else item.get("cep", "")
+        label        = end_original if isinstance(item, str) else item.get("label", end_original)
+
         end_limpo = normalizar_endereco(end_original)
-        if "Uberlandia" not in end_limpo: end_limpo += ", Uberlandia, MG"
-        
-        loc = None
-        try:
-            loc = geolocator.geocode(end_limpo)
-            if not loc:
-                loc = photon.geocode(end_limpo)
-        except:
-            try:
-                loc = photon.geocode(end_limpo)
-            except:
-                loc = None
+        if "Uberlandia" not in end_limpo and "Uberlândia" not in end_limpo:
+            end_limpo += ", Uberlandia, MG"
+
+        # Variações progressivas: completo → sem bairro → só rua
+        partes = [p.strip() for p in end_limpo.split(",")]
+        candidatos = [end_limpo]
+        if len(partes) >= 3:
+            candidatos.append(", ".join(partes[:2]) + ", Uberlandia, MG")
+        if len(partes) >= 2:
+            candidatos.append(partes[0] + ", Uberlandia, MG")
+
+        loc, _ = _tentar(nom, pho, candidatos)
+
+        # Fallback CEP: ViaCEP devolve nome oficial da rua
+        if not loc and cep:
+            dados = _via_cep(cep)
+            if dados:
+                numero = partes[1].strip() if len(partes) >= 2 and partes[1].strip().isdigit() else ""
+                logradouro = dados.get("logradouro", "")
+                localidade = dados.get("localidade", "Uberlândia")
+                uf         = dados.get("uf", "MG")
+                sufixo     = f", {localidade}, {uf}, Brasil"
+                cands_cep  = []
+                if logradouro:
+                    if numero:
+                        cands_cep.append(f"{logradouro}, {numero}{sufixo}")
+                    cands_cep.append(f"{logradouro}{sufixo}")
+                bairro = dados.get("bairro", "")
+                if bairro:
+                    cands_cep.append(f"{bairro}{sufixo}")
+                if cands_cep:
+                    loc, _ = _tentar(nom, pho, cands_cep)
 
         if loc:
-            resultados.append({"lat": loc.latitude, "lon": loc.longitude, "label": end_original})
+            resultados.append({"lat": loc.latitude, "lon": loc.longitude, "label": label})
         else:
             resultados.append(None)
-        time.sleep(0.5)
+
     return resultados
 
 def obter_matriz_osrm(coords):
