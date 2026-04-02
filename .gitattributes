@@ -1,0 +1,3 @@
+# Garante que scripts shell sempre usem LF (Unix), mesmo no Windows
+*.sh text eol=lf
+*.py text eol=lf
