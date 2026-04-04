@@ -3,7 +3,7 @@ load_dotenv()
 
 import uvicorn
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import Depends, FastAPI, Request, HTTPException
 import logging
 import logging.handlers
 import os
@@ -13,7 +13,7 @@ import asyncio
 import threading
 from mercos_service import MercosService
 from src import database as db
-from src.admin_routes import router as admin_router
+from src.admin_routes import router as admin_router, verificar_admin
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -449,7 +449,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-app.include_router(admin_router)
+app.include_router(admin_router, dependencies=[Depends(verificar_admin)])
 
 from compras.admin_routes import router as compras_router
 app.include_router(compras_router)

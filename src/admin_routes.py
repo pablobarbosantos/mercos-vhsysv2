@@ -5,14 +5,33 @@ Inclui endpoints de Auditoria de Sequência e Fluxo.
 """
 
 import logging
+import secrets
 import threading
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, status
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 import os
 
 from src import database as db
+
+_security = HTTPBasic()
+
+
+def verificar_admin(credentials: HTTPBasicCredentials = Depends(_security)):
+    ok_user = secrets.compare_digest(
+        credentials.username.encode(), os.getenv("ADMIN_USER", "admin").encode()
+    )
+    ok_pass = secrets.compare_digest(
+        credentials.password.encode(), os.getenv("ADMIN_PASS", "").encode()
+    )
+    if not ok_user or not ok_pass:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 logger = logging.getLogger(__name__)
 
@@ -702,6 +721,11 @@ async def api_rota_otimizar(request: Request):
             "endereco": ", ".join(partes),
             "cep": (r["cep"] or "").replace(".", "").replace("-", "").strip(),
             "label": r["cliente"] or str(r["mercos_id"]),
+            "cliente": r["cliente"] or "",
+            "rua": r["rua"] or "",
+            "numero_end": r["numero_end"] or "",
+            "bairro": r["bairro"] or "",
+            "cidade": r["cidade"] or "Uberlândia",
         })
 
     try:
@@ -716,8 +740,17 @@ async def api_rota_otimizar(request: Request):
         pontos = resultado.get("pontos", [])
         ordem  = resultado.get("ordem", list(range(len(pontos))))
         paradas = [
-            {"seq": seq + 1, "label": pontos[idx].get("label", f"Parada {idx+1}"),
-             "lat": pontos[idx]["lat"], "lon": pontos[idx]["lon"]}
+            {
+                "seq": seq + 1,
+                "label": pontos[idx].get("label", f"Parada {idx+1}"),
+                "lat": pontos[idx]["lat"],
+                "lon": pontos[idx]["lon"],
+                "cliente": pontos[idx].get("cliente", ""),
+                "rua": pontos[idx].get("rua", ""),
+                "numero_end": pontos[idx].get("numero_end", ""),
+                "bairro": pontos[idx].get("bairro", ""),
+                "cidade": pontos[idx].get("cidade", ""),
+            }
             for seq, idx in enumerate(ordem)
         ]
         duracao_s = resultado.get("duracao_segundos", 0)
@@ -1053,7 +1086,7 @@ async def api_separacao_guia_lote(ids: str):
 
     return {
         "pedidos": [dict(p) for p in pedidos],
-        "itens_consolidados": list(agrupado.values()),
+        "itens_consolidados": sorted(agrupado.values(), key=lambda x: x["qtd_total"], reverse=True),
         "total_pedidos": len(pedidos),
     }
 
