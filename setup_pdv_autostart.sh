@@ -1,7 +1,8 @@
 #!/bin/bash
 # =============================================================================
 # Configura o PDV para abrir automaticamente ao ligar o servidor
-# Execute uma vez no servidor:  bash setup_pdv_autostart.sh
+# Compatível com Xubuntu (LightDM + XFCE)
+# Execute uma vez no servidor:  sudo bash setup_pdv_autostart.sh
 # =============================================================================
 
 set -e
@@ -30,36 +31,40 @@ fi
 ok "Instalação encontrada em $INSTALL_DIR"
 
 # =============================================================================
-# 2. Garantir que pablo tem acesso ao diretório de instalação (em /root)
+# 2. Garantir acesso ao diretório de instalação (em /root)
 # =============================================================================
-if [ "$INSTALL_DIR" = "/root/mercos_vhsys" ]; then
+if [[ "$INSTALL_DIR" == /root/* ]]; then
     chmod o+rx /root
-    ok "Permissão de leitura em /root concedida para outros usuários"
+    ok "Permissão de leitura em /root concedida"
 fi
 
 # =============================================================================
-# 3. Configurar auto-login no GDM3
+# 3. Configurar auto-login no LightDM (Xubuntu)
 # =============================================================================
-msg "Configurando auto-login para $USUARIO no GDM3..."
+msg "Configurando auto-login para $USUARIO no LightDM..."
 
-GDM_CONF="/etc/gdm3/custom.conf"
+LIGHTDM_CONF="/etc/lightdm/lightdm.conf"
 
-if [ ! -f "$GDM_CONF" ]; then
-    err "Arquivo $GDM_CONF não encontrado. Verifique se o GDM3 está instalado."
-    exit 1
+# Cria o arquivo se não existir
+if [ ! -f "$LIGHTDM_CONF" ]; then
+    echo "[Seat:*]" | sudo tee "$LIGHTDM_CONF" > /dev/null
 fi
 
-# Verifica se auto-login já está configurado
-if grep -q "AutomaticLoginEnable=true" "$GDM_CONF"; then
-    ok "Auto-login já configurado em $GDM_CONF"
+if grep -q "^autologin-user=" "$LIGHTDM_CONF"; then
+    sudo sed -i "s/^autologin-user=.*/autologin-user=${USUARIO}/" "$LIGHTDM_CONF"
+    ok "Auto-login atualizado para $USUARIO"
 else
-    # Adiciona dentro do bloco [daemon]
-    sudo sed -i '/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin='"$USUARIO" "$GDM_CONF"
+    # Garante que a seção [Seat:*] existe e adiciona as linhas
+    if grep -q "^\[Seat:\*\]" "$LIGHTDM_CONF"; then
+        sudo sed -i "/^\[Seat:\*\]/a autologin-user=${USUARIO}\nautologin-user-timeout=0" "$LIGHTDM_CONF"
+    else
+        printf "\n[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\n" "$USUARIO" | sudo tee -a "$LIGHTDM_CONF" > /dev/null
+    fi
     ok "Auto-login configurado para $USUARIO"
 fi
 
 # =============================================================================
-# 4. Criar arquivo de autostart do GNOME
+# 4. Criar arquivo de autostart XDG (funciona no XFCE)
 # =============================================================================
 msg "Criando autostart do PDV para $USUARIO..."
 
@@ -73,10 +78,9 @@ Name=PDV — Pablo Agro
 Comment=Ponto de Venda — abre automaticamente ao iniciar a sessão
 Exec=bash -c "sleep 8 && cd ${INSTALL_DIR} && source venv/bin/activate && python pdv/main.py"
 Terminal=false
-X-GNOME-Autostart-enabled=true
 EOF
 
-chown "$USUARIO:$USUARIO" "$AUTOSTART_DIR/PDV.desktop"
+chown -R "$USUARIO:$USUARIO" "$AUTOSTART_DIR"
 ok "Arquivo de autostart criado: $AUTOSTART_DIR/PDV.desktop"
 
 # =============================================================================
@@ -87,12 +91,12 @@ echo "=========================================="
 echo "      PDV AUTOSTART CONFIGURADO!          "
 echo "=========================================="
 echo ""
-ok "Auto-login: $USUARIO entra automaticamente no boot"
+ok "Auto-login: $USUARIO entra automaticamente no boot (LightDM)"
 ok "PDV: abre 8s após o login (aguarda mercos-main subir)"
 echo ""
 echo -e "${AMARELO}Próximos passos:${NC}"
 echo "  sudo reboot"
-echo "  → PDV deve abrir automaticamente na tela"
+echo "  → PDV deve abrir automaticamente na tela HDMI"
 echo ""
 echo "  Se não abrir, verifique:"
 echo "    journalctl -u mercos-main --since '5 min ago'"
