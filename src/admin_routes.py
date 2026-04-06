@@ -193,30 +193,6 @@ async def api_reconciliacao_agora():
     return {"ok": True, "mensagem": "Reconciliação iniciada em background — verifique logs e WhatsApp."}
 
 
-@router.post("/api/auditoria/fluxo/{mercos_id}/separado")
-async def api_marcar_separado(request: Request, mercos_id: int):
-    """Marca pedido como separado manualmente via painel."""
-    pedido = db.fluxo_get_pedido(mercos_id)
-    if not pedido:
-        raise HTTPException(status_code=404, detail="Pedido não encontrado no fluxo.")
-    db.fluxo_marcar_separado(mercos_id)
-    db.admin_registrar_acao("separado", mercos_id, ip=request.client.host if request.client else "")
-    logger.info(f"[Admin] Pedido {mercos_id} marcado como SEPARADO manualmente.")
-    return {"ok": True, "mercos_id": mercos_id, "novo_status": "separado"}
-
-
-@router.post("/api/auditoria/fluxo/{mercos_id}/enviado")
-async def api_marcar_enviado(request: Request, mercos_id: int):
-    """Marca pedido como enviado manualmente via painel."""
-    pedido = db.fluxo_get_pedido(mercos_id)
-    if not pedido:
-        raise HTTPException(status_code=404, detail="Pedido não encontrado no fluxo.")
-    db.fluxo_marcar_enviado(mercos_id)
-    db.admin_registrar_acao("enviado", mercos_id, ip=request.client.host if request.client else "")
-    logger.info(f"[Admin] Pedido {mercos_id} marcado como ENVIADO manualmente.")
-    return {"ok": True, "mercos_id": mercos_id, "novo_status": "enviado"}
-
-
 @router.post("/api/auditoria/fluxo/lote/separado")
 async def api_marcar_separado_lote(request: Request):
     """Marca múltiplos pedidos como separado em lote."""
@@ -245,6 +221,30 @@ async def api_marcar_enviado_lote(request: Request):
         db.admin_registrar_acao("enviado", mid, ip=ip)
     logger.info(f"[Admin] {count} pedido(s) marcados como ENVIADO em lote.")
     return {"ok": True, "atualizados": count}
+
+
+@router.post("/api/auditoria/fluxo/{mercos_id}/separado")
+async def api_marcar_separado(request: Request, mercos_id: int):
+    """Marca pedido como separado manualmente via painel."""
+    pedido = db.fluxo_get_pedido(mercos_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado no fluxo.")
+    db.fluxo_marcar_separado(mercos_id)
+    db.admin_registrar_acao("separado", mercos_id, ip=request.client.host if request.client else "")
+    logger.info(f"[Admin] Pedido {mercos_id} marcado como SEPARADO manualmente.")
+    return {"ok": True, "mercos_id": mercos_id, "novo_status": "separado"}
+
+
+@router.post("/api/auditoria/fluxo/{mercos_id}/enviado")
+async def api_marcar_enviado(request: Request, mercos_id: int):
+    """Marca pedido como enviado manualmente via painel."""
+    pedido = db.fluxo_get_pedido(mercos_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado no fluxo.")
+    db.fluxo_marcar_enviado(mercos_id)
+    db.admin_registrar_acao("enviado", mercos_id, ip=request.client.host if request.client else "")
+    logger.info(f"[Admin] Pedido {mercos_id} marcado como ENVIADO manualmente.")
+    return {"ok": True, "mercos_id": mercos_id, "novo_status": "enviado"}
 
 
 @router.post("/api/auditoria/fluxo/{mercos_id}/regredir")
