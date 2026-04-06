@@ -1153,9 +1153,10 @@ async def api_separacao_guia_lote(ids: str):
     numero_por_id = {p["mercos_id"]: p["numero"] or str(p["mercos_id"]) for p in pedidos}
 
     # Agrupa itens por produto, consolidando múltiplas linhas do mesmo pedido
+    # Usa sku+nome como chave para evitar misturar produtos com SKU reutilizado
     agrupado: dict = {}
     for item in itens:
-        chave = item["sku"] or item["nome_produto"] or "?"
+        chave = (item["sku"] or "") + "|" + (item["nome_produto"] or "?")
         if chave not in agrupado:
             agrupado[chave] = {
                 "sku": item["sku"],
