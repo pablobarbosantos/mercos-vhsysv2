@@ -773,10 +773,10 @@
     .guia-item .qtd { font-size: 18px; font-weight: 700; color: var(--accent); min-width: 60px; text-align: right; }
     .guia-lote-item {
       display: flex; gap: 16px; align-items: flex-start;
-      padding: 10px 0; border-bottom: 1px solid var(--border);
+      padding: 10px 0; border-bottom: 2px solid #ccc;
     }
     .guia-lote-item .info { flex: 1; }
-    .guia-lote-item .qtd-total { font-size: 22px; font-weight: 700; color: var(--ok); min-width: 60px; text-align: right; }
+    .guia-lote-item .qtd-total { font-size: 22px; font-weight: 700; color: var(--ok); min-width: 50px; text-align: left; }
     .cidade-badge {
       padding: 4px 12px;
       background: var(--accent-dim);
@@ -1072,10 +1072,16 @@
 
     <!-- Em Separação -->
     <div id="sep-sec-separados" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn-action" id="btn-marcar-enviados-lote" onclick="marcarEnviadoLote()" disabled style="opacity:.5;background:var(--accent);color:#000">✔ Marcar Enviados</button>
+        <button class="btn-action" id="btn-rota-separados" onclick="gerarListaRota()" disabled style="opacity:.5">🗺️ Lista de Rota</button>
+        <span id="sep-separados-count" style="color:var(--muted2);font-size:12px"></span>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th><input type="checkbox" id="chk-sep-separados-all" onchange="toggleTodosSepSeparados(this)" title="Selecionar todos"></th>
               <th>#Pedido</th>
               <th>Cliente</th>
               <th>Cidade / Bairro</th>
@@ -1085,7 +1091,7 @@
             </tr>
           </thead>
           <tbody id="tbody-sep-separados">
-            <tr><td colspan="6" class="empty"><div class="icon">⏳</div><span class="spinner"></span> Carregando…</td></tr>
+            <tr><td colspan="7" class="empty"><div class="icon">⏳</div><span class="spinner"></span> Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1520,7 +1526,7 @@
       ? `R$ ${Number(p.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}`
       : '—';
     const sel = _selecionados.has(p.mercos_id) ? 'selected' : '';
-    const movivel = status === 'processado' || status === 'separado';
+    const movivel = status === 'processado' || status === 'separado' || status === 'enviado';
     const dragAttrs = movivel
       ? `draggable="true" ondragstart="dragStart(event,${p.mercos_id},'${status}')" ondragend="dragEnd(event)"`
       : '';
@@ -1550,16 +1556,19 @@
     if (status === 'processado')
       acoes = `<button class="action-sep" style="font-size:9px;padding:3px 8px" onclick="marcarSeparado(${p.mercos_id},this)">📋 Separado</button>`;
     else if (status === 'separado')
-      acoes = `<button class="action-env" style="font-size:9px;padding:3px 8px" onclick="marcarEnviado(${p.mercos_id},this)">🚚 Enviado</button>`;
+      acoes = `<button class="action-env" style="font-size:9px;padding:3px 8px" onclick="marcarEnviado(${p.mercos_id},this)">🚚 Enviado</button>
+               <button class="action-sep" style="font-size:9px;padding:3px 8px;background:var(--warn);color:#000" onclick="regredir(${p.mercos_id},'processado',this)" title="Voltar para Processado">↩</button>`;
+    else if (status === 'enviado')
+      acoes = `<button class="action-sep" style="font-size:9px;padding:3px 8px;background:var(--warn);color:#000" onclick="regredir(${p.mercos_id},'separado',this)" title="Voltar para Separado">↩ Voltar</button>`;
     else if (status === 'erro')
       acoes = `<button class="reprocess" style="font-size:9px;padding:3px 8px" onclick="reprocessarFluxo(${p.mercos_id},this)">⟳ Reprocessar</button>`;
 
-    // Checkbox para incluir na rota (separados) ou na rota de sep (processados)
-    const chk = (status === 'separado' || status === 'processado')
+    // Checkbox para seleção múltipla (processado, separado, enviado)
+    const chk = (status === 'separado' || status === 'processado' || status === 'enviado')
       ? `<input type="checkbox" class="card-checkbox"
            ${_selecionados.has(p.mercos_id) ? 'checked' : ''}
            onchange="toggleSelecionado(${p.mercos_id},this)"
-           title="${status === 'separado' ? 'Incluir na rota' : 'Selecionar'}">`
+           title="Selecionar">`
       : '';
 
     return `<div class="kanban-card ${sel} ${movivel ? 'draggable' : ''}" id="card-${p.mercos_id}" ${dragAttrs} style="${borderLeft}">
@@ -1596,26 +1605,53 @@
     document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
     if (!_dragId || _dragStatus === destStatus) return;
 
-    const permitido = { processado: ['separado'], separado: ['enviado'] };
+    // Transições permitidas (incluindo regressão)
+    const permitido = {
+      processado: ['separado'],
+      separado:   ['enviado', 'processado'],
+      enviado:    ['separado'],
+    };
     if (!permitido[_dragStatus]?.includes(destStatus)) {
       toast(`Movimento "${_dragStatus}" → "${destStatus}" não permitido.`, 'erro');
       _dragId = _dragStatus = null;
       return;
     }
 
-    const url = destStatus === 'separado'
-      ? `/admin/api/auditoria/fluxo/${_dragId}/separado`
-      : `/admin/api/auditoria/fluxo/${_dragId}/enviado`;
+    // Regressão usa endpoint regredir
+    const isRegressao = (destStatus === 'processado' && _dragStatus === 'separado') ||
+                        (destStatus === 'separado'   && _dragStatus === 'enviado');
+
+    // Se há múltiplos selecionados e o card arrastado está entre eles, move todos
+    const ids = (_selecionados.has(_dragId) && _selecionados.size > 1)
+      ? [..._selecionados]
+      : [_dragId];
 
     try {
-      const res = await fetch(url, { method: 'POST' });
-      if (res.ok) {
-        toast(`Pedido #${_dragId} → ${destStatus}.`, 'ok');
-        await carregarFluxo();
+      if (isRegressao) {
+        // Regressão: um por vez (ou lote se for o mesmo sentido)
+        for (const id of ids) {
+          await fetch(`/admin/api/auditoria/fluxo/${id}/regredir`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ para: destStatus })
+          });
+        }
+      } else if (ids.length > 1) {
+        const endpoint = destStatus === 'separado' ? 'lote/separado' : 'lote/enviado';
+        await fetch(`/admin/api/auditoria/fluxo/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mercos_ids: ids })
+        });
       } else {
-        const d = await res.json();
-        toast(d.detail || 'Erro ao mover.', 'erro');
+        const url = destStatus === 'separado'
+          ? `/admin/api/auditoria/fluxo/${_dragId}/separado`
+          : `/admin/api/auditoria/fluxo/${_dragId}/enviado`;
+        await fetch(url, { method: 'POST' });
       }
+      toast(`${ids.length} pedido(s) → ${destStatus}.`, 'ok');
+      if (ids.length > 1) _selecionados.clear();
+      await carregarFluxo();
     } catch (err) {
       toast('Falha: ' + err.message, 'erro');
     }
@@ -2306,10 +2342,13 @@
     _atualizarBotoesSep();
   }
 
+  let _sepSeparadosSelecionados = new Set();
+
   function _renderSepSeparados() {
     const tbody = document.getElementById('tbody-sep-separados');
     if (!_sepSeparados.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty"><div class="icon">✅</div>Nenhum pedido em separação aguardando envio</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty"><div class="icon">✅</div>Nenhum pedido em separação aguardando envio</td></tr>';
+      _atualizarBotoesSepSeparados();
       return;
     }
     tbody.innerHTML = _sepSeparados.map(p => {
@@ -2318,18 +2357,119 @@
       const mins     = sepEm ? Math.round((agora - sepEm) / 60000) : null;
       const tempoStr = mins !== null ? (mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`) : '—';
       const cidBairro = [p.cidade, p.bairro].filter(Boolean).join(' / ') || '—';
+      const sel = _sepSeparadosSelecionados.has(p.mercos_id);
       return `<tr>
+        <td><input type="checkbox" ${sel ? 'checked' : ''} onchange="toggleSepSeparadosItem(${p.mercos_id}, this)"></td>
         <td class="id-cell">#${p.numero || p.mercos_id}</td>
         <td>${escHtml(p.cliente || '—')}</td>
         <td style="color:var(--muted2)">${escHtml(cidBairro)}</td>
         <td>${brl(p.valor)}</td>
         <td>${tempoStr}</td>
-        <td style="display:flex;gap:6px">
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-action" style="padding:4px 10px;font-size:11px" onclick="verGuia(${p.mercos_id})">📋 Guia</button>
           <button class="btn-action" style="padding:4px 10px;font-size:11px;background:var(--accent);color:#000" onclick="marcarEnviadoSep(${p.mercos_id}, this)">🚚 Enviado</button>
+          <button class="btn-action" style="padding:4px 10px;font-size:11px;background:var(--warn);color:#000" onclick="regredir(${p.mercos_id},'processado',this)" title="Voltar para Fila de Separação">↩ Voltar</button>
         </td>
       </tr>`;
     }).join('');
+    _atualizarBotoesSepSeparados();
+  }
+
+  function toggleSepSeparadosItem(mercosId, el) {
+    if (el.checked) _sepSeparadosSelecionados.add(mercosId);
+    else _sepSeparadosSelecionados.delete(mercosId);
+    _atualizarBotoesSepSeparados();
+  }
+
+  function toggleTodosSepSeparados(chk) {
+    _sepSeparados.forEach(p => {
+      if (chk.checked) _sepSeparadosSelecionados.add(p.mercos_id);
+      else _sepSeparadosSelecionados.delete(p.mercos_id);
+    });
+    _renderSepSeparados();
+  }
+
+  function _atualizarBotoesSepSeparados() {
+    const tem = _sepSeparadosSelecionados.size > 0;
+    const btnEnv  = document.getElementById('btn-marcar-enviados-lote');
+    const btnRota = document.getElementById('btn-rota-separados');
+    const count   = document.getElementById('sep-separados-count');
+    if (btnEnv)  { btnEnv.disabled  = !tem; btnEnv.style.opacity  = tem ? '1' : '.5'; }
+    if (btnRota) { btnRota.disabled = !tem; btnRota.style.opacity  = tem ? '1' : '.5'; }
+    if (count)   count.textContent  = tem ? `${_sepSeparadosSelecionados.size} selecionado(s)` : '';
+  }
+
+  async function marcarEnviadoLote() {
+    if (!_sepSeparadosSelecionados.size) return;
+    if (!confirm(`Marcar ${_sepSeparadosSelecionados.size} pedido(s) como enviado?`)) return;
+    try {
+      const res = await fetch('/admin/api/auditoria/fluxo/lote/enviado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mercos_ids: [..._sepSeparadosSelecionados] })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`${data.atualizados} pedido(s) marcados como enviado.`, 'ok');
+        _sepSeparadosSelecionados.clear();
+        await carregarSeparacao();
+      } else {
+        toast(data.detail || 'Erro ao marcar enviados.', 'erro');
+      }
+    } catch(e) { toast('Falha: ' + e.message, 'erro'); }
+  }
+
+  async function gerarListaRota() {
+    if (!_sepSeparadosSelecionados.size) return;
+    try {
+      const res = await fetch('/admin/api/separacao/lista-rota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mercos_ids: [..._sepSeparadosSelecionados] })
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.detail || 'Erro ao gerar lista.', 'erro'); return; }
+      _abrirModalListaRota(data.paradas, data.link_maps);
+    } catch(e) { toast('Falha: ' + e.message, 'erro'); }
+  }
+
+  function _abrirModalListaRota(paradas, linkMaps) {
+    const total = paradas.reduce((s, p) => s + (p.valor || 0), 0);
+    const linhas = paradas.map((p, i) => `
+      <tr>
+        <td style="text-align:center;font-weight:700">${i+1}</td>
+        <td>#${escHtml(p.numero)}</td>
+        <td><b>${escHtml(p.cliente)}</b></td>
+        <td style="font-size:11px;color:var(--muted2)">${escHtml(p.endereco || '—')}</td>
+        <td style="text-align:right">${brl(p.valor)}</td>
+      </tr>`).join('');
+    const html = `
+      <div id="lista-rota-print">
+        <div style="font-family:var(--font-disp);font-size:18px;font-weight:800;margin-bottom:16px">
+          📋 Lista de Rota — ${paradas.length} entrega(s)
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--surface2);text-align:left">
+              <th style="padding:6px 8px">#</th>
+              <th style="padding:6px 8px">Pedido</th>
+              <th style="padding:6px 8px">Cliente</th>
+              <th style="padding:6px 8px">Endereço</th>
+              <th style="padding:6px 8px;text-align:right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+          <tfoot>
+            <tr style="font-weight:700;border-top:2px solid var(--border2)">
+              <td colspan="4" style="padding:8px;text-align:right">Total</td>
+              <td style="padding:8px;text-align:right">${brl(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        ${linkMaps ? `<div style="margin-top:16px"><a href="${escHtml(linkMaps)}" target="_blank" style="display:inline-block;padding:10px 18px;background:var(--accent);color:#000;font-weight:700;border-radius:6px;text-decoration:none;font-size:13px">↗ Abrir no Google Maps</a></div>` : ''}
+      </div>`;
+    document.getElementById('guia-conteudo').innerHTML = html;
+    document.getElementById('modal-guia').style.display = 'flex';
   }
 
   function toggleSepItem(mercosId, el) {
@@ -2412,12 +2552,12 @@
       html += data.itens_consolidados.map(it => {
         const pedidosList = it.pedidos.map(p => `#${p.mercos_id} (${(p.quantidade||0).toLocaleString('pt-BR',{maximumFractionDigits:2})})`).join(', ');
         return `<div class="guia-lote-item">
+          <div class="qtd-total">${(it.qtd_total||0).toLocaleString('pt-BR',{maximumFractionDigits:2})}</div>
           <div class="info">
             <div style="font-weight:700">${escHtml(it.nome_produto||'—')}</div>
             <div style="font-size:11px;color:var(--muted2);margin-top:2px">SKU: ${escHtml(it.sku||'—')}</div>
             <div style="font-size:10px;color:var(--muted2);margin-top:4px">Pedidos: ${pedidosList}</div>
           </div>
-          <div class="qtd-total">${(it.qtd_total||0).toLocaleString('pt-BR',{maximumFractionDigits:2})}</div>
         </div>`;
       }).join('');
       document.getElementById('guia-conteudo').innerHTML = html;
@@ -2442,12 +2582,44 @@
   async function marcarSeparadoLote() {
     if (!_sepSelecionados.size) { toast('Selecione ao menos um pedido', 'warn'); return; }
     if (!confirm(`Marcar ${_sepSelecionados.size} pedido(s) como separado?`)) return;
-    for (const id of _sepSelecionados) {
-      await fetch(`/admin/api/auditoria/fluxo/${id}/separado`, { method: 'POST' });
+    try {
+      const res = await fetch('/admin/api/auditoria/fluxo/lote/separado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mercos_ids: [..._sepSelecionados] })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`${data.atualizados} pedido(s) marcados como separados.`, 'ok');
+        _sepSelecionados.clear();
+        await carregarSeparacao();
+      } else {
+        toast(data.detail || 'Erro.', 'erro');
+      }
+    } catch(e) { toast('Falha: ' + e.message, 'erro'); }
+  }
+
+  async function regredir(mercosId, para, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const res = await fetch(`/admin/api/auditoria/fluxo/${mercosId}/regredir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ para })
+      });
+      if (res.ok) {
+        toast(`Pedido #${mercosId} voltou para "${para}".`, 'ok');
+        await carregarFluxo();
+        await carregarSeparacao();
+      } else {
+        const d = await res.json();
+        toast(d.detail || 'Erro ao regredir.', 'erro');
+        if (btn) { btn.disabled = false; btn.textContent = '↩ Voltar'; }
+      }
+    } catch(e) {
+      toast('Falha: ' + e.message, 'erro');
+      if (btn) { btn.disabled = false; btn.textContent = '↩ Voltar'; }
     }
-    _sepSelecionados.clear();
-    toast('Pedidos marcados como separados', 'ok');
-    await carregarSeparacao();
   }
 
   async function marcarEnviadoSep(mercosId, btn) {
@@ -2510,8 +2682,8 @@
     });
     if (!itens.length) { window.print(); return; }
     const linhas = itens.map(it =>
-      `<tr><td style="padding:6px 8px;border-bottom:1px solid #ddd;font-size:14px;">${it.nome}</td>` +
-      `<td style="padding:6px 8px;border-bottom:1px solid #ddd;font-size:18px;font-weight:bold;text-align:right;min-width:60px;">${it.qtd}</td></tr>`
+      `<tr><td style="padding:8px 10px;border-bottom:2px solid #bbb;font-size:18px;font-weight:bold;min-width:50px;">${it.qtd}</td>` +
+      `<td style="padding:8px 10px;border-bottom:2px solid #bbb;font-size:14px;">${it.nome}</td></tr>`
     ).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
       <style>body{font-family:Arial,sans-serif;padding:24px;color:#000;background:#fff}

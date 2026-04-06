@@ -86,7 +86,7 @@ class MercosService:
                         db.fluxo_registrar_recebido(
                             mercos_id=mercos_id,
                             numero=str(numero or mercos_id),
-                            cliente=dados_mercos.get("cliente_razao_social", ""),
+                            cliente=dados_mercos.get("cliente_nome_fantasia", "").strip() or dados_mercos.get("cliente_razao_social", ""),
                             valor=valor_total,
                             cidade=cidade,
                             bairro=bairro,

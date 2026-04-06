@@ -262,6 +262,55 @@ def fluxo_marcar_enviado(mercos_id: int):
         """, (datetime.now(timezone.utc).isoformat(), mercos_id))
 
 
+def fluxo_marcar_separado_lote(mercos_ids: list) -> int:
+    """Marca múltiplos pedidos como separado em uma única query."""
+    if not mercos_ids:
+        return 0
+    ts = datetime.now(timezone.utc).isoformat()
+    placeholders = ",".join("?" * len(mercos_ids))
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"UPDATE pedidos_fluxo SET separado_em=?, status_fluxo='separado' WHERE mercos_id IN ({placeholders}) AND status_fluxo='processado'",
+            [ts] + list(mercos_ids)
+        )
+        return cur.rowcount
+
+
+def fluxo_marcar_enviado_lote(mercos_ids: list) -> int:
+    """Marca múltiplos pedidos como enviado em uma única query."""
+    if not mercos_ids:
+        return 0
+    ts = datetime.now(timezone.utc).isoformat()
+    placeholders = ",".join("?" * len(mercos_ids))
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"UPDATE pedidos_fluxo SET enviado_em=?, status_fluxo='enviado' WHERE mercos_id IN ({placeholders}) AND status_fluxo='separado'",
+            [ts] + list(mercos_ids)
+        )
+        return cur.rowcount
+
+
+def fluxo_regredir_status(mercos_id: int, para: str) -> bool:
+    """
+    Volta um pedido para o status anterior.
+    Transições permitidas: enviado→separado, separado→processado.
+    Retorna True se a linha foi atualizada.
+    """
+    _transicoes = {
+        "separado":   ("enviado",   "enviado_em"),
+        "processado": ("separado",  "separado_em"),
+    }
+    if para not in _transicoes:
+        return False
+    status_atual, campo_limpar = _transicoes[para]
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"UPDATE pedidos_fluxo SET {campo_limpar}=NULL, status_fluxo=? WHERE mercos_id=? AND status_fluxo=?",
+            (para, mercos_id, status_atual)
+        )
+        return cur.rowcount > 0
+
+
 def fluxo_marcar_cancelado(mercos_id: int):
     with get_conn() as conn:
         conn.execute("""

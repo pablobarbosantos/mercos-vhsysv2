@@ -504,10 +504,11 @@ async def receive_mercos_order(request: Request):
                 )
 
                 if mercos_id:
+                    _cliente = dados.get("cliente_nome_fantasia", "").strip() or dados.get("cliente_razao_social", "")
                     db.fluxo_registrar_recebido(
                         mercos_id=mercos_id,
                         numero=str(numero or mercos_id),
-                        cliente=dados.get("cliente_razao_social", ""),
+                        cliente=_cliente,
                         valor=float(dados.get("valor_total", 0) or 0),
                         cidade=dados.get("cliente_cidade", "") or "",
                         bairro=dados.get("cliente_bairro", "") or "",
@@ -539,10 +540,11 @@ async def receive_mercos_order(request: Request):
                         mercos_id=mercos_id,
                         payload_json=json.dumps(dados, ensure_ascii=False),
                     )
+                    _cliente = dados.get("cliente_nome_fantasia", "").strip() or dados.get("cliente_razao_social", "")
                     db.fluxo_registrar_recebido(
                         mercos_id=mercos_id,
                         numero=str(numero),
-                        cliente=dados.get("cliente_razao_social", ""),
+                        cliente=_cliente,
                         valor=float(dados.get("valor_total", 0) or 0),
                         cidade=dados.get("cliente_cidade", "") or "",
                         bairro=dados.get("cliente_bairro", "") or "",

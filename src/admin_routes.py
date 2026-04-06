@@ -217,6 +217,88 @@ async def api_marcar_enviado(request: Request, mercos_id: int):
     return {"ok": True, "mercos_id": mercos_id, "novo_status": "enviado"}
 
 
+@router.post("/api/auditoria/fluxo/lote/separado")
+async def api_marcar_separado_lote(request: Request):
+    """Marca múltiplos pedidos como separado em lote."""
+    body = await request.json()
+    mercos_ids = body.get("mercos_ids", [])
+    if not mercos_ids:
+        raise HTTPException(status_code=400, detail="mercos_ids é obrigatório.")
+    count = db.fluxo_marcar_separado_lote(mercos_ids)
+    ip = request.client.host if request.client else ""
+    for mid in mercos_ids:
+        db.admin_registrar_acao("separado", mid, ip=ip)
+    logger.info(f"[Admin] {count} pedido(s) marcados como SEPARADO em lote.")
+    return {"ok": True, "atualizados": count}
+
+
+@router.post("/api/auditoria/fluxo/lote/enviado")
+async def api_marcar_enviado_lote(request: Request):
+    """Marca múltiplos pedidos como enviado em lote."""
+    body = await request.json()
+    mercos_ids = body.get("mercos_ids", [])
+    if not mercos_ids:
+        raise HTTPException(status_code=400, detail="mercos_ids é obrigatório.")
+    count = db.fluxo_marcar_enviado_lote(mercos_ids)
+    ip = request.client.host if request.client else ""
+    for mid in mercos_ids:
+        db.admin_registrar_acao("enviado", mid, ip=ip)
+    logger.info(f"[Admin] {count} pedido(s) marcados como ENVIADO em lote.")
+    return {"ok": True, "atualizados": count}
+
+
+@router.post("/api/auditoria/fluxo/{mercos_id}/regredir")
+async def api_regredir_status(request: Request, mercos_id: int):
+    """Volta pedido para status anterior. Body: { 'para': 'separado' | 'processado' }"""
+    body = await request.json()
+    para = body.get("para", "")
+    if para not in ("separado", "processado"):
+        raise HTTPException(status_code=400, detail="'para' deve ser 'separado' ou 'processado'.")
+    ok = db.fluxo_regredir_status(mercos_id, para)
+    if not ok:
+        raise HTTPException(status_code=409, detail=f"Pedido {mercos_id} não pode ser regredido para '{para}' (status atual incompatível).")
+    db.admin_registrar_acao(f"regredido_para_{para}", mercos_id, ip=request.client.host if request.client else "")
+    logger.info(f"[Admin] Pedido {mercos_id} regredido para '{para}' manualmente.")
+    return {"ok": True, "mercos_id": mercos_id, "novo_status": para}
+
+
+@router.post("/api/separacao/lista-rota")
+async def api_lista_rota(request: Request):
+    """Retorna lista simples de pedidos para impressão de rota, sem geocodificação."""
+    body = await request.json()
+    mercos_ids = body.get("mercos_ids", [])
+    if not mercos_ids:
+        raise HTTPException(status_code=400, detail="mercos_ids é obrigatório.")
+    paradas = []
+    for mid in mercos_ids:
+        p = db.fluxo_get_pedido(mid)
+        if not p:
+            continue
+        endereco_parts = [
+            p.get("rua", "") or "",
+            p.get("numero_end", "") or "",
+            p.get("bairro", "") or "",
+            p.get("cidade", "") or "",
+        ]
+        endereco = ", ".join(x for x in endereco_parts if x)
+        paradas.append({
+            "mercos_id": mid,
+            "numero":    p.get("numero", str(mid)),
+            "cliente":   p.get("cliente", ""),
+            "endereco":  endereco,
+            "cep":       p.get("cep", "") or "",
+            "valor":     p.get("valor", 0),
+        })
+    # Monta link Google Maps com endereços em texto (sem coordenadas)
+    enderecos_maps = [p["endereco"] for p in paradas if p["endereco"]]
+    link_maps = ""
+    if enderecos_maps:
+        import urllib.parse
+        partes = "/".join(urllib.parse.quote(e) for e in enderecos_maps)
+        link_maps = f"https://www.google.com/maps/dir/{partes}"
+    return {"ok": True, "paradas": paradas, "link_maps": link_maps}
+
+
 @router.post("/api/auditoria/sequencia/{mercos_id}/resolver")
 async def api_resolver_buraco(mercos_id: int, resolucao: str = "verificado_manualmente"):
     """Marca um buraco de sequência como resolvido."""
