@@ -77,7 +77,14 @@ class VhsysService:
         self._cache_ttl_seg      = int(os.getenv("VHSYS_CACHE_TTL_HORAS", "4")) * 3600
 
         logger.info("[VhsysService] Inicializando...")
-        self._carregar_caches()
+        for _tentativa in range(1, 4):
+            try:
+                self._carregar_caches()
+                break
+            except KeyboardInterrupt:
+                logger.warning(f"[VhsysService] KeyboardInterrupt durante carga de cache (tentativa {_tentativa}/3) — retentando...")
+                if _tentativa == 3:
+                    raise
 
     # ──────────────────────────────────────────────────────────────────────────
     # RETRY HTTP
@@ -447,6 +454,8 @@ class VhsysService:
             "status_pedido":         "Em Aberto",
             "data_pedido":           dados.get("data", ""),
             "obs_pedido":            f"Origem Mercos - Pedido #{numero_pedido} | Cond: {nome_condicao}",
+            "referencia_pedido":     str(numero_pedido),
+            "numero_pedido":         str(numero_pedido),
             "frete_por_pedido":      frete_codigo,
             "transportadora_pedido": frete_nome,
             "id_transportadora":     frete_id,

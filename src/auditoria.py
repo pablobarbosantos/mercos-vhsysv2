@@ -410,3 +410,109 @@ def reconciliar_fim_de_dia():
         )
 
     get_whatsapp().notificar_reconciliacao(stats)
+
+
+# ══════════════════════════════════════════════════════════════
+# 5. VERIFICAÇÃO DE SYNC VHSYS (via referencia_pedido)
+# ══════════════════════════════════════════════════════════════
+
+def verificar_sync_vhsys(vhsys_service) -> None:
+    """
+    Cruza os pedidos do VHSys (campo referencia_pedido = número Mercos)
+    com os pedidos recebidos localmente (pedidos_fluxo).
+
+    Detecta dois tipos de problema:
+      1. Pedido recebido via webhook mas ausente no VHSys (falha no processamento).
+      2. Gap na sequência dos números Mercos no VHSys (webhook nunca chegou).
+
+    Só analisa pedidos com referencia_pedido preenchida — field adicionado em
+    06/04/2026; pedidos anteriores são ignorados.
+
+    Roda a cada 30 min via APScheduler.
+    """
+    from datetime import date, timedelta
+
+    hoje = date.today().isoformat()
+    ontem = (date.today() - timedelta(days=1)).isoformat()
+
+    # ── 1. Pedidos no VHSys com referencia_pedido preenchida (últimos 2 dias) ─
+    try:
+        pedidos_vhsys = vhsys_service.buscar_pedidos_recentes(dias=2)
+    except Exception as e:
+        logger.error(f"[Sync/VHSys] Erro ao buscar pedidos VHSys: {e}")
+        return
+
+    refs_vhsys: set[int] = set()
+    for p in pedidos_vhsys:
+        ref = str(p.get("referencia_pedido") or "").strip()
+        if ref.isdigit() and int(ref) > 0:
+            refs_vhsys.add(int(ref))
+
+    if not refs_vhsys:
+        logger.debug("[Sync/VHSys] Nenhum pedido VHSys com referencia_pedido numérica — ainda sem dados pós-deploy.")
+        return
+
+    # ── 2. Pedidos recebidos localmente nos últimos 2 dias ────────────────────
+    with db.get_conn() as conn:
+        rows = conn.execute("""
+            SELECT CAST(numero AS INTEGER) as num, cliente
+            FROM pedidos_fluxo
+            WHERE (recebido_em LIKE ? OR recebido_em LIKE ?)
+              AND numero IS NOT NULL AND numero != ''
+              AND CAST(numero AS INTEGER) > 0
+        """, (f"{hoje}%", f"{ontem}%")).fetchall()
+
+    nums_fluxo: dict[int, str] = {
+        row["num"]: row["cliente"]
+        for row in rows
+        if row["num"]
+    }
+
+    # ── 3. Pedidos no fluxo local mas fora do VHSys (falha de processamento) ─
+    # Só verifica pedidos cujo número está na faixa coberta pelo VHSys
+    min_ref = min(refs_vhsys)
+    max_ref = max(refs_vhsys)
+
+    faltando_vhsys = {
+        n: c for n, c in nums_fluxo.items()
+        if n >= min_ref and n not in refs_vhsys
+    }
+
+    # ── 4. Gaps na sequência VHSys (webhook nunca chegou) ────────────────────
+    seq_ordenada = sorted(refs_vhsys)
+    gaps_seq: list[int] = []
+    for i in range(len(seq_ordenada) - 1):
+        atual  = seq_ordenada[i]
+        proximo = seq_ordenada[i + 1]
+        for gap in range(atual + 1, proximo):
+            # Só reporta se também não está no fluxo local (webhook realmente perdido)
+            if gap not in nums_fluxo:
+                gaps_seq.append(gap)
+
+    # ── 5. Log e alerta ───────────────────────────────────────────────────────
+    problemas: list[str] = []
+
+    if faltando_vhsys:
+        for num, cliente in sorted(faltando_vhsys.items()):
+            logger.warning(f"[Sync/VHSys] Pedido #{num} ({cliente}) recebido mas ausente no VHSys.")
+        nomes = ", ".join(f"#{n}" for n in sorted(faltando_vhsys))
+        problemas.append(f"Recebidos mas não criados no VHSys: {nomes}")
+
+    if gaps_seq:
+        for gap in gaps_seq:
+            logger.warning(f"[Sync/VHSys] Gap na sequência VHSys: pedido #{gap} não encontrado.")
+        nomes = ", ".join(f"#{n}" for n in gaps_seq)
+        problemas.append(f"Webhook não recebido (gap de sequência): {nomes}")
+
+    if problemas:
+        msg = "⚠️ *Sync VHSys/Mercos*\n" + "\n".join(f"• {p}" for p in problemas)
+        msg += "\nVerifique o painel admin e reprocesse se necessário."
+        try:
+            get_whatsapp().enviar_mensagem(msg)
+        except Exception as e:
+            logger.warning(f"[Sync/VHSys] Falha ao enviar WhatsApp: {e}")
+    else:
+        logger.info(
+            f"[Sync/VHSys] ✅ {len(refs_vhsys)} pedido(s) VHSys verificados "
+            f"(#{min_ref}–#{max_ref}) — nenhum problema encontrado."
+        )

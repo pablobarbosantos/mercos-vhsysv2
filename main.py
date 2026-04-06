@@ -138,6 +138,14 @@ def _job_reconciliacao():
         logger.error(f"[Scheduler/Reconciliacao] Erro: {e}", exc_info=True)
 
 
+def _job_sync_vhsys():
+    try:
+        from src.auditoria import verificar_sync_vhsys
+        verificar_sync_vhsys(mercos_service.vhsys)
+    except Exception as e:
+        logger.error(f"[Scheduler/SyncVHSys] Erro: {e}", exc_info=True)
+
+
 # ── Worker da fila de eventos ──────────────────────────────────────────────
 
 _worker_lock = threading.Lock()
@@ -397,6 +405,7 @@ scheduler.add_job(
 
 scheduler.add_job(_job_sefaz_coletar,    "interval", hours=COMPRAS_SEFAZ_HORAS, id="compras_sefaz",   max_instances=1)
 scheduler.add_job(_job_processar_compras,"interval", minutes=COMPRAS_WORKER_MIN, id="compras_worker",  max_instances=1)
+scheduler.add_job(_job_sync_vhsys,       "interval", minutes=30,                 id="sync_vhsys",      max_instances=1)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI
