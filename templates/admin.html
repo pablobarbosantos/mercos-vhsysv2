@@ -2550,7 +2550,7 @@
       </div>`;
       html += '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:12px">ITENS CONSOLIDADOS (separar por produto):</div>';
       html += data.itens_consolidados.map(it => {
-        const pedidosList = it.pedidos.map(p => `#${p.mercos_id} (${(p.quantidade||0).toLocaleString('pt-BR',{maximumFractionDigits:2})})`).join(', ');
+        const pedidosList = it.pedidos.map(p => `#${p.numero||p.mercos_id} (${(p.quantidade||0).toLocaleString('pt-BR',{maximumFractionDigits:2})})`).join(', ');
         return `<div class="guia-lote-item">
           <div class="qtd-total">${(it.qtd_total||0).toLocaleString('pt-BR',{maximumFractionDigits:2})}</div>
           <div class="info">

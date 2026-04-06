@@ -1149,7 +1149,10 @@ async def api_separacao_guia_lote(ids: str):
             mercos_ids
         ).fetchall()
 
-    # Agrupa itens por produto
+    # Mapa mercos_id → numero para exibir número do pedido nos itens
+    numero_por_id = {p["mercos_id"]: p["numero"] or str(p["mercos_id"]) for p in pedidos}
+
+    # Agrupa itens por produto, consolidando múltiplas linhas do mesmo pedido
     agrupado: dict = {}
     for item in itens:
         chave = item["sku"] or item["nome_produto"] or "?"
@@ -1158,13 +1161,19 @@ async def api_separacao_guia_lote(ids: str):
                 "sku": item["sku"],
                 "nome_produto": item["nome_produto"],
                 "qtd_total": 0,
-                "pedidos": [],
+                "pedidos_qtd": {},  # mercos_id → quantidade acumulada
             }
         agrupado[chave]["qtd_total"] += item["quantidade"] or 0
-        agrupado[chave]["pedidos"].append({
-            "mercos_id": item["mercos_id"],
-            "quantidade": item["quantidade"],
-        })
+        mid = item["mercos_id"]
+        agrupado[chave]["pedidos_qtd"][mid] = agrupado[chave]["pedidos_qtd"].get(mid, 0) + (item["quantidade"] or 0)
+
+    # Converte pedidos_qtd em lista ordenada com numero legível
+    for v in agrupado.values():
+        v["pedidos"] = [
+            {"mercos_id": mid, "numero": numero_por_id.get(mid, str(mid)), "quantidade": qtd}
+            for mid, qtd in sorted(v["pedidos_qtd"].items())
+        ]
+        del v["pedidos_qtd"]
 
     return {
         "pedidos": [dict(p) for p in pedidos],
