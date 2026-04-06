@@ -111,6 +111,20 @@ class MercosService:
                         for it in itens_vhsys
                         if (it.get("desc_produto") or it.get("id_produto"))
                     ]
+                    # Itens de bonificação (preco=0) não vão pro VHSys mas precisam aparecer na guia
+                    for item in dados_mercos.get("itens", []):
+                        if item.get("excluido"):
+                            continue
+                        qtd   = float(item.get("quantidade", 0) or 0)
+                        preco = float(item.get("preco_liquido", 0) or 0)
+                        if qtd > 0 and preco == 0:
+                            itens_para_salvar.append({
+                                "sku":          str(item.get("produto_codigo", "") or "").strip(),
+                                "nome_produto": (item.get("produto_nome", "") or "").strip(),
+                                "quantidade":   qtd,
+                                "valor_unit":   0.0,
+                                "valor_total":  0.0,
+                            })
                     if itens_para_salvar:
                         db.salvar_itens_pedido(mercos_id, itens_para_salvar)
                 except Exception as e:
