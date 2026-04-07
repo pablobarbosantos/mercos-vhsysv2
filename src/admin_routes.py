@@ -168,15 +168,13 @@ async def api_auditoria_fluxo(limit: int = 200):
 
 @router.post("/api/auditoria/verificar-agora")
 async def api_verificar_agora():
-    """Dispara as duas auditorias manualmente (útil para testes)."""
+    """Dispara as auditorias em background e retorna imediatamente."""
     from src.auditoria import verificar_sequencia, verificar_fluxo
-    buracos = verificar_sequencia()
-    alertas = verificar_fluxo()
-    return {
-        "ok": True,
-        "buracos_encontrados": len(buracos),
-        "alertas_fluxo":       len(alertas),
-    }
+    def _rodar():
+        verificar_sequencia()
+        verificar_fluxo()
+    threading.Thread(target=_rodar, daemon=True).start()
+    return {"ok": True, "mensagem": "Auditoria iniciada em background — resultado via WhatsApp/logs."}
 
 
 @router.post("/api/expedicao/verificar-agora")
