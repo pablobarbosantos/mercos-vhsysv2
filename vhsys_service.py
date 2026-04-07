@@ -455,7 +455,6 @@ class VhsysService:
             "data_pedido":           dados.get("data", ""),
             "obs_pedido":            f"Origem Mercos - Pedido #{numero_pedido} | Cond: {nome_condicao}",
             "referencia_pedido":     str(numero_pedido),
-            "numero_pedido":         str(numero_pedido),
             "frete_por_pedido":      frete_codigo,
             "transportadora_pedido": frete_nome,
             "id_transportadora":     frete_id,

@@ -76,7 +76,7 @@ class WhatsAppClient:
             f"✅ *Pedido processado!*\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"📋 Mercos: *#{numero_pedido}*\n"
-            f"🔗 VHSys: *{vhsys_id}*\n"
+            f"🔢 VHSys Nº: *{vhsys_id}*\n"
             f"👤 Cliente: {cliente}\n"
             f"💰 Valor: *R$ {valor:,.2f}*\n"
             f"📅 Cond.: {condicao}\n"
