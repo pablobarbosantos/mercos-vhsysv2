@@ -4,6 +4,8 @@ load_dotenv()
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse
+import requests as _requests
 import logging
 import logging.handlers
 import os
@@ -471,6 +473,21 @@ app.include_router(compras_router)
 @app.get("/")
 async def root():
     return {"status": "online"}
+
+
+@app.get("/qr", response_class=HTMLResponse)
+async def qr_whatsapp():
+    """Proxy para o QR code do WhatsApp (Node.js porta 3000)."""
+    def _fetch():
+        return _requests.get("http://localhost:3000/qr", timeout=5)
+    try:
+        resp = await asyncio.to_thread(_fetch)
+        return HTMLResponse(content=resp.text, status_code=resp.status_code)
+    except Exception:
+        return HTMLResponse(
+            content="<h2>WhatsApp server não disponível (porta 3000)</h2>",
+            status_code=503,
+        )
 
 
 @app.post("/webhook/mercos")
