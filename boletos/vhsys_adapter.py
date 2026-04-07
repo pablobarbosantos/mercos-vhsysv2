@@ -66,15 +66,52 @@ def buscar_contas_abertas() -> list[dict]:
 
 
 def buscar_conta_por_id(id_conta_rec: str) -> dict | None:
-    """Busca uma conta específica pelo ID."""
+    """
+    Busca uma conta específica pelo ID e enriquece com dados do cliente
+    (CNPJ/CPF, endereço) necessários para o payload do boleto SICOOB.
+    """
     try:
         resp = requests.get(
             f"{_BASE_URL}/contas-receber/{id_conta_rec}",
             headers=_HEADERS,
             timeout=_TIMEOUT,
         )
-        if resp.status_code == 200:
-            return resp.json().get("data", {})
+        if resp.status_code != 200:
+            return None
+        data = resp.json().get("data", {})
+        if isinstance(data, list):
+            data = data[0] if data else {}
+
+        # Enriquecer com dados do cliente (CNPJ/CPF, endereço)
+        id_cliente = data.get("id_cliente")
+        if id_cliente:
+            cliente = _buscar_cliente(str(id_cliente))
+            if cliente:
+                # Injeta campos do cliente que o boleto precisa
+                data.setdefault("cpf_cnpj_cliente", cliente.get("cnpj_cliente") or cliente.get("cpf_cliente", ""))
+                data.setdefault("endereco_cliente", cliente.get("endereco_cliente", ""))
+                data.setdefault("numero_end",       cliente.get("numero_cliente", ""))
+                data.setdefault("bairro_cliente",   cliente.get("bairro_cliente", ""))
+                data.setdefault("cidade_cliente",   cliente.get("cidade_cliente", ""))
+                data.setdefault("uf_cliente",       cliente.get("uf_cliente", "MG"))
+                data.setdefault("cep_cliente",      cliente.get("cep_cliente", ""))
+        return data
     except Exception as e:
         logger.error("[VHSysAdapter] Erro ao buscar conta %s: %s", id_conta_rec, e)
+    return None
+
+
+def _buscar_cliente(id_cliente: str) -> dict | None:
+    """Busca dados completos de um cliente no VHSys pelo ID."""
+    try:
+        resp = requests.get(
+            f"{_BASE_URL}/clientes/{id_cliente}",
+            headers=_HEADERS,
+            timeout=_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            data = resp.json().get("data", {})
+            return data[0] if isinstance(data, list) and data else data
+    except Exception as e:
+        logger.debug("[VHSysAdapter] Erro ao buscar cliente %s: %s", id_cliente, e)
     return None
