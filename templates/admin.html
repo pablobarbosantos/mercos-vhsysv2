@@ -1386,8 +1386,8 @@
     const status = document.getElementById('filtro-status').value.toLowerCase();
     const filtrados = _pedidos.filter(p => {
       const matchBusca = !busca ||
-        String(p.mercos_id).includes(busca) ||
-        String(p.vhsys_id || '').toLowerCase().includes(busca);
+        String(p.numero_mercos || p.mercos_id).includes(busca) ||
+        String(p.vhsys_nro || '').toLowerCase().includes(busca);
       const matchStatus = !status || (p.status || '').toLowerCase().startsWith(status);
       return matchBusca && matchStatus;
     });
@@ -1404,7 +1404,8 @@
     tbody.innerHTML = pedidos.map(p => {
       const status     = p.status || 'desconhecido';
       const badgeClass = badgePara(status);
-      const vhsysId    = (p.vhsys_id && p.vhsys_id !== 'erro') ? p.vhsys_id : '—';
+      const mercoNro   = p.numero_mercos || p.mercos_id;
+      const vhsysId    = (p.vhsys_nro && p.vhsys_nro !== 'erro') ? p.vhsys_nro : '—';
       const dataFmt    = p.processado_em ? formatarData(p.processado_em) : '—';
       const erroHtml   = p.erro
         ? `<span class="erro-msg" title="${escHtml(p.erro)}">${escHtml(p.erro)}</span>`
@@ -1414,7 +1415,7 @@
         ? `<button class="reprocess" onclick="reprocessar(${p.mercos_id}, this)">⟳ Reprocessar</button>`
         : '—';
       return `<tr>
-        <td class="id-cell">#${p.mercos_id}</td>
+        <td class="id-cell">#${mercoNro}</td>
         <td class="id-cell ${vhsysId !== '—' ? 'vhsys-id' : ''}">${vhsysId}</td>
         <td style="color:var(--muted2);white-space:nowrap;font-size:11px">${dataFmt}</td>
         <td><span class="badge ${badgeClass}">${status}</span></td>

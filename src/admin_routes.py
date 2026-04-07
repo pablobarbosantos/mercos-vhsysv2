@@ -50,11 +50,13 @@ def _listar_pedidos(limit: int = 200) -> list[dict]:
         rows = conn.execute("""
             SELECT
                 p.mercos_id,
-                p.vhsys_id,
+                COALESCE(f.numero, CAST(p.mercos_id AS TEXT)) AS numero_mercos,
+                COALESCE(p.vhsys_nro, p.vhsys_id)            AS vhsys_nro,
                 p.processado_em,
                 p.status,
                 e.erro
             FROM pedidos_processados p
+            LEFT JOIN pedidos_fluxo f ON f.mercos_id = p.mercos_id
             LEFT JOIN (
                 SELECT referencia_id, erro,
                        ROW_NUMBER() OVER (PARTITION BY referencia_id ORDER BY ocorrido_em DESC) AS rn

@@ -153,6 +153,10 @@ def init_db():
             conn.execute(f"ALTER TABLE pedidos_fluxo ADD COLUMN {col} {typedef}")
         except Exception:
             pass  # coluna já existe
+    try:
+        conn.execute("ALTER TABLE pedidos_processados ADD COLUMN vhsys_nro TEXT")
+    except Exception:
+        pass  # coluna já existe
 
     logger.info("[DB] Banco inicializado.")
 
@@ -169,14 +173,14 @@ def pedido_ja_processado(mercos_id: int) -> bool:
     return row is not None
 
 
-def salvar_pedido_processado(mercos_id: int, vhsys_id: str, status: str = "ok"):
+def salvar_pedido_processado(mercos_id: int, vhsys_id: str, status: str = "ok", vhsys_nro: str = None):
     """Regra Mercos: obrigatório gravar ID e timestamp de retorno após POST."""
     with get_conn() as conn:
         conn.execute("""
-            INSERT OR REPLACE INTO pedidos_processados (mercos_id, vhsys_id, processado_em, status)
-            VALUES (?, ?, ?, ?)
-        """, (mercos_id, str(vhsys_id), datetime.now(timezone.utc).isoformat(), status))
-    logger.debug(f"[DB] Pedido Mercos {mercos_id} → vhsys {vhsys_id} salvo.")
+            INSERT OR REPLACE INTO pedidos_processados (mercos_id, vhsys_id, vhsys_nro, processado_em, status)
+            VALUES (?, ?, ?, ?, ?)
+        """, (mercos_id, str(vhsys_id), vhsys_nro, datetime.now(timezone.utc).isoformat(), status))
+    logger.debug(f"[DB] Pedido Mercos {mercos_id} → vhsys {vhsys_id} (nro={vhsys_nro}) salvo.")
 
 
 def registrar_erro(entidade: str, referencia_id: str, erro: str):

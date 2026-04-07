@@ -71,7 +71,7 @@ class MercosService:
                 vhsys_id      = str(pedido_data.get("id_ped") or "desconhecido")
                 vhsys_numero  = str(pedido_data.get("id_pedido") or vhsys_id)
                 valor_total   = float(pedido_data.get("valor_total_nota", 0) or 0)
-                db.salvar_pedido_processado(mercos_id, vhsys_id, status="ok")
+                db.salvar_pedido_processado(mercos_id, vhsys_id, status="ok", vhsys_nro=vhsys_numero)
                 db.fluxo_marcar_processado(mercos_id)
                 logger.info(f"[MercosService] OK Pedido Mercos #{numero} → VHSYS #{vhsys_numero} (id_ped={vhsys_id})")
 
