@@ -66,6 +66,10 @@ from compras import database as compras_db
 compras_db.init_db()
 logger.info("[Startup] Banco compras OK.")
 
+from boletos import database as boletos_db
+boletos_db.init_db()
+logger.info("[Startup] Banco boletos OK.")
+
 mercos_service = MercosService()
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -231,6 +235,24 @@ def _job_processar_compras():
             logger.info(f"[Compras/Worker] {resultado}")
     except Exception as e:
         logger.error(f"[Compras/Worker] Erro: {e}", exc_info=True)
+
+
+# ── Boletos SICOOB ────────────────────────────────────────────────────────────
+
+def _job_relatorio_boletos():
+    try:
+        from boletos.whatsapp_report import relatorio_boletos
+        relatorio_boletos()
+    except Exception as e:
+        logger.error(f"[BoletoReport] Erro: {e}", exc_info=True)
+
+
+def _job_marcar_vencidos_boletos():
+    try:
+        from boletos.database import marcar_vencidos
+        marcar_vencidos()
+    except Exception as e:
+        logger.error(f"[BoletoVencidos] Erro: {e}", exc_info=True)
 
 
 # ── Recuperação automática de histórico ──────────────────────────────────────
@@ -408,6 +430,16 @@ scheduler.add_job(
 scheduler.add_job(_job_sefaz_coletar,    "interval", hours=COMPRAS_SEFAZ_HORAS, id="compras_sefaz",   max_instances=1)
 scheduler.add_job(_job_processar_compras,"interval", minutes=COMPRAS_WORKER_MIN, id="compras_worker",  max_instances=1)
 scheduler.add_job(_job_sync_vhsys,       "interval", minutes=30,                 id="sync_vhsys",      max_instances=1)
+scheduler.add_job(
+    _job_relatorio_boletos,
+    CronTrigger(hour=7, minute=30, day_of_week="mon-fri", timezone="America/Sao_Paulo"),
+    id="relatorio_boletos_manha"
+)
+scheduler.add_job(
+    _job_marcar_vencidos_boletos,
+    CronTrigger(hour=0, minute=5, timezone="America/Sao_Paulo"),
+    id="boletos_marcar_vencidos"
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI
@@ -464,6 +496,10 @@ app.include_router(admin_router, dependencies=[Depends(verificar_admin)])
 
 from compras.admin_routes import router as compras_router
 app.include_router(compras_router)
+
+from boletos.admin_routes import router as boletos_router, webhook_router as boletos_webhook_router
+app.include_router(boletos_router, dependencies=[Depends(verificar_admin)])
+app.include_router(boletos_webhook_router)  # sem auth — SICOOB chama diretamente
 
 
 # ──────────────────────────────────────────────────────────────────────────────

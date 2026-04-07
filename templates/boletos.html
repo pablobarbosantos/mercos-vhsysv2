@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boletos SICOOB</title>
+  <style>
+    :root {
+      --bg: #080b10; --bg2: #0d1117; --bg3: #161b22;
+      --border: #30363d; --accent: #00d4ff; --accent2: #0099bb;
+      --text: #e6edf3; --text2: #8b949e; --green: #3fb950;
+      --red: #f85149; --yellow: #d29922; --blue: #58a6ff;
+      --radius: 8px; --font: 'Space Mono', 'Courier New', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; }
+
+    header {
+      background: var(--bg3); border-bottom: 1px solid var(--border);
+      padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 16px; color: var(--accent); }
+    header span { color: var(--text2); font-size: 11px; }
+
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 24px; }
+    .tab {
+      padding: 12px 20px; cursor: pointer; color: var(--text2); font-size: 12px;
+      border-bottom: 2px solid transparent; transition: all .2s; user-select: none;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .pane { display: none; padding: 20px 24px; }
+    .pane.active { display: block; }
+
+    /* ─── Toolbar ─────────────────────────────────────────────── */
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar select, .toolbar input {
+      background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 10px; border-radius: var(--radius); font-family: var(--font); font-size: 12px;
+    }
+    .toolbar label { color: var(--text2); font-size: 11px; }
+
+    /* ─── Botões ──────────────────────────────────────────────── */
+    .btn {
+      padding: 6px 14px; border-radius: var(--radius); border: none; cursor: pointer;
+      font-family: var(--font); font-size: 11px; font-weight: bold; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-success { background: var(--green); color: #000; }
+    .btn-danger  { background: var(--red); color: #fff; }
+    .btn-ghost   { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn-sm { padding: 4px 10px; font-size: 10px; }
+
+    /* ─── Tabelas ─────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: var(--bg3); color: var(--text2); font-size: 10px; text-transform: uppercase;
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg3); }
+    tbody td { padding: 8px 12px; vertical-align: middle; }
+    tbody tr.emitido-ok { background: rgba(63, 185, 80, 0.06); }
+
+    /* ─── Badge de status ─────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 10px; font-weight: bold; text-transform: uppercase;
+    }
+    .badge-emitido  { background: rgba(88,166,255,.15); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-pago     { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green); }
+    .badge-vencido  { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red); }
+    .badge-baixado  { background: rgba(139,148,158,.15); color: var(--text2); border: 1px solid var(--border); }
+
+    /* ─── Input de data inline ────────────────────────────────── */
+    input[type="date"] {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 4px 8px; border-radius: 4px; font-family: var(--font); font-size: 11px;
+    }
+    input[type="date"]:focus { outline: 1px solid var(--accent); }
+
+    /* ─── Formulário de config ────────────────────────────────── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 720px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-size: 11px; color: var(--text2); }
+    .form-group input, .form-group select, .form-group textarea {
+      background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 10px; border-radius: var(--radius); font-family: var(--font); font-size: 12px;
+    }
+    .form-group input:focus, .form-group textarea:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-save { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+
+    /* ─── Alertas ─────────────────────────────────────────────── */
+    .alert {
+      padding: 10px 14px; border-radius: var(--radius); font-size: 12px;
+      margin-bottom: 14px; display: none;
+    }
+    .alert.show { display: block; }
+    .alert-success { background: rgba(63,185,80,.12); border: 1px solid var(--green); color: var(--green); }
+    .alert-error   { background: rgba(248,81,73,.12); border: 1px solid var(--red); color: var(--red); }
+    .alert-info    { background: rgba(0,212,255,.08); border: 1px solid var(--accent); color: var(--accent); }
+
+    /* ─── Empty state ─────────────────────────────────────────── */
+    .empty { text-align: center; padding: 40px; color: var(--text2); }
+    .empty big { font-size: 32px; display: block; margin-bottom: 8px; }
+
+    /* ─── Loading spinner ─────────────────────────────────────── */
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Confirm dialog ──────────────────────────────────────── */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; display: none; align-items: center; justify-content: center; }
+    .overlay.show { display: flex; }
+    .dialog { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 24px; max-width: 400px; width: 90%; }
+    .dialog h3 { color: var(--accent); margin-bottom: 12px; }
+    .dialog p { color: var(--text2); margin-bottom: 20px; font-size: 12px; }
+    .dialog-btns { display: flex; gap: 10px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏦 Boletos SICOOB</h1>
+  <span>Emissão e gestão de cobranças bancárias</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('emitir')">📤 Emitir</div>
+  <div class="tab" onclick="showTab('emitidos')">📋 Emitidos</div>
+  <div class="tab" onclick="showTab('config')">⚙️ Configurações</div>
+</div>
+
+<!-- ─────────────────── ABA: EMITIR ─────────────────── -->
+<div id="pane-emitir" class="pane active">
+  <div id="alert-emitir" class="alert"></div>
+  <div class="toolbar">
+    <button class="btn btn-ghost" onclick="carregarPendentes()">🔄 Atualizar</button>
+    <span id="info-pendentes" style="color:var(--text2);font-size:11px;"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table id="tbl-pendentes">
+      <thead>
+        <tr>
+          <th>Referência / Pedido</th>
+          <th>Cliente</th>
+          <th>Valor</th>
+          <th>Vencimento Sugerido</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-pendentes">
+        <tr><td colspan="5" class="empty"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ─────────────────── ABA: EMITIDOS ─────────────────── -->
+<div id="pane-emitidos" class="pane">
+  <div id="alert-emitidos" class="alert"></div>
+  <div class="toolbar">
+    <label>Status:</label>
+    <select id="filtro-status" onchange="carregarEmitidos()">
+      <option value="">Todos</option>
+      <option value="emitido">Emitido</option>
+      <option value="pago">Pago</option>
+      <option value="vencido">Vencido</option>
+      <option value="baixado">Baixado</option>
+    </select>
+    <button class="btn btn-ghost" onclick="carregarEmitidos()">🔄 Atualizar</button>
+    <span id="info-emitidos" style="color:var(--text2);font-size:11px;"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Nosso Nº</th>
+          <th>Ref.</th>
+          <th>Cliente</th>
+          <th>Valor</th>
+          <th>Vencimento</th>
+          <th>Emissão</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-emitidos">
+        <tr><td colspan="8" class="empty"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ─────────────────── ABA: CONFIG ─────────────────── -->
+<div id="pane-config" class="pane">
+  <div id="alert-config" class="alert"></div>
+  <h2 style="color:var(--accent);font-size:14px;margin-bottom:16px;">Configurações globais dos boletos</h2>
+  <p style="color:var(--text2);font-size:11px;margin-bottom:20px;">
+    Esses valores são aplicados a todos os boletos emitidos. Altere e salve uma vez — todos os próximos boletos seguirão este padrão.
+  </p>
+
+  <form id="form-config" onsubmit="salvarConfig(event)" class="form-grid">
+    <div class="form-group">
+      <label>Espécie do Título</label>
+      <select id="cfg-especie_titulo" name="especie_titulo">
+        <option value="DM">DM — Duplicata Mercantil</option>
+        <option value="DS">DS — Duplicata de Serviço</option>
+        <option value="NP">NP — Nota Promissória</option>
+        <option value="RC">RC — Recibo</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Modalidade (código SICOOB)</label>
+      <select id="cfg-codigo_modalidade" name="codigo_modalidade">
+        <option value="1">1 — Com Registro (boleto normal)</option>
+        <option value="3" selected>3 — Autoenvolvável (3 vias)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Juros (% ao mês)</label>
+      <input type="number" id="cfg-juros_percentual" name="juros_percentual" step="0.01" min="0" max="100" value="1.00">
+    </div>
+    <div class="form-group">
+      <label>Multa (% por atraso)</label>
+      <input type="number" id="cfg-multa_percentual" name="multa_percentual" step="0.01" min="0" max="100" value="2.00">
+    </div>
+    <div class="form-group">
+      <label>Protestar após (dias corridos)</label>
+      <input type="number" id="cfg-dias_protesto" name="dias_protesto" min="0" max="365" value="3">
+    </div>
+    <div class="form-group">
+      <label>Baixar após (dias do vencimento)</label>
+      <input type="number" id="cfg-dias_baixa" name="dias_baixa" min="0" max="365" value="60">
+    </div>
+    <div class="form-group">
+      <label>Carteira</label>
+      <input type="number" id="cfg-carteira" name="carteira" value="1" min="1">
+    </div>
+    <div class="form-group">
+      <label>Beneficiário (nome impresso no PDF)</label>
+      <input type="text" id="cfg-beneficiario" name="beneficiario" placeholder="Ex: PABLO AGRO LTDA" maxlength="40">
+    </div>
+    <div class="form-group full">
+      <label>Local de Pagamento (1ª linha das instruções)</label>
+      <input type="text" id="cfg-local_pagamento" name="local_pagamento" maxlength="80"
+             placeholder="Pagável em qualquer banco até o vencimento">
+    </div>
+    <div class="form-save full">
+      <button type="submit" class="btn btn-primary">💾 Salvar Configurações</button>
+      <span id="cfg-status" style="font-size:11px;color:var(--text2);"></span>
+    </div>
+  </form>
+</div>
+
+<!-- ─────────────────── CONFIRM DIALOG ─────────────────── -->
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h3 id="dlg-title">Confirmação</h3>
+    <p id="dlg-body"></p>
+    <div class="dialog-btns">
+      <button class="btn btn-ghost" onclick="fecharDialog()">Cancelar</button>
+      <button class="btn btn-danger" id="dlg-confirm">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Navegação ────────────────────────────────────────────────────────────────
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['emitir','emitidos','config'][i]===id));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+  if (id==='emitir') carregarPendentes();
+  if (id==='emitidos') carregarEmitidos();
+  if (id==='config') carregarConfig();
+}
+
+// ─── Utilitários ─────────────────────────────────────────────────────────────
+function fmtValor(v) {
+  return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+}
+function fmtData(d) {
+  if (!d) return '—';
+  const [y,m,dd] = d.split('-');
+  return `${dd}/${m}/${y}`;
+}
+function isoHoje() {
+  return new Date().toISOString().slice(0,10);
+}
+function showAlert(id, msg, tipo='error') {
+  const el = document.getElementById('alert-'+id);
+  el.className = `alert alert-${tipo} show`;
+  el.textContent = msg;
+  setTimeout(()=>el.classList.remove('show'), 5000);
+}
+function badgeStatus(s) {
+  const map = {emitido:'badge-emitido',pago:'badge-pago',vencido:'badge-vencido',baixado:'badge-baixado'};
+  return `<span class="badge ${map[s]||'badge-emitido'}">${s}</span>`;
+}
+
+// ─── Confirm dialog ───────────────────────────────────────────────────────────
+let _dlgCallback = null;
+function confirmar(titulo, corpo, cb) {
+  document.getElementById('dlg-title').textContent = titulo;
+  document.getElementById('dlg-body').textContent = corpo;
+  _dlgCallback = cb;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('dlg-confirm').onclick = () => { fecharDialog(); cb(); };
+}
+function fecharDialog() { document.getElementById('overlay').classList.remove('show'); }
+
+// ─── ABA EMITIR ──────────────────────────────────────────────────────────────
+async function carregarPendentes() {
+  document.getElementById('tbody-pendentes').innerHTML =
+    '<tr><td colspan="5" class="empty"><div class="spinner"></div></td></tr>';
+  document.getElementById('info-pendentes').textContent = '';
+
+  try {
+    const r = await fetch('/boletos/api/pendentes');
+    const contas = await r.json();
+    if (!r.ok) throw new Error(contas.detail || JSON.stringify(contas));
+
+    const pendentes = contas.filter(c => !c.boleto_ja_emitido);
+    document.getElementById('info-pendentes').textContent = `${pendentes.length} conta(s) sem boleto`;
+
+    if (pendentes.length === 0) {
+      document.getElementById('tbody-pendentes').innerHTML =
+        '<tr><td colspan="5" class="empty"><big>✅</big>Nenhuma conta pendente de boleto</td></tr>';
+      return;
+    }
+
+    const rows = pendentes.map(c => {
+      const id = c.id_conta_rec;
+      const venc = c.vencimento_rec || isoHoje();
+      const valor = parseFloat(c.valor_rec || 0);
+      return `
+        <tr id="row-${id}">
+          <td>${c.n_documento_rec || c.identificacao || id}</td>
+          <td>${(c.nome_cliente||'').slice(0,30)}</td>
+          <td>${fmtValor(valor)}</td>
+          <td><input type="date" id="venc-${id}" value="${venc}" min="${isoHoje()}"></td>
+          <td>
+            <button class="btn btn-primary btn-sm" id="btn-${id}" onclick="emitirBoleto('${id}', ${valor})">
+              Emitir
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+    document.getElementById('tbody-pendentes').innerHTML = rows;
+  } catch (e) {
+    showAlert('emitir', 'Erro ao carregar pendentes: ' + e.message);
+    document.getElementById('tbody-pendentes').innerHTML =
+      '<tr><td colspan="5" class="empty">Erro ao carregar. Verifique se o servidor VHSys está acessível.</td></tr>';
+  }
+}
+
+async function emitirBoleto(contaId, valor) {
+  const vencInput = document.getElementById(`venc-${contaId}`);
+  const dataVenc = vencInput ? vencInput.value : isoHoje();
+  const btn = document.getElementById(`btn-${contaId}`);
+  btn.disabled = true;
+  btn.textContent = '⏳';
+
+  try {
+    const r = await fetch('/boletos/api/emitir', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({vhsys_conta_id: contaId, data_vencimento: dataVenc, valor})
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+
+    const nossoNum = data.nosso_numero;
+    const row = document.getElementById(`row-${contaId}`);
+    row.classList.add('emitido-ok');
+    row.cells[4].innerHTML = `
+      <span style="color:var(--green);font-size:11px;">✅ Nº ${nossoNum}</span>
+      <button class="btn btn-ghost btn-sm" onclick="window.open('/boletos/api/${nossoNum}/pdf','_blank')">🖨️ Imprimir</button>`;
+    showAlert('emitir', `✅ Boleto Nº ${nossoNum} emitido com sucesso!`, 'success');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Emitir';
+    showAlert('emitir', 'Erro: ' + e.message);
+  }
+}
+
+// ─── ABA EMITIDOS ─────────────────────────────────────────────────────────────
+async function carregarEmitidos() {
+  document.getElementById('tbody-emitidos').innerHTML =
+    '<tr><td colspan="8" class="empty"><div class="spinner"></div></td></tr>';
+  const status = document.getElementById('filtro-status').value;
+  const url = '/boletos/api/emitidos' + (status ? `?status=${status}` : '');
+
+  try {
+    const r = await fetch(url);
+    const lista = await r.json();
+    if (!r.ok) throw new Error(JSON.stringify(lista));
+
+    document.getElementById('info-emitidos').textContent = `${lista.length} boleto(s)`;
+
+    if (lista.length === 0) {
+      document.getElementById('tbody-emitidos').innerHTML =
+        '<tr><td colspan="8" class="empty"><big>📋</big>Nenhum boleto encontrado</td></tr>';
+      return;
+    }
+
+    const rows = lista.map(b => `
+      <tr>
+        <td><b>${b.nosso_numero}</b></td>
+        <td>${b.vhsys_nro || '—'}</td>
+        <td>${(b.cliente_nome||'').slice(0,28)}</td>
+        <td>${fmtValor(b.valor_nominal)}</td>
+        <td>${fmtData(b.data_vencimento)}</td>
+        <td>${fmtData(b.emitido_em ? b.emitido_em.slice(0,10) : '')}</td>
+        <td>${badgeStatus(b.status)}</td>
+        <td style="white-space:nowrap;display:flex;gap:4px;">
+          <button class="btn btn-ghost btn-sm" onclick="window.open('/boletos/api/${b.nosso_numero}/pdf','_blank')" title="Imprimir PDF">🖨️</button>
+          ${b.status==='emitido'||b.status==='vencido' ? `
+            <button class="btn btn-danger btn-sm" onclick="confirmarBaixa(${b.nosso_numero},'${b.cliente_nome}')" title="Dar baixa">🗑️</button>
+          ` : ''}
+        </td>
+      </tr>`).join('');
+    document.getElementById('tbody-emitidos').innerHTML = rows;
+  } catch (e) {
+    showAlert('emitidos', 'Erro ao carregar: ' + e.message);
+  }
+}
+
+function confirmarBaixa(nossoNum, cliente) {
+  confirmar('Dar Baixa no Boleto',
+    `Tem certeza que deseja dar baixa no boleto Nº ${nossoNum} (${cliente})? Esta ação cancela o boleto no SICOOB.`,
+    async () => {
+      try {
+        const r = await fetch(`/boletos/api/${nossoNum}?motivo=BAIXA_MANUAL`, {method:'DELETE'});
+        if (!r.ok) throw new Error(await r.text());
+        showAlert('emitidos', `Boleto ${nossoNum} baixado.`, 'success');
+        carregarEmitidos();
+      } catch(e) {
+        showAlert('emitidos', 'Erro ao baixar: ' + e.message);
+      }
+    }
+  );
+}
+
+// ─── ABA CONFIG ───────────────────────────────────────────────────────────────
+async function carregarConfig() {
+  try {
+    const r = await fetch('/boletos/api/config');
+    const cfg = await r.json();
+    const campos = ['especie_titulo','juros_percentual','multa_percentual',
+                    'dias_protesto','dias_baixa','codigo_modalidade','carteira',
+                    'local_pagamento','beneficiario'];
+    campos.forEach(k => {
+      const el = document.getElementById('cfg-'+k);
+      if (el && cfg[k] !== undefined && cfg[k] !== null) el.value = cfg[k];
+    });
+  } catch(e) {
+    showAlert('config', 'Erro ao carregar configurações: ' + e.message);
+  }
+}
+
+async function salvarConfig(e) {
+  e.preventDefault();
+  const campos = ['especie_titulo','juros_percentual','multa_percentual',
+                  'dias_protesto','dias_baixa','codigo_modalidade','carteira',
+                  'local_pagamento','beneficiario'];
+  const data = {};
+  campos.forEach(k => {
+    const el = document.getElementById('cfg-'+k);
+    if (el) data[k] = el.value;
+  });
+
+  try {
+    const r = await fetch('/boletos/api/config', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const st = document.getElementById('cfg-status');
+    st.style.color = 'var(--green)';
+    st.textContent = '✅ Salvo em ' + new Date().toLocaleTimeString('pt-BR');
+    setTimeout(()=>st.textContent='', 4000);
+  } catch(e) {
+    showAlert('config', 'Erro ao salvar: ' + e.message);
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+carregarPendentes();
+</script>
+</body>
+</html>
