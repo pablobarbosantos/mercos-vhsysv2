@@ -76,27 +76,58 @@ def get_clientes(q: str = ""):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VHSys — contas pendentes
+# Pedidos do banco principal (sync.db) — lista para emissão de boleto
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/api/pendentes")
-def get_pendentes():
+@router.get("/api/pedidos")
+def get_pedidos(limit: int = 100):
+    """Lista últimos pedidos do VHSys para emissão de boleto."""
     try:
-        contas = vhsys_adapter.buscar_contas_abertas()
-        # Filtrar apenas as sem boleto emitido e que têm forma de pagamento boleto
-        pendentes = [
-            c for c in contas
-            if not c.get("boleto_ja_emitido")
-        ]
-        return pendentes
+        pedidos = vhsys_adapter.buscar_pedidos_recentes(limit=limit)
     except Exception as e:
-        logger.error("[Boletos/pendentes] %s", e)
+        logger.error("[Boletos/pedidos] %s", e)
         raise HTTPException(status_code=502, detail=str(e))
+
+    emitidos = db.listar_conta_ids_emitidos()
+    resultado = []
+    for p in pedidos:
+        id_ped = str(p.get("id_ped", ""))
+        p["boleto_ja_emitido"] = f"PEDIDO-{id_ped}" in emitidos
+        resultado.append(p)
+    return resultado
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Emissão
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/api/emitir-por-pedido", status_code=201)
+async def post_emitir_por_pedido(request: Request):
+    data = await request.json()
+    vhsys_pedido_id = str(data.get("vhsys_pedido_id", ""))
+    vhsys_cliente_id = str(data.get("vhsys_cliente_id", ""))
+    valor = data.get("valor")
+    referencia = data.get("referencia", "")
+    data_vencimento = data.get("data_vencimento", "")
+    if not vhsys_pedido_id or not vhsys_cliente_id or not valor or not data_vencimento:
+        raise HTTPException(status_code=400, detail="vhsys_pedido_id, vhsys_cliente_id, valor e data_vencimento são obrigatórios")
+    try:
+        boleto = boleto_service.emitir_por_pedido(
+            vhsys_pedido_id=vhsys_pedido_id,
+            vhsys_cliente_id=vhsys_cliente_id,
+            valor=float(valor),
+            referencia=referencia,
+            data_vencimento=data_vencimento,
+        )
+        return boleto
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error("[Boletos/emitir-por-pedido] %s", e, exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e))
+
 
 @router.post("/api/emitir", status_code=201)
 async def post_emitir(request: Request):

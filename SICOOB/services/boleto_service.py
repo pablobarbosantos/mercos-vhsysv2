@@ -112,27 +112,34 @@ def segunda_via(nosso_numero: str) -> dict:
 
 
 def segunda_via_pdf(nosso_numero: str) -> bytes:
-    """Retorna o PDF oficial do boleto via segunda via SICOOB (base64 decodificado)."""
+    """Retorna o PDF oficial do boleto via segunda via SICOOB.
+    modeloImpressao=2 = A4 sem envelopamento 3 vias.
+    """
     import base64
+    scope = "boletos_consulta"
+    session, token = _session_e_token(scope)
+    url = f"{_BASE_URL}{_BOLETOS_PATH}/segunda-via"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {
+        "numeroCliente": config.NUMERO_CLIENTE,
+        "codigoModalidade": 1,
+        "nossoNumero": int(nosso_numero),
+        "gerarPdf": "true",
+        "modeloImpressao": 2,  # 1=A4 1via, 2=A4 3vias, 3=A4 com envelopamento
+    }
     try:
-        resultado = _boleto_api().emitir_segunda_via(
-            numero_cliente=config.NUMERO_CLIENTE,
-            codigo_modalidade=1,
-            nosso_numero=int(nosso_numero),
-            gerar_pdf=True,
+        resp = session.get(url, params=params, headers=headers, timeout=config.TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        inner = data.get("resultado", data)
+        pdf_b64 = (
+            inner.get("pdfBoleto")
+            or inner.get("pdf")
+            or inner.get("pdfBase64")
         )
-        # API retorna o PDF em base64 no campo 'pdfBoleto' dentro de 'resultado'
-        if isinstance(resultado, dict):
-            inner = resultado.get("resultado", resultado)
-            pdf_b64 = (
-                inner.get("pdfBoleto")
-                or inner.get("pdf")
-                or inner.get("pdfBase64")
-                or inner.get("arquivoPdf")
-            )
-            if pdf_b64:
-                return base64.b64decode(pdf_b64)
-        raise BoletoError("Campo PDF não encontrado na resposta da segunda via")
+        if not pdf_b64:
+            raise BoletoError(f"Campo PDF não encontrado. Campos disponíveis: {list(inner.keys())}")
+        return base64.b64decode(pdf_b64)
     except BoletoError:
         raise
     except Exception as e:

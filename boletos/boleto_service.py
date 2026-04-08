@@ -85,11 +85,19 @@ def construir_payload(nosso_numero: int, config: dict, conta: dict, data_vencime
         },
     }
 
-    # Protesto (opcional)
-    dias_protesto = config.get("dias_protesto", 0)
-    if dias_protesto and int(dias_protesto) > 0:
-        payload["codigoProtesto"] = 1          # 1 = protestar dias corridos
-        payload["numeroDiasProtesto"] = int(dias_protesto)
+    # Instruções impressas no boleto (mensagensInstrucao)
+    data_acrescimos = (datetime.strptime(data_vencimento, "%Y-%m-%d") + timedelta(days=1)).strftime("%d/%m/%Y")
+    instrucoes = []
+    juros_pct = float(config.get("juros_percentual", 0))
+    multa_pct = float(config.get("multa_percentual", 0))
+    if juros_pct > 0:
+        juros_dia = juros_pct / 30
+        juros_str = f"{juros_dia:.2f}".replace(".", ",")
+        instrucoes.append(f"A partir {data_acrescimos} Juros {juros_str}%/dia.")
+    if multa_pct > 0:
+        instrucoes.append(f"A partir {data_acrescimos} Multa de {multa_pct:.0f}%.")
+    instrucoes.append("Não conceder desconto.")
+    payload["mensagensInstrucao"] = instrucoes
 
     return payload
 
@@ -235,6 +243,86 @@ def emitir_avulso(
 
     boleto = db.get_boleto_by_conta_id(synthetic_id)
     logger.info("[BoletoService] ✅ Boleto avulso emitido: nossoNumero=%s", nosso_numero)
+    return boleto
+
+
+def emitir_por_pedido(
+    vhsys_pedido_id: str,
+    vhsys_cliente_id: str,
+    valor: float,
+    referencia: str,
+    data_vencimento: str,
+) -> dict:
+    """
+    Emite boleto vinculado a um pedido VHSys.
+    Busca dados completos do cliente pelo id_cliente.
+    vhsys_conta_id salvo como 'PEDIDO-{vhsys_pedido_id}'.
+    """
+    synthetic_id = f"PEDIDO-{vhsys_pedido_id}"
+
+    # Idempotência
+    existente = db.get_boleto_by_conta_id(synthetic_id)
+    if existente:
+        raise ValueError(f"Boleto já emitido para pedido VHSys {vhsys_pedido_id} (nossoNumero={existente['nosso_numero']})")
+
+    if valor <= 0:
+        raise ValueError(f"Valor do pedido inválido: {valor}")
+
+    # Buscar cliente no VHSys pelo ID
+    from boletos.vhsys_adapter import buscar_cliente_por_id
+    cliente = buscar_cliente_por_id(vhsys_cliente_id)
+    if not cliente:
+        raise ValueError(f"Cliente {vhsys_cliente_id} não encontrado no VHSys")
+
+    config = db.get_config()
+    nosso_numero = db.next_nosso_numero()
+
+    conta = {
+        "valor_rec": valor,
+        "nome_cliente": (cliente.get("razao_cliente") or cliente.get("nome_cliente") or "").strip(),
+        "cpf_cnpj_cliente": cliente.get("cnpj_cliente") or cliente.get("cpf_cliente") or "",
+        "endereco_cliente": cliente.get("endereco_cliente", ""),
+        "bairro_cliente": cliente.get("bairro_cliente", ""),
+        "cidade_cliente": cliente.get("cidade_cliente", ""),
+        "uf_cliente": cliente.get("uf_cliente", "MG"),
+        "cep_cliente": cliente.get("cep_cliente", ""),
+        "n_documento_rec": referencia or f"Pedido {vhsys_pedido_id}",
+    }
+
+    payload = construir_payload(nosso_numero, config, conta, data_vencimento)
+    logger.info("[BoletoService] Emitindo por pedido VHSys nossoNumero=%s pedido=%s", nosso_numero, vhsys_pedido_id)
+
+    try:
+        resp = requests.post(f"{_SICOOB_URL}/boletos", json=payload, timeout=_TIMEOUT)
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError("SICOOB app (porta 8001) não está rodando. Inicie com: python SICOOB/app.py")
+
+    if resp.status_code not in (200, 201):
+        body = resp.text[:500]
+        logger.error("[BoletoService] Erro SICOOB %s: %s", resp.status_code, body)
+        raise ValueError(f"SICOOB rejeitou a emissão (HTTP {resp.status_code}): {body}")
+
+    sicoob_data = resp.json()
+    resultado = sicoob_data.get("resultado", sicoob_data)
+
+    cpf_cnpj = _so_digitos(conta["cpf_cnpj_cliente"])
+    db.salvar_boleto({
+        "vhsys_conta_id": synthetic_id,
+        "vhsys_nro": referencia or vhsys_pedido_id,
+        "nosso_numero": nosso_numero,
+        "cliente_nome": conta["nome_cliente"],
+        "cliente_cpf_cnpj": cpf_cnpj,
+        "valor_nominal": round(valor, 2),
+        "data_vencimento": data_vencimento,
+        "data_emissao": datetime.now().strftime("%Y-%m-%d"),
+        "linha_digitavel": resultado.get("linhaDigitavel"),
+        "codigo_barras": resultado.get("codigoBarras"),
+        "qr_code": resultado.get("qrCode"),
+        "sicoob_json": resultado,
+    })
+
+    boleto = db.get_boleto_by_conta_id(synthetic_id)
+    logger.info("[BoletoService] ✅ Boleto por pedido emitido: nossoNumero=%s", nosso_numero)
     return boleto
 
 

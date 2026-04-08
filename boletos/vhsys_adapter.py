@@ -33,6 +33,8 @@ def _get(path: str, params: dict) -> list[dict]:
             logger.warning("[VHSysAdapter] HTTP %s em %s", resp.status_code, path)
             break
         itens = resp.json().get("data", [])
+        if isinstance(itens, dict):
+            itens = [itens]
         if not itens:
             break
         resultados.extend(itens)
@@ -137,6 +139,44 @@ def buscar_clientes(q: str) -> list[dict]:
 def buscar_cliente_por_id(id_cliente: str) -> dict | None:
     """Retorna dados completos de um cliente (CNPJ + endereço)."""
     return _buscar_cliente(id_cliente)
+
+
+def buscar_pedidos_recentes(limit: int = 100) -> list[dict]:
+    """
+    Retorna os últimos pedidos do VHSys ordenados por id_pedido decrescente.
+    Campos: id_ped (interno), id_pedido (sequencial/visível), id_cliente,
+    nome_cliente, valor_total_nota (str), data_pedido, status_pedido.
+    VHSys retorna mais antigos primeiro; calcula offset para pegar os mais recentes.
+    limit_max da API = 250.
+    """
+    LIMIT_MAX = 250
+    try:
+        # 1ª chamada: pega total
+        r0 = requests.get(f"{_BASE_URL}/pedidos", headers=_HEADERS,
+                          params={"limit": 1}, timeout=_TIMEOUT)
+        if r0.status_code != 200:
+            logger.warning("[VHSysAdapter/pedidos] HTTP %s", r0.status_code)
+            return []
+        total = r0.json().get("paging", {}).get("total", 0)
+
+        # Calcula offset para pegar os últimos LIMIT_MAX
+        offset = max(0, total - LIMIT_MAX)
+        r1 = requests.get(f"{_BASE_URL}/pedidos", headers=_HEADERS,
+                          params={"limit": LIMIT_MAX, "offset": offset}, timeout=_TIMEOUT)
+        if r1.status_code != 200:
+            logger.warning("[VHSysAdapter/pedidos] HTTP %s na pág offset=%s", r1.status_code, offset)
+            return []
+
+        data = r1.json().get("data", [])
+        if isinstance(data, dict):
+            data = [data]
+        itens = [i for i in data if isinstance(i, dict) and i.get("lixeira") != "Sim"]
+        itens.sort(key=lambda x: int(x.get("id_pedido") or 0), reverse=True)
+        logger.info("[VHSysAdapter/pedidos] %d pedidos carregados (total=%d)", len(itens), total)
+        return itens[:limit]
+    except Exception as e:
+        logger.error("[VHSysAdapter/pedidos] %s", e)
+        raise
 
 
 def _buscar_cliente(id_cliente: str) -> dict | None:

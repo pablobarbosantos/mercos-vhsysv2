@@ -144,6 +144,7 @@
   <div id="alert-emitir" class="alert"></div>
   <div class="toolbar">
     <button class="btn btn-ghost" onclick="carregarPendentes()">🔄 Atualizar</button>
+    <button class="btn btn-success" onclick="abrirAvulso()">➕ Boleto Avulso</button>
     <span id="info-pendentes" style="color:var(--text2);font-size:11px;"></span>
   </div>
 
@@ -263,6 +264,51 @@
   </form>
 </div>
 
+<!-- ─────────────────── MODAL: BOLETO AVULSO ─────────────────── -->
+<div class="overlay" id="overlay-avulso">
+  <div class="dialog" style="max-width:480px;">
+    <h3>➕ Boleto Avulso</h3>
+    <p>Emitir boleto para qualquer cliente do VHSys sem vínculo com conta a receber.</p>
+
+    <div class="form-group" style="margin-bottom:12px;position:relative;">
+      <label>Buscar cliente (nome ou CNPJ/CPF)</label>
+      <input type="text" id="avulso-busca" placeholder="Ex: Empório Tradição  ou  12.345.678/0001-99"
+             oninput="debouncarBusca()" onblur="fecharResultados()" autocomplete="off"
+             style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--radius);font-family:var(--font);font-size:12px;width:100%;">
+      <div id="avulso-resultados"
+           style="position:absolute;left:0;right:0;z-index:200;background:var(--bg3);border:1px solid var(--accent);border-radius:var(--radius);max-height:220px;overflow-y:auto;display:none;margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,.5);">
+      </div>
+      <div id="avulso-cliente-selecionado" style="color:var(--green);font-size:11px;margin-top:5px;min-height:16px;"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="avulso-valor" step="0.01" min="0.01" placeholder="0,00"
+               style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+      </div>
+      <div class="form-group">
+        <label>Vencimento</label>
+        <input type="date" id="avulso-vencimento">
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Descrição / Referência</label>
+      <input type="text" id="avulso-descricao" maxlength="60" placeholder="Ex: Cobrança ref. contrato X"
+             style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--radius);font-family:var(--font);font-size:12px;width:100%;">
+    </div>
+
+    <div id="avulso-resultado" style="display:none;color:var(--green);font-size:12px;margin-bottom:12px;"></div>
+    <div id="avulso-erro" style="display:none;color:var(--red);font-size:12px;margin-bottom:12px;"></div>
+
+    <div class="dialog-btns">
+      <button class="btn btn-ghost" onclick="fecharAvulso()">Cancelar</button>
+      <button class="btn btn-success" id="btn-emitir-avulso" onclick="emitirAvulso()">Emitir Boleto</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─────────────────── CONFIRM DIALOG ─────────────────── -->
 <div class="overlay" id="overlay">
   <div class="dialog">
@@ -327,62 +373,74 @@ async function carregarPendentes() {
   document.getElementById('info-pendentes').textContent = '';
 
   try {
-    const r = await fetch('/boletos/api/pendentes');
-    const contas = await r.json();
-    if (!r.ok) throw new Error(contas.detail || JSON.stringify(contas));
+    const r = await fetch('/boletos/api/pedidos');
+    const pedidos = await r.json();
+    if (!r.ok) throw new Error(pedidos.detail || JSON.stringify(pedidos));
 
-    const pendentes = contas.filter(c => !c.boleto_ja_emitido);
-    document.getElementById('info-pendentes').textContent = `${pendentes.length} conta(s) sem boleto`;
+    const semBoleto = pedidos.filter(p => !p.boleto_ja_emitido).length;
+    document.getElementById('info-pendentes').textContent = `${pedidos.length} pedido(s) — ${semBoleto} sem boleto`;
 
-    if (pendentes.length === 0) {
+    if (pedidos.length === 0) {
       document.getElementById('tbody-pendentes').innerHTML =
-        '<tr><td colspan="5" class="empty"><big>✅</big>Nenhuma conta pendente de boleto</td></tr>';
+        '<tr><td colspan="5" class="empty"><big>📋</big>Nenhum pedido encontrado</td></tr>';
       return;
     }
 
-    const rows = pendentes.map(c => {
-      const id = c.id_conta_rec;
-      const venc = c.vencimento_rec || isoHoje();
-      const valor = parseFloat(c.valor_rec || 0);
+    const rows = pedidos.map(p => {
+      const idPed   = p.id_ped;
+      const idCli   = p.id_cliente;
+      const nroPed  = p.id_pedido;          // número sequencial visível (1, 2, ... 308)
+      const cliente = (p.nome_cliente || '').slice(0, 30);
+      const valor   = parseFloat(p.valor_total_nota || 0);
+      const jaEmitido = p.boleto_ja_emitido;
+      const ref     = `Pedido #${nroPed}`;
       return `
-        <tr id="row-${id}">
-          <td>${c.n_documento_rec || c.identificacao || id}</td>
-          <td>${(c.nome_cliente||'').slice(0,30)}</td>
+        <tr id="row-${idPed}" class="${jaEmitido ? 'emitido-ok' : ''}">
+          <td><b>#${nroPed}</b></td>
+          <td>${cliente}</td>
           <td>${fmtValor(valor)}</td>
-          <td><input type="date" id="venc-${id}" value="${venc}" min="${isoHoje()}"></td>
+          <td>${jaEmitido ? '—' : `<input type="date" id="venc-${idPed}" value="${isoHoje()}" min="${isoHoje()}">`}</td>
           <td>
-            <button class="btn btn-primary btn-sm" id="btn-${id}" onclick="emitirBoleto('${id}', ${valor})">
-              Emitir
-            </button>
+            ${jaEmitido
+              ? '<span style="color:var(--green);font-size:11px;">✅ Emitido</span>'
+              : `<button class="btn btn-primary btn-sm" id="btn-${idPed}"
+                  onclick="emitirBoletoPedido('${idPed}','${idCli}',${valor},'${ref}')">Emitir</button>`
+            }
           </td>
         </tr>`;
     }).join('');
     document.getElementById('tbody-pendentes').innerHTML = rows;
   } catch (e) {
-    showAlert('emitir', 'Erro ao carregar pendentes: ' + e.message);
+    showAlert('emitir', 'Erro ao carregar pedidos: ' + e.message);
     document.getElementById('tbody-pendentes').innerHTML =
-      '<tr><td colspan="5" class="empty">Erro ao carregar. Verifique se o servidor VHSys está acessível.</td></tr>';
+      '<tr><td colspan="5" class="empty">Erro ao carregar. Tente novamente.</td></tr>';
   }
 }
 
-async function emitirBoleto(contaId, valor) {
-  const vencInput = document.getElementById(`venc-${contaId}`);
+async function emitirBoletoPedido(idPed, idCli, valor, ref) {
+  const vencInput = document.getElementById(`venc-${idPed}`);
   const dataVenc = vencInput ? vencInput.value : isoHoje();
-  const btn = document.getElementById(`btn-${contaId}`);
+  const btn = document.getElementById(`btn-${idPed}`);
   btn.disabled = true;
   btn.textContent = '⏳';
 
   try {
-    const r = await fetch('/boletos/api/emitir', {
+    const r = await fetch('/boletos/api/emitir-por-pedido', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({vhsys_conta_id: contaId, data_vencimento: dataVenc, valor})
+      body: JSON.stringify({
+        vhsys_pedido_id: idPed,
+        vhsys_cliente_id: idCli,
+        valor,
+        referencia: ref,
+        data_vencimento: dataVenc,
+      })
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
 
     const nossoNum = data.nosso_numero;
-    const row = document.getElementById(`row-${contaId}`);
+    const row = document.getElementById(`row-${idPed}`);
     row.classList.add('emitido-ok');
     row.cells[4].innerHTML = `
       <span style="color:var(--green);font-size:11px;">✅ Nº ${nossoNum}</span>
@@ -451,6 +509,141 @@ function confirmarBaixa(nossoNum, cliente) {
       }
     }
   );
+}
+
+// ─── BOLETO AVULSO ───────────────────────────────────────────────────────────
+let _avulsoClienteId = null;
+let _debounceTimer = null;
+
+function abrirAvulso() {
+  _avulsoClienteId = null;
+  document.getElementById('avulso-busca').value = '';
+  document.getElementById('avulso-resultados').style.display = 'none';
+  document.getElementById('avulso-resultados').innerHTML = '';
+  document.getElementById('avulso-cliente-selecionado').textContent = '';
+  document.getElementById('avulso-valor').value = '';
+  document.getElementById('avulso-vencimento').value = isoHoje();
+  document.getElementById('avulso-descricao').value = '';
+  document.getElementById('avulso-resultado').style.display = 'none';
+  document.getElementById('avulso-erro').style.display = 'none';
+  document.getElementById('btn-emitir-avulso').disabled = false;
+  document.getElementById('btn-emitir-avulso').textContent = 'Emitir Boleto';
+  document.getElementById('overlay-avulso').classList.add('show');
+}
+
+function fecharAvulso() {
+  document.getElementById('overlay-avulso').classList.remove('show');
+}
+
+function debouncarBusca() {
+  clearTimeout(_debounceTimer);
+  _debounceTimer = setTimeout(buscarClientes, 350);
+}
+
+function fecharResultados() {
+  // Delay para permitir o click no item antes de fechar
+  setTimeout(() => {
+    document.getElementById('avulso-resultados').style.display = 'none';
+  }, 200);
+}
+
+async function buscarClientes() {
+  const q = document.getElementById('avulso-busca').value.trim();
+  const box = document.getElementById('avulso-resultados');
+
+  // Limpa seleção anterior se o usuário voltou a digitar
+  if (_avulsoClienteId) {
+    _avulsoClienteId = null;
+    document.getElementById('avulso-cliente-selecionado').textContent = '';
+  }
+
+  if (q.length < 2) { box.style.display = 'none'; return; }
+
+  box.innerHTML = '<div style="padding:8px 12px;color:var(--text2);font-size:11px;"><span class="spinner" style="vertical-align:middle;margin-right:6px;"></span>Buscando...</div>';
+  box.style.display = 'block';
+
+  try {
+    const r = await fetch(`/boletos/api/clientes?q=${encodeURIComponent(q)}`);
+    const lista = await r.json();
+    if (!Array.isArray(lista) || !lista.length) {
+      box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:11px;">Nenhum cliente encontrado. Tente outro trecho do nome ou CNPJ.</div>';
+      return;
+    }
+    box.innerHTML = lista.slice(0, 20).map(c => {
+      const id = c.id_cliente;
+      const nome = (c.razao_cliente || c.nome_cliente || c.razao_social || '').trim();
+      const cnpj = (c.cnpj_cliente || '').trim();
+      const cpf  = (c.cpf_cliente  || '').trim();
+      const doc  = cnpj || cpf || '';
+      const cidade = c.cidade_cliente ? ` — ${c.cidade_cliente}` : '';
+      // Escapa aspas simples para uso inline
+      const nomeSafe = nome.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const docSafe  = doc.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `<div onmousedown="selecionarCliente('${id}','${nomeSafe}','${docSafe}')"
+                   style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);">
+                <div style="font-size:12px;color:var(--text);">${nome}</div>
+                <div style="font-size:10px;color:var(--text2);margin-top:2px;">${doc}${cidade}</div>
+              </div>`;
+    }).join('');
+  } catch(e) {
+    box.innerHTML = `<div style="padding:8px 12px;color:var(--red);font-size:11px;">Erro: ${e.message}</div>`;
+  }
+}
+
+function selecionarCliente(id, nome, doc) {
+  _avulsoClienteId = id;
+  document.getElementById('avulso-busca').value = nome;
+  document.getElementById('avulso-resultados').style.display = 'none';
+  document.getElementById('avulso-cliente-selecionado').textContent = `✔ ${nome}${doc ? ' — ' + doc : ''}`;
+}
+
+async function emitirAvulso() {
+  if (!_avulsoClienteId) {
+    document.getElementById('avulso-erro').textContent = 'Selecione um cliente da lista.';
+    document.getElementById('avulso-erro').style.display = 'block';
+    return;
+  }
+  const valor = parseFloat(document.getElementById('avulso-valor').value);
+  const venc = document.getElementById('avulso-vencimento').value;
+  const desc = document.getElementById('avulso-descricao').value.trim();
+
+  if (!valor || valor <= 0) {
+    document.getElementById('avulso-erro').textContent = 'Informe um valor válido.';
+    document.getElementById('avulso-erro').style.display = 'block';
+    return;
+  }
+  if (!venc) {
+    document.getElementById('avulso-erro').textContent = 'Informe o vencimento.';
+    document.getElementById('avulso-erro').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('avulso-erro').style.display = 'none';
+  const btn = document.getElementById('btn-emitir-avulso');
+  btn.disabled = true;
+  btn.textContent = '⏳';
+
+  try {
+    const r = await fetch('/boletos/api/emitir-avulso', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({vhsys_cliente_id: _avulsoClienteId, valor, data_vencimento: venc, descricao: desc})
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+
+    const nossoNum = data.nosso_numero;
+    document.getElementById('avulso-resultado').innerHTML =
+      `✅ Boleto Nº <b>${nossoNum}</b> emitido! ` +
+      `<button class="btn btn-ghost btn-sm" onclick="window.open('/boletos/api/${nossoNum}/pdf','_blank')">🖨️ Imprimir</button>`;
+    document.getElementById('avulso-resultado').style.display = 'block';
+    btn.textContent = '✅ Emitido';
+  } catch(e) {
+    document.getElementById('avulso-erro').textContent = 'Erro: ' + e.message;
+    document.getElementById('avulso-erro').style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Emitir Boleto';
+  }
 }
 
 // ─── ABA CONFIG ───────────────────────────────────────────────────────────────
