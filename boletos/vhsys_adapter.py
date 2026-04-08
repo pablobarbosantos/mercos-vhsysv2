@@ -57,6 +57,15 @@ def buscar_contas_abertas() -> list[dict]:
         item["boleto_ja_emitido"] = conta_id in emitidos
         resultado.append(item)
 
+    def _chave_pedido(item):
+        ref = str(item.get("n_documento_rec") or item.get("identificacao") or "0")
+        try:
+            return int(ref.split("-")[0])
+        except (ValueError, IndexError):
+            return 0
+
+    resultado.sort(key=_chave_pedido, reverse=True)
+
     logger.info(
         "[VHSysAdapter] %d contas abertas, %d já com boleto emitido",
         len(resultado),
@@ -99,6 +108,35 @@ def buscar_conta_por_id(id_conta_rec: str) -> dict | None:
     except Exception as e:
         logger.error("[VHSysAdapter] Erro ao buscar conta %s: %s", id_conta_rec, e)
     return None
+
+
+def buscar_clientes(q: str) -> list[dict]:
+    """
+    Busca clientes no VHSys por nome ou CNPJ/CPF.
+    Detecta automaticamente se q parece um documento (só dígitos) ou nome.
+    """
+    import re
+    q = q.strip()
+    if not q:
+        return []
+
+    so_digitos = re.sub(r"\D", "", q)
+
+    # Busca por CNPJ/CPF se o input contiver pelo menos 3 dígitos consecutivos
+    if len(so_digitos) >= 3 and re.fullmatch(r"[\d.\-/\s]+", q):
+        # Tenta cnpj_cpf_cliente (parâmetro aceito pela API VHSys)
+        resultados = _get("/clientes", {"cnpj_cpf_cliente": so_digitos, "limit": 20})
+        if resultados:
+            return resultados
+        # Fallback: busca por nome caso parâmetro não seja suportado
+        return _get("/clientes", {"nome_cliente": q, "limit": 20})
+
+    return _get("/clientes", {"nome_cliente": q, "limit": 20})
+
+
+def buscar_cliente_por_id(id_cliente: str) -> dict | None:
+    """Retorna dados completos de um cliente (CNPJ + endereço)."""
+    return _buscar_cliente(id_cliente)
 
 
 def _buscar_cliente(id_cliente: str) -> dict | None:
