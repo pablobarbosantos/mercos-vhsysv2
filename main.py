@@ -12,10 +12,12 @@ import os
 import sys
 import json
 import asyncio
+import subprocess
 import threading
 from mercos_service import MercosService
 from src import database as db
 from src.admin_routes import router as admin_router, verificar_admin
+from src.whatsapp import get_whatsapp
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -445,9 +447,29 @@ scheduler.add_job(
 # FastAPI
 # ──────────────────────────────────────────────────────────────────────────────
 
+_sicoob_proc: subprocess.Popen | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _sicoob_proc
     # ── startup ──
+    # Sobe SICOOB app (porta 8001) automaticamente como subprocess
+    _sicoob_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SICOOB")
+    _sicoob_py = os.path.join(_sicoob_dir, "Scripts", "python.exe")
+    if not os.path.exists(_sicoob_py):
+        _sicoob_py = sys.executable
+    try:
+        _sicoob_proc = subprocess.Popen(
+            [_sicoob_py, "app.py"],
+            cwd=_sicoob_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info("[SICOOB] App iniciado automaticamente (PID=%s)", _sicoob_proc.pid)
+    except Exception as e:
+        logger.error("[SICOOB] Falha ao iniciar app: %s", e)
+
     # Limpa falsos positivos de auditoria gerados com mercos_id global (bug antigo)
     # IDs globais Mercos são muito maiores que números de pedido (~9 dígitos vs ~4)
     with db.get_conn() as conn:
@@ -489,6 +511,13 @@ async def lifespan(app: FastAPI):
     # ── shutdown ──
     scheduler.shutdown(wait=False)
     logger.info("[Scheduler] Encerrado.")
+    if _sicoob_proc and _sicoob_proc.poll() is None:
+        _sicoob_proc.terminate()
+        try:
+            _sicoob_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _sicoob_proc.kill()
+        logger.info("[SICOOB] App encerrado.")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -588,6 +617,16 @@ async def receive_mercos_order(request: Request):
                         f"[Webhook] pedido.faturado #{numero} (id={mercos_id}) "
                         f"NÃO encontrado no VHSys — enfileirando (segunda chance)."
                     )
+                    try:
+                        _cliente_wa = dados.get("cliente_nome_fantasia", "").strip() or dados.get("cliente_razao_social", "")
+                        get_whatsapp()._enviar(
+                            get_whatsapp().notify_to,
+                            f"⚠️ *Webhook perdido detectado*\n"
+                            f"Pedido #{numero} ({_cliente_wa}) chegou via *faturado* mas nunca foi recebido via *gerado*.\n"
+                            f"Enfileirando agora — verifique se há outros pedidos faltando.",
+                        )
+                    except Exception as _e:
+                        logger.warning(f"[Webhook] Falha ao enviar alerta WhatsApp: {_e}")
                     fila_id = db.fila_enfileirar(
                         evento=evento,
                         mercos_id=mercos_id,
