@@ -33,7 +33,7 @@ def init_db():
                 dias_protesto     INTEGER DEFAULT 3,
                 dias_baixa        INTEGER DEFAULT 60,
                 local_pagamento   TEXT    DEFAULT 'Pagável em qualquer banco até o vencimento',
-                codigo_modalidade INTEGER DEFAULT 3,
+                codigo_modalidade INTEGER DEFAULT 1,
                 carteira          INTEGER DEFAULT 1,
                 atualizado_em     TEXT
             );

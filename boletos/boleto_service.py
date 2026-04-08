@@ -6,9 +6,9 @@ import logging
 import os
 import re
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from boletos import database as db
-from boletos.vhsys_adapter import buscar_conta_por_id
+from boletos.vhsys_adapter import buscar_conta_por_id, buscar_cliente_por_id
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ def _so_digitos(s: str) -> str:
 def construir_payload(nosso_numero: int, config: dict, conta: dict, data_vencimento: str) -> dict:
     """
     Monta o payload para POST /boletos no SICOOB app (porta 8001).
+    Segue o schema exato do sicoob-sdk (sicoob/validation.py:get_boleto_schema).
     """
     cpf_cnpj = _so_digitos(
         conta.get("cpf_cnpj_cliente")
@@ -34,52 +35,62 @@ def construir_payload(nosso_numero: int, config: dict, conta: dict, data_vencime
     nome = (conta.get("nome_cliente") or conta.get("nome_contato") or "").strip()
 
     # Endereço do pagador (melhor esforço)
-    endereco = (conta.get("endereco_cliente") or conta.get("endereco") or "").strip()
-    cidade   = (conta.get("cidade_cliente")   or conta.get("cidade")   or "").strip()
-    uf       = (conta.get("uf_cliente")       or conta.get("uf")       or "SP").strip()
-    cep      = _so_digitos(conta.get("cep_cliente") or conta.get("cep") or "00000000")
-    bairro   = (conta.get("bairro_cliente")   or conta.get("bairro")   or "").strip()
+    endereco_rua  = (conta.get("endereco_cliente") or conta.get("endereco") or "NAO INFORMADO").strip()
+    numero_end    = (conta.get("numero_cliente")   or conta.get("numero")   or "").strip()
+    endereco_full = f"{endereco_rua}, {numero_end}".strip(", ") if numero_end else endereco_rua
+    cidade        = (conta.get("cidade_cliente")   or conta.get("cidade")   or "NAO INFORMADO").strip()
+    uf            = (conta.get("uf_cliente")       or conta.get("uf")       or "MG").strip()
+    cep           = _so_digitos(conta.get("cep_cliente") or conta.get("cep") or "00000000")
+    bairro        = (conta.get("bairro_cliente")   or conta.get("bairro")   or "NAO INFORMADO").strip()
 
     valor = float(conta.get("valor_rec") or conta.get("valor") or 0)
 
+    # tipoJurosMora: 1=valor fixo, 2=taxa mensal, 3=isento
+    tipo_juros = 2 if config.get("juros_percentual", 0) > 0 else 3
+    # tipoMulta: 0=sem multa, 1=valor fixo, 2=percentual
+    tipo_multa = 2 if config.get("multa_percentual", 0) > 0 else 0
+
     payload: dict = {
+        # Obrigatórios
         "numeroCliente": _NUMERO_CLIENTE,
-        "codigoModalidade": config.get("codigo_modalidade", 3),
+        "codigoModalidade": 1,            # SDK só aceita 1
         "nossoNumero": nosso_numero,
+        "seuNumero": str(nosso_numero)[:18],
+        "dataEmissao": datetime.now().strftime("%Y-%m-%d"),
         "dataVencimento": data_vencimento,
-        "valorNominal": round(valor, 2),
-        "especieDocumento": config.get("especie_titulo", "DM"),
+        "valor": round(valor, 2),
+        "codigoEspecieDocumento": str(config.get("especie_titulo", "DM")).upper()[:3],
+        "identificacaoEmissaoBoleto": 1,          # 1 = banco registra
+        "identificacaoDistribuicaoBoleto": 2,     # 2 = cliente distribui (não imprime via banco)
+        "numeroParcela": 1,
+        # Juros mora (campos raiz, não objeto aninhado)
+        "tipoJurosMora": tipo_juros,
+        "valorJurosMora": round(float(config.get("juros_percentual", 1.0)), 4),
+        "dataJurosMora": (datetime.strptime(data_vencimento, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d"),
+        # Multa (campos raiz)
+        "tipoMulta": tipo_multa,
+        "valorMulta": round(float(config.get("multa_percentual", 2.0)), 4),
+        "dataMulta": (datetime.strptime(data_vencimento, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d"),
+        # Desconto (sem desconto = 0)
+        "tipoDesconto": 0,
+        # Pagador — nomes de campo conforme get_pagador_schema()
         "pagador": {
-            "nome": nome[:40],
-            "cpfCnpj": cpf_cnpj,
-            "endereco": endereco[:40] if endereco else "NAO INFORMADO",
-            "bairro": bairro[:15] if bairro else "NAO INFORMADO",
-            "cidade": cidade[:15] if cidade else "NAO INFORMADO",
-            "uf": uf[:2] if uf else "MG",
-            "cep": cep[:8] if cep else "00000000",
+            "numeroCpfCnpj": cpf_cnpj,
+            "nome": nome[:50],
+            "endereco": endereco_full[:40],
+            "bairro": bairro[:30],
+            "cidade": cidade[:40],
+            "uf": uf[:2].upper(),
+            "cep": cep[:8].zfill(8),
         },
-        "mensagem": {
-            "linha1": config.get("local_pagamento", "Pagável em qualquer banco até o vencimento")[:80],
-        },
-        "juros": {
-            "tipo": "PERCENTUAL_MES",
-            "valor": config.get("juros_percentual", 1.0),
-        },
-        "multa": {
-            "tipo": "PERCENTUAL",
-            "valor": config.get("multa_percentual", 2.0),
-        },
-        "instrucoes": [
-            {
-                "tipo": "PROTESTAR_DIAS_CORRIDOS",
-                "quantidade": config.get("dias_protesto", 3),
-            },
-            {
-                "tipo": "BAIXAR_BOLETO",
-                "quantidade": config.get("dias_baixa", 60),
-            },
-        ],
     }
+
+    # Protesto (opcional)
+    dias_protesto = config.get("dias_protesto", 0)
+    if dias_protesto and int(dias_protesto) > 0:
+        payload["codigoProtesto"] = 1          # 1 = protestar dias corridos
+        payload["numeroDiasProtesto"] = int(dias_protesto)
+
     return payload
 
 
@@ -157,6 +168,73 @@ def validar_e_emitir(
 
     boleto = db.get_boleto_by_conta_id(vhsys_conta_id)
     logger.info("[BoletoService] ✅ Boleto emitido e salvo: nossoNumero=%s", nosso_numero)
+    return boleto
+
+
+def emitir_avulso(
+    vhsys_cliente_id: str,
+    valor: float,
+    data_vencimento: str,
+    descricao: str,
+) -> dict:
+    """
+    Emite boleto para qualquer cliente VHSys sem conta-a-receber vinculada.
+    vhsys_conta_id salvo como 'AVULSO-{nosso_numero}' para não colidir com idempotência.
+    """
+    cliente = buscar_cliente_por_id(vhsys_cliente_id)
+    if not cliente:
+        raise ValueError(f"Cliente {vhsys_cliente_id} não encontrado no VHSys")
+
+    config = db.get_config()
+    nosso_numero = db.next_nosso_numero()
+
+    conta = {
+        "valor_rec": valor,
+        "nome_cliente": (cliente.get("razao_cliente") or cliente.get("nome_cliente") or cliente.get("razao_social") or "").strip(),
+        "cpf_cnpj_cliente": cliente.get("cnpj_cliente") or cliente.get("cpf_cliente") or "",
+        "endereco_cliente": cliente.get("endereco_cliente", ""),
+        "bairro_cliente": cliente.get("bairro_cliente", ""),
+        "cidade_cliente": cliente.get("cidade_cliente", ""),
+        "uf_cliente": cliente.get("uf_cliente", "MG"),
+        "cep_cliente": cliente.get("cep_cliente", ""),
+        "n_documento_rec": descricao,
+    }
+
+    payload = construir_payload(nosso_numero, config, conta, data_vencimento)
+    logger.info("[BoletoService] Emitindo avulso nossoNumero=%s cliente=%s", nosso_numero, vhsys_cliente_id)
+
+    try:
+        resp = requests.post(f"{_SICOOB_URL}/boletos", json=payload, timeout=_TIMEOUT)
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError("SICOOB app (porta 8001) não está rodando. Inicie com: python SICOOB/app.py")
+
+    if resp.status_code not in (200, 201):
+        body = resp.text[:500]
+        logger.error("[BoletoService] Erro SICOOB %s: %s", resp.status_code, body)
+        raise ValueError(f"SICOOB rejeitou a emissão (HTTP {resp.status_code}): {body}")
+
+    sicoob_data = resp.json()
+    resultado = sicoob_data.get("resultado", sicoob_data)
+    synthetic_id = f"AVULSO-{nosso_numero}"
+
+    cpf_cnpj = _so_digitos(conta["cpf_cnpj_cliente"])
+    db.salvar_boleto({
+        "vhsys_conta_id": synthetic_id,
+        "vhsys_nro": descricao,
+        "nosso_numero": nosso_numero,
+        "cliente_nome": conta["nome_cliente"],
+        "cliente_cpf_cnpj": cpf_cnpj,
+        "valor_nominal": round(valor, 2),
+        "data_vencimento": data_vencimento,
+        "data_emissao": datetime.now().strftime("%Y-%m-%d"),
+        "linha_digitavel": resultado.get("linhaDigitavel"),
+        "codigo_barras": resultado.get("codigoBarras"),
+        "qr_code": resultado.get("qrCode"),
+        "sicoob_json": resultado,
+    })
+
+    boleto = db.get_boleto_by_conta_id(synthetic_id)
+    logger.info("[BoletoService] ✅ Boleto avulso emitido: nossoNumero=%s", nosso_numero)
     return boleto
 
 

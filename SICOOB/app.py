@@ -14,7 +14,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 import config
 from services import boleto_service
@@ -95,6 +95,8 @@ def emitir_boleto(payload: dict[str, Any]):
     `numeroCliente` é preenchido automaticamente se ausente.
     """
     payload.setdefault("numeroCliente", config.NUMERO_CLIENTE)
+    if config.NUMERO_CONTA_CORRENTE:
+        payload.setdefault("numeroContaCorrente", config.NUMERO_CONTA_CORRENTE)
     return boleto_service.emitir(payload)
 
 
@@ -118,10 +120,21 @@ def baixar_boleto(nosso_numero: str, motivo: str = "BAIXA_MANUAL"):
 
 @app.get("/boletos/{nosso_numero}/segunda-via")
 def segunda_via(nosso_numero: str):
-    """Retorna dados da segunda via do boleto (inclui link/PDF)."""
+    """Retorna dados da segunda via do boleto (JSON)."""
     return boleto_service.segunda_via(nosso_numero)
+
+
+@app.get("/boletos/{nosso_numero}/pdf")
+def boleto_pdf(nosso_numero: str):
+    """Retorna o PDF oficial do boleto emitido pelo SICOOB."""
+    pdf_bytes = boleto_service.segunda_via_pdf(nosso_numero)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=boleto_{nosso_numero}.pdf"},
+    )
 
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8001, reload=False)

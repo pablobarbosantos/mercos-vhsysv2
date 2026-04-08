@@ -62,6 +62,20 @@ async def post_config(request: Request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# VHSys — clientes (autocomplete para boleto avulso)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/clientes")
+def get_clientes(q: str = ""):
+    """Busca clientes VHSys por nome (autocomplete para boleto avulso)."""
+    try:
+        return vhsys_adapter.buscar_clientes(q)
+    except Exception as e:
+        logger.error("[Boletos/clientes] %s", e)
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # VHSys — contas pendentes
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -106,6 +120,39 @@ async def post_emitir(request: Request):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("[Boletos/emitir] %s", e, exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Emissão avulsa (qualquer cliente VHSys, sem conta-a-receber)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/api/emitir-avulso", status_code=201)
+async def post_emitir_avulso(request: Request):
+    data = await request.json()
+
+    vhsys_cliente_id = str(data.get("vhsys_cliente_id", ""))
+    valor = data.get("valor")
+    data_vencimento = data.get("data_vencimento", "")
+    descricao = data.get("descricao", "").strip()
+
+    if not vhsys_cliente_id or not valor or not data_vencimento:
+        raise HTTPException(status_code=400, detail="vhsys_cliente_id, valor e data_vencimento são obrigatórios")
+
+    try:
+        boleto = boleto_service.emitir_avulso(
+            vhsys_cliente_id=vhsys_cliente_id,
+            valor=float(valor),
+            data_vencimento=data_vencimento,
+            descricao=descricao or f"Avulso",
+        )
+        return boleto
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error("[Boletos/emitir-avulso] %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail=str(e))
 
 
@@ -160,18 +207,21 @@ def get_pdf(nosso_numero: int):
     if not boleto:
         raise HTTPException(status_code=404, detail=f"Boleto {nosso_numero} não encontrado")
     try:
-        config = db.get_config()
-        pdf_bytes = gerar_pdf_boleto(boleto, config)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"inline; filename=boleto_{nosso_numero}.pdf"
-            },
-        )
+        import requests as _req
+        resp = _req.get(f"{boleto_service._SICOOB_URL}/boletos/{nosso_numero}/pdf", timeout=30)
+        if resp.status_code == 200 and resp.headers.get("Content-Type", "").startswith("application/pdf"):
+            return Response(
+                content=resp.content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"inline; filename=boleto_{nosso_numero}.pdf"},
+            )
+        # fallback: repassa o erro do SICOOB
+        raise HTTPException(status_code=502, detail=resp.text[:300])
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("[Boletos/PDF] nossoNumero=%s erro: %s", nosso_numero, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

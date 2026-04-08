@@ -98,14 +98,42 @@ def baixar(nosso_numero: str, motivo: str = "BAIXA_MANUAL") -> dict:
 
 
 def segunda_via(nosso_numero: str) -> dict:
-    """Retorna dados da segunda via (inclui PDF/link)."""
-    scope = "boletos_consulta"
-    session, token = _session_e_token(scope)
-    url = f"{_BASE_URL}{_BOLETOS_PATH}/{config.NUMERO_CLIENTE}/{nosso_numero}/segunda-via"
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    """Retorna dados da segunda via (JSON, sem PDF)."""
     try:
-        resp = session.get(url, headers=headers, timeout=config.TIMEOUT)
-        resp.raise_for_status()
-        return resp.json()
+        resultado = _boleto_api().emitir_segunda_via(
+            numero_cliente=config.NUMERO_CLIENTE,
+            codigo_modalidade=1,
+            nosso_numero=int(nosso_numero),
+            gerar_pdf=False,
+        )
+        return resultado
     except Exception as e:
         raise BoletoError(f"Erro na segunda via: {e}") from e
+
+
+def segunda_via_pdf(nosso_numero: str) -> bytes:
+    """Retorna o PDF oficial do boleto via segunda via SICOOB (base64 decodificado)."""
+    import base64
+    try:
+        resultado = _boleto_api().emitir_segunda_via(
+            numero_cliente=config.NUMERO_CLIENTE,
+            codigo_modalidade=1,
+            nosso_numero=int(nosso_numero),
+            gerar_pdf=True,
+        )
+        # API retorna o PDF em base64 no campo 'pdfBoleto' dentro de 'resultado'
+        if isinstance(resultado, dict):
+            inner = resultado.get("resultado", resultado)
+            pdf_b64 = (
+                inner.get("pdfBoleto")
+                or inner.get("pdf")
+                or inner.get("pdfBase64")
+                or inner.get("arquivoPdf")
+            )
+            if pdf_b64:
+                return base64.b64decode(pdf_b64)
+        raise BoletoError("Campo PDF não encontrado na resposta da segunda via")
+    except BoletoError:
+        raise
+    except Exception as e:
+        raise BoletoError(f"Erro ao obter PDF da segunda via: {e}") from e
