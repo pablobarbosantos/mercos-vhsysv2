@@ -787,6 +787,11 @@
       color: var(--accent);
     }
     .cidade-badge:hover { background: var(--accent); color: #000; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.7;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -850,6 +855,7 @@
         <option value="erro">❌ Erro</option>
         <option value="duplicata">↩ Duplicata</option>
         <option value="pendente">⏳ Pendente</option>
+        <option value="erro_permanente">🔴 Erro Permanente</option>
       </select>
       <span id="contagem">— pedidos</span>
     </div>

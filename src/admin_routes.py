@@ -53,19 +53,36 @@ def _listar_pedidos(limit: int = 200) -> list[dict]:
                 COALESCE(f.numero, CAST(p.mercos_id AS TEXT)) AS numero_mercos,
                 COALESCE(p.vhsys_nro, p.vhsys_id)            AS vhsys_nro,
                 p.processado_em,
-                p.status,
-                e.erro
+                CASE WHEN fe.status = 'erro_permanente' THEN 'erro_permanente'
+                     ELSE p.status END                        AS status,
+                COALESCE(fe.ultimo_erro, e.erro)              AS erro
             FROM pedidos_processados p
             LEFT JOIN pedidos_fluxo f ON f.mercos_id = p.mercos_id
+            LEFT JOIN fila_eventos fe ON fe.mercos_id = p.mercos_id
+                                     AND fe.status = 'erro_permanente'
             LEFT JOIN (
                 SELECT referencia_id, erro,
                        ROW_NUMBER() OVER (PARTITION BY referencia_id ORDER BY ocorrido_em DESC) AS rn
                 FROM erros_log
                 WHERE entidade = 'pedidos'
             ) e ON e.referencia_id = CAST(p.mercos_id AS TEXT) AND e.rn = 1
-            ORDER BY p.processado_em DESC
+            UNION
+            SELECT
+                fe2.mercos_id,
+                COALESCE(f2.numero, CAST(fe2.mercos_id AS TEXT)) AS numero_mercos,
+                NULL                                               AS vhsys_nro,
+                fe2.atualizado_em                                  AS processado_em,
+                'erro_permanente'                                  AS status,
+                fe2.ultimo_erro                                    AS erro
+            FROM fila_eventos fe2
+            LEFT JOIN pedidos_fluxo f2 ON f2.mercos_id = fe2.mercos_id
+            WHERE fe2.status = 'erro_permanente'
+              AND NOT EXISTS (
+                  SELECT 1 FROM pedidos_processados pp WHERE pp.mercos_id = fe2.mercos_id
+              )
+            ORDER BY processado_em DESC
             LIMIT ?
-        """, (limit,)).fetchall()
+        """, (limit, limit)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -428,7 +445,6 @@ async def api_analytics_produtos(
     with db.get_conn() as conn:
         mais_vendidos = conn.execute(f"""
             SELECT
-                COALESCE(NULLIF(i.sku,''), i.nome_produto) AS produto,
                 i.nome_produto,
                 SUM(i.quantidade) AS qtd_total,
                 SUM(i.valor_total) AS valor_total,
@@ -436,7 +452,7 @@ async def api_analytics_produtos(
             FROM itens_pedido i
             JOIN pedidos_fluxo pf ON pf.mercos_id = i.mercos_id
             {where}
-            GROUP BY COALESCE(NULLIF(i.sku,''), i.nome_produto)
+            GROUP BY i.nome_produto
             ORDER BY valor_total DESC
             LIMIT ?
         """, (*params_mv, top)).fetchall()
