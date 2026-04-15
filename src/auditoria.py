@@ -27,10 +27,13 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────
 LIMITE_PROCESSAMENTO = int(os.getenv("AUDIT_LIMITE_PROCESSAMENTO_MIN", 30))
 LIMITE_SEPARACAO     = int(os.getenv("AUDIT_LIMITE_SEPARACAO_MIN", 120))
-LIMITE_ENVIO         = int(os.getenv("AUDIT_LIMITE_ENVIO_MIN", 240))
+LIMITE_ENVIO         = int(os.getenv("AUDIT_LIMITE_ENVIO_MIN", 4320))  # padrão: 3 dias (era 4h)
 
-# Evita flood de alertas: só reenvia o mesmo buraco após X horas
+# Evita flood de alertas: só reenvia o mesmo buraco de sequência após X horas
 COOLDOWN_ALERTA_HORAS = int(os.getenv("AUDIT_COOLDOWN_HORAS", 4))
+
+# Cooldown de re-alerta para pedidos travados no fluxo (parado_separacao / parado_envio)
+COOLDOWN_FLUXO_HORAS = int(os.getenv("AUDIT_COOLDOWN_FLUXO_HORAS", 24))
 
 
 # ══════════════════════════════════════════════════════════════
@@ -100,27 +103,25 @@ def verificar_sequencia() -> list[dict]:
 
 
 def _buraco_ja_alertado(mercos_id: int) -> bool:
-    """Retorna True se este buraco foi alertado ou resolvido dentro do cooldown.
-    Usa MAX(detectado_em, resolvido_em) para que "resolver todos" suprima
-    re-detecções pelo período de cooldown.
+    """Retorna True se este buraco não deve gerar novo alerta.
+    - Se já foi marcado como resolvido: nunca mais alerta.
+    - Caso contrário: suprime re-alerta dentro do cooldown de X horas.
     """
     with db.get_conn() as conn:
         row = conn.execute(
-            """SELECT detectado_em, resolvido_em FROM auditoria_sequencia
+            """SELECT detectado_em, resolvido_em, resolvido FROM auditoria_sequencia
                WHERE mercos_id = ?
                ORDER BY detectado_em DESC LIMIT 1""",
             (mercos_id,)
         ).fetchone()
     if not row:
         return False
+    # Buraco marcado como resolvido → nunca mais alerta
+    if row["resolvido"]:
+        return True
     ultima = datetime.fromisoformat(row["detectado_em"])
     if ultima.tzinfo is None:
         ultima = ultima.replace(tzinfo=timezone.utc)
-    if row["resolvido_em"]:
-        resolvido = datetime.fromisoformat(row["resolvido_em"])
-        if resolvido.tzinfo is None:
-            resolvido = resolvido.replace(tzinfo=timezone.utc)
-        ultima = max(ultima, resolvido)
     return (datetime.now(timezone.utc) - ultima).total_seconds() / 3600 < COOLDOWN_ALERTA_HORAS
 
 
@@ -201,6 +202,8 @@ def verificar_fluxo() -> list[dict]:
             WHERE status_fluxo = 'processado'
               AND processado_em < datetime('now', '-{LIMITE_SEPARACAO} minutes')
               AND separado_em IS NULL
+              AND (ultimo_alerta_fluxo_em IS NULL
+                   OR ultimo_alerta_fluxo_em < datetime('now', '-{COOLDOWN_FLUXO_HORAS} hours'))
         """).fetchall()
 
         for r in sem_separacao:
@@ -222,6 +225,8 @@ def verificar_fluxo() -> list[dict]:
             WHERE status_fluxo = 'separado'
               AND separado_em < datetime('now', '-{LIMITE_ENVIO} minutes')
               AND enviado_em IS NULL
+              AND (ultimo_alerta_fluxo_em IS NULL
+                   OR ultimo_alerta_fluxo_em < datetime('now', '-{COOLDOWN_FLUXO_HORAS} hours'))
         """).fetchall()
 
         for r in sem_envio:
@@ -246,6 +251,16 @@ def verificar_fluxo() -> list[dict]:
         get_whatsapp().alertar_fluxo_travado(alertas)
     except Exception as e:
         logger.warning(f"[Auditoria/Fluxo] Falha no alerta WhatsApp: {e}")
+
+    # Registra timestamp do alerta para evitar re-envio dentro do cooldown
+    ids_alertados = [a["mercos_id"] for a in alertas if a.get("tipo") in ("parado_separacao", "parado_envio")]
+    if ids_alertados:
+        placeholders = ",".join("?" * len(ids_alertados))
+        with db.get_conn() as conn:
+            conn.execute(
+                f"UPDATE pedidos_fluxo SET ultimo_alerta_fluxo_em = datetime('now') WHERE mercos_id IN ({placeholders})",
+                ids_alertados,
+            )
 
     return alertas
 

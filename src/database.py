@@ -157,6 +157,10 @@ def init_db():
         conn.execute("ALTER TABLE pedidos_processados ADD COLUMN vhsys_nro TEXT")
     except Exception:
         pass  # coluna já existe
+    try:
+        conn.execute("ALTER TABLE pedidos_fluxo ADD COLUMN ultimo_alerta_fluxo_em TEXT")
+    except Exception:
+        pass  # coluna já existe
 
     logger.info("[DB] Banco inicializado.")
 
