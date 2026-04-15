@@ -82,7 +82,7 @@ def _listar_pedidos(limit: int = 200) -> list[dict]:
               )
             ORDER BY processado_em DESC
             LIMIT ?
-        """, (limit, limit)).fetchall()
+        """, (limit,)).fetchall()
     return [dict(r) for r in rows]
 
 
