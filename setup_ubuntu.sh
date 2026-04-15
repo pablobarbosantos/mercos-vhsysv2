@@ -67,7 +67,7 @@ fi
 
 msg "Instalando dependências do Chromium/Puppeteer (para WhatsApp Web)..."
 sudo apt-get install -y \
-    libasound2 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 \
+    libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 \
     libdbus-1-3 libdrm2 libexpat1 libgbm1 libglib2.0-0 libnspr4 \
     libnss3 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 libxcb1 \
     libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 \
@@ -136,41 +136,40 @@ npm install --silent
 ok "Node.js dependencies instaladas."
 
 # =============================================================================
-# 7. Baixar ngrok para Linux
+# 7. Instalar Tailscale
 # =============================================================================
-cd "$INSTALL_DIR"
-if [ ! -f "ngrok" ]; then
-    msg "Baixando ngrok para Linux (amd64)..."
-    wget -q "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" -O /tmp/ngrok.tgz
-    tar xzf /tmp/ngrok.tgz -C "$INSTALL_DIR"
-    rm /tmp/ngrok.tgz
-    chmod +x "$INSTALL_DIR/ngrok"
-    ok "ngrok baixado."
+msg "Instalando Tailscale..."
+if command -v tailscale &>/dev/null; then
+    ok "Tailscale já instalado, pulando."
 else
-    ok "ngrok já existe, pulando download."
+    curl -fsSL https://tailscale.com/install.sh | sh
+    ok "Tailscale instalado."
 fi
 
 # =============================================================================
-# 8. Configurar ngrok authtoken
+# 8. Autenticar Tailscale e ativar Funnel
 # =============================================================================
 echo ""
 echo "=========================================="
-echo "       CONFIGURAÇÃO DO NGROK              "
+echo "     CONFIGURAÇÃO DO TAILSCALE FUNNEL     "
 echo "=========================================="
 echo ""
-echo "O ngrok cria um endereço público para o webhook do Mercos."
+echo "O Tailscale Funnel cria um endereço público ESTÁVEL para o webhook."
+echo "A URL nunca muda entre reinicializações."
 echo ""
-echo "  1. Acesse: https://dashboard.ngrok.com/get-started/your-authtoken"
-echo "  2. Faça login ou crie uma conta gratuita"
-echo "  3. Copie o authtoken"
+echo "Passos:"
+echo "  1. Execute:  sudo tailscale up"
+echo "     → Abra o link mostrado no browser e faça login"
+echo "  2. No painel admin.tailscale.com:"
+echo "     → Ative 'HTTPS Certificates' (DNS → Enable HTTPS)"
+echo "     → Ative 'Funnel' para esta máquina"
+echo "  3. Execute:  tailscale funnel 8000"
+echo "     → Anote a URL exibida (ex: https://meupc.meuperfil.ts.net)"
+echo "  4. Configure essa URL no painel Mercos (Configurações → Webhooks)"
+echo "     → Adicione /webhook/mercos ao final da URL"
 echo ""
-read -rp "Cole o authtoken do ngrok aqui: " NGROK_TOKEN
-if [ -n "$NGROK_TOKEN" ]; then
-    "$INSTALL_DIR/ngrok" config add-authtoken "$NGROK_TOKEN"
-    ok "ngrok authtoken configurado."
-else
-    err "Authtoken não informado. Configure depois com: ./ngrok config add-authtoken SEU_TOKEN"
-fi
+read -rp "Pressione Enter quando o Funnel estiver ativo e a URL configurada no Mercos..."
+ok "Tailscale Funnel configurado."
 
 # =============================================================================
 # 9. Criar systemd services
@@ -197,33 +196,12 @@ StandardError=append:${INSTALL_DIR}/logs/node.log
 WantedBy=multi-user.target
 EOF
 
-# --- mercos-ngrok.service ---
-sudo tee /etc/systemd/system/mercos-ngrok.service > /dev/null <<EOF
-[Unit]
-Description=Mercos ngrok Tunnel
-After=network.target mercos-whatsapp.service
-Wants=mercos-whatsapp.service
-
-[Service]
-Type=simple
-User=${USUARIO}
-WorkingDirectory=${INSTALL_DIR}
-ExecStart=${INSTALL_DIR}/ngrok http 8000 --log stdout
-Restart=on-failure
-RestartSec=10
-StandardOutput=append:${INSTALL_DIR}/logs/ngrok.log
-StandardError=append:${INSTALL_DIR}/logs/ngrok.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
 # --- mercos-main.service ---
 sudo tee /etc/systemd/system/mercos-main.service > /dev/null <<EOF
 [Unit]
 Description=Mercos VHSys Main Server
-After=network.target mercos-ngrok.service
-Wants=mercos-ngrok.service
+After=network.target tailscaled.service
+Wants=tailscaled.service
 
 [Service]
 Type=simple
@@ -240,7 +218,7 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable mercos-whatsapp mercos-ngrok mercos-main
+sudo systemctl enable mercos-whatsapp mercos-main
 ok "Serviços systemd criados e habilitados."
 
 # =============================================================================
@@ -300,7 +278,7 @@ cat > "$DESKTOP_DIR/Webhook.desktop" <<EOF
 Version=1.0
 Type=Application
 Name=URL do Webhook
-Comment=Mostra a URL atual do ngrok para configurar no Mercos
+Comment=Mostra a URL estável do Tailscale Funnel para configurar no Mercos
 Exec=bash -c "cd ${INSTALL_DIR} && bash mostrar_webhook.sh"
 Icon=network-transmit-receive
 Terminal=false
@@ -326,8 +304,6 @@ ok "4 atalhos criados na área de trabalho (Admin, PDV, Consulta, Webhook)."
 msg "Iniciando serviços..."
 sudo systemctl start mercos-whatsapp || true
 sleep 3
-sudo systemctl start mercos-ngrok || true
-sleep 5
 sudo systemctl start mercos-main || true
 ok "Serviços iniciados."
 
@@ -341,7 +317,7 @@ echo "=========================================="
 echo ""
 ok "Python venv criado com todas as dependências"
 ok "Node.js e WhatsApp server instalados"
-ok "ngrok configurado"
+ok "Tailscale Funnel configurado (URL estável)"
 ok "Serviços de boot habilitados (auto-start)"
 ok "4 atalhos criados na área de trabalho"
 echo ""

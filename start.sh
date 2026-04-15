@@ -9,7 +9,7 @@ mkdir -p logs
 
 # Para processos anteriores se existirem
 pkill -f "node whatsapp_server/server.js" 2>/dev/null || true
-pkill -f "ngrok http 8000"               2>/dev/null || true
+tailscale funnel reset                   2>/dev/null || true
 pkill -f "python main.py"                2>/dev/null || true
 sleep 1
 
@@ -17,9 +17,8 @@ echo "→ Iniciando WhatsApp server..."
 node whatsapp_server/server.js >> logs/node.log 2>&1 &
 sleep 3
 
-echo "→ Iniciando ngrok..."
-./ngrok http 8000 >> logs/ngrok.log 2>&1 &
-sleep 5
+echo "→ Ativando Tailscale Funnel..."
+tailscale funnel --bg 8000 >> logs/tailscale-funnel.log 2>&1 || true
 
 echo "→ Iniciando servidor principal..."
 python main.py >> logs/python.log 2>&1 &

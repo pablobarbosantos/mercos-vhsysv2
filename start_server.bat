@@ -22,22 +22,15 @@ if not defined NODE (
 :: Aguarda Node inicializar
 timeout /t 5 /nobreak >nul
 
-:: --- ngrok ---
-if exist "%DIR%\ngrok.exe" (
-    set NGROK=%DIR%\ngrok.exe
+:: --- Tailscale Funnel ---
+where tailscale >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo [%DATE% %TIME%] AVISO: tailscale nao encontrado no PATH >> "%LOG%"
 ) else (
-    for /f "delims=" %%i in ('where ngrok 2^>nul') do set NGROK=%%i
+    echo [%DATE% %TIME%] Ativando Tailscale Funnel porta 8000 >> "%LOG%"
+    tailscale funnel 8000 >> "%LOG%" 2>&1
+    echo [%DATE% %TIME%] Tailscale Funnel ativo >> "%LOG%"
 )
-
-if not defined NGROK (
-    echo [%DATE% %TIME%] ERRO: ngrok nao encontrado >> "%LOG%"
-) else (
-    echo [%DATE% %TIME%] ngrok encontrado: %NGROK% >> "%LOG%"
-    start "ngrok" /min cmd /c ""%NGROK%" http 8000 >> "%DIR%\logs\ngrok.log" 2>&1"
-)
-
-:: Aguarda ngrok inicializar
-timeout /t 5 /nobreak >nul
 
 :: --- Python (FastAPI) ---
 echo [%DATE% %TIME%] Iniciando Python/FastAPI >> "%LOG%"

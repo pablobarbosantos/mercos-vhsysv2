@@ -72,6 +72,10 @@ from boletos import database as boletos_db
 boletos_db.init_db()
 logger.info("[Startup] Banco boletos OK.")
 
+from nfe_emitidas import database as nfe_emitidas_db
+nfe_emitidas_db.init_db()
+logger.info("[Startup] Banco nfe_emitidas OK.")
+
 mercos_service = MercosService()
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -529,6 +533,9 @@ app.include_router(compras_router)
 from boletos.admin_routes import router as boletos_router, webhook_router as boletos_webhook_router
 app.include_router(boletos_router, dependencies=[Depends(verificar_admin)])
 app.include_router(boletos_webhook_router)  # sem auth — SICOOB chama diretamente
+
+from nfe_emitidas.admin_routes import router as nfe_emitidas_router
+app.include_router(nfe_emitidas_router)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

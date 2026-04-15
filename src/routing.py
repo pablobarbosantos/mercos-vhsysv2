@@ -35,17 +35,18 @@ def _tentar(nom, pho, candidatos: list[str]):
     for q in candidatos:
         try:
             loc = nom.geocode(q)
-            time.sleep(0.35)
+            time.sleep(1.1)  # Nominatim: máx 1 req/s
             if loc:
                 return loc, q
         except Exception:
-            time.sleep(0.35)
+            time.sleep(1.1)
         try:
             loc = pho.geocode(q)
+            time.sleep(0.5)  # Photon: rate limit menor, mas respeitar
             if loc:
                 return loc, q
         except Exception:
-            pass
+            time.sleep(0.5)
     return None, None
 
 
@@ -94,7 +95,8 @@ def geocodificar(enderecos):
                     loc, _ = _tentar(nom, pho, cands_cep)
 
         if loc:
-            resultados.append({"lat": loc.latitude, "lon": loc.longitude, "label": label})
+            extra = {k: v for k, v in item.items() if k not in ("endereco", "cep", "label")} if isinstance(item, dict) else {}
+            resultados.append({"lat": loc.latitude, "lon": loc.longitude, "label": label, **extra})
         else:
             resultados.append(None)
 
