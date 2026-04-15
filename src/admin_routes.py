@@ -119,7 +119,26 @@ async def api_pedidos(limit: int = 200):
 
 @router.post("/api/reprocessar/{mercos_id}")
 async def api_reprocessar(request: Request, mercos_id: int):
+    ip = request.client.host if request.client else ""
     row = _pedido_payload_raw(mercos_id)
+
+    # Caso 1: item em erro_permanente na fila — reativa direto na fila
+    with db.get_conn() as conn:
+        fila_row = conn.execute(
+            "SELECT id FROM fila_eventos WHERE mercos_id=? AND status='erro_permanente' LIMIT 1",
+            (mercos_id,)
+        ).fetchone()
+        if fila_row:
+            conn.execute(
+                "UPDATE fila_eventos SET status='pendente', tentativas=0, proximo_tentativa=NULL WHERE id=?",
+                (fila_row["id"],)
+            )
+    if fila_row:
+        db.admin_registrar_acao("reprocessar_permanente", mercos_id, ip=ip)
+        logger.info(f"[Admin] Pedido {mercos_id} reativado da fila (erro_permanente → pendente).")
+        return {"ok": True, "mensagem": f"Pedido {mercos_id} reativado na fila de processamento."}
+
+    # Caso 2: pedido em erro/pendente_reprocessamento em pedidos_processados
     if not row:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
     if row["status"] not in ("erro", "pendente_reprocessamento"):
@@ -128,7 +147,7 @@ async def api_reprocessar(request: Request, mercos_id: int):
             detail=f"Pedido está com status '{row['status']}' — só pedidos com erro podem ser reprocessados."
         )
     _reprocessar_pedido(mercos_id)
-    db.admin_registrar_acao("reprocessar", mercos_id, ip=request.client.host if request.client else "")
+    db.admin_registrar_acao("reprocessar", mercos_id, ip=ip)
     return {"ok": True, "mensagem": f"Pedido {mercos_id} marcado para reprocessamento."}
 
 
@@ -262,6 +281,25 @@ async def api_regredir_status(request: Request, mercos_id: int):
     return {"ok": True, "mercos_id": mercos_id, "novo_status": para}
 
 
+@router.post("/api/auditoria/fluxo/{mercos_id}/cancelado")
+async def api_cancelar_pedido(request: Request, mercos_id: int):
+    """Cancela um pedido manualmente."""
+    pedido = db.fluxo_get_pedido(mercos_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+    if pedido["status_fluxo"] == "cancelado":
+        raise HTTPException(status_code=400, detail="Pedido já está cancelado.")
+    with db.get_conn() as conn:
+        conn.execute(
+            "UPDATE fila_eventos SET status='cancelado' WHERE mercos_id=? AND status IN ('pendente','processando')",
+            (mercos_id,)
+        )
+    db.fluxo_marcar_cancelado(mercos_id)
+    db.admin_registrar_acao("cancelar", mercos_id, ip=request.client.host if request.client else "")
+    logger.info(f"[Admin] Pedido {mercos_id} cancelado manualmente.")
+    return {"ok": True, "mercos_id": mercos_id}
+
+
 @router.post("/api/separacao/lista-rota")
 async def api_lista_rota(request: Request):
     """Retorna lista simples de pedidos para impressão de rota, sem geocodificação."""
@@ -372,31 +410,48 @@ async def api_analytics_resumo():
 
 
 @router.get("/api/analytics/produtos")
-async def api_analytics_produtos(dias_parado: int = 30, top: int = 10):
+async def api_analytics_produtos(
+    dias_parado: int = 30, top: int = 10,
+    data_inicio: str = None, data_fim: str = None
+):
     """Top produtos mais vendidos + produtos parados (sem venda há X dias)."""
+    filtros = ["pf.status_fluxo NOT IN ('cancelado','erro')"]
+    params_mv: list = []
+    if data_inicio:
+        filtros.append("DATE(pf.recebido_em) >= ?")
+        params_mv.append(data_inicio)
+    if data_fim:
+        filtros.append("DATE(pf.recebido_em) <= ?")
+        params_mv.append(data_fim)
+    where = "WHERE " + " AND ".join(filtros)
+
     with db.get_conn() as conn:
         mais_vendidos = conn.execute(f"""
             SELECT
-                COALESCE(NULLIF(sku,''), nome_produto) AS produto,
-                nome_produto,
-                SUM(quantidade) AS qtd_total,
-                SUM(valor_total) AS valor_total,
-                COUNT(DISTINCT mercos_id) AS num_pedidos
-            FROM itens_pedido
-            GROUP BY COALESCE(NULLIF(sku,''), nome_produto)
+                COALESCE(NULLIF(i.sku,''), i.nome_produto) AS produto,
+                i.nome_produto,
+                SUM(i.quantidade) AS qtd_total,
+                SUM(i.valor_total) AS valor_total,
+                COUNT(DISTINCT i.mercos_id) AS num_pedidos
+            FROM itens_pedido i
+            JOIN pedidos_fluxo pf ON pf.mercos_id = i.mercos_id
+            {where}
+            GROUP BY COALESCE(NULLIF(i.sku,''), i.nome_produto)
             ORDER BY valor_total DESC
             LIMIT ?
-        """, (top,)).fetchall()
+        """, (*params_mv, top)).fetchall()
 
         parados = conn.execute(f"""
             SELECT
-                COALESCE(NULLIF(sku,''), nome_produto) AS produto,
-                nome_produto,
-                SUM(quantidade) AS qtd_total,
-                MAX(processado_em) AS ultima_venda,
-                CAST(julianday('now') - julianday(MAX(processado_em)) AS INTEGER) AS dias_sem_venda
-            FROM itens_pedido
-            GROUP BY COALESCE(NULLIF(sku,''), nome_produto)
+                COALESCE(NULLIF(i.sku,''), i.nome_produto) AS produto,
+                i.nome_produto,
+                SUM(i.quantidade) AS qtd_total,
+                MAX(pf.recebido_em) AS ultima_venda,
+                CAST(julianday('now') - julianday(MAX(pf.recebido_em)) AS INTEGER) AS dias_sem_venda
+            FROM itens_pedido i
+            JOIN pedidos_fluxo pf ON pf.mercos_id = i.mercos_id
+            WHERE pf.status_fluxo NOT IN ('cancelado','erro')
+            GROUP BY COALESCE(NULLIF(i.sku,''), i.nome_produto)
             HAVING dias_sem_venda >= ?
             ORDER BY dias_sem_venda DESC
             LIMIT ?
