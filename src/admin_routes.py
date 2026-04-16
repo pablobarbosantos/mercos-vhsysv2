@@ -459,15 +459,15 @@ async def api_analytics_produtos(
 
         parados = conn.execute(f"""
             SELECT
-                COALESCE(NULLIF(i.sku,''), i.nome_produto) AS produto,
                 i.nome_produto,
+                i.nome_produto AS produto,
                 SUM(i.quantidade) AS qtd_total,
                 MAX(pf.recebido_em) AS ultima_venda,
                 CAST(julianday('now') - julianday(MAX(pf.recebido_em)) AS INTEGER) AS dias_sem_venda
             FROM itens_pedido i
             JOIN pedidos_fluxo pf ON pf.mercos_id = i.mercos_id
             WHERE pf.status_fluxo NOT IN ('cancelado','erro')
-            GROUP BY COALESCE(NULLIF(i.sku,''), i.nome_produto)
+            GROUP BY i.nome_produto
             HAVING dias_sem_venda >= ?
             ORDER BY dias_sem_venda DESC
             LIMIT ?
@@ -998,14 +998,14 @@ async def api_abc_produtos(data_inicio: str = None, data_fim: str = None, top: i
     with db.get_conn() as conn:
         rows = conn.execute(f"""
             SELECT
-                COALESCE(NULLIF(i.sku,''), i.nome_produto) AS produto,
                 i.nome_produto,
+                i.nome_produto AS produto,
                 SUM(i.quantidade)  AS qtd_total,
                 SUM(i.valor_total) AS valor_total,
                 COUNT(DISTINCT i.mercos_id) AS num_pedidos
             FROM itens_pedido i
             {where}
-            GROUP BY COALESCE(NULLIF(i.sku,''), i.nome_produto)
+            GROUP BY i.nome_produto
             ORDER BY valor_total DESC
             LIMIT ?
         """, (*params, top)).fetchall()
