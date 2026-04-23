@@ -86,6 +86,8 @@ def upsert_boleto(nosso_numero: str, campos: dict) -> int:
 
         if row is None:
             campos.setdefault("status_atual", "EMITIDO")
+            campos.setdefault("valor", 0.0)
+            campos.setdefault("vencimento", "")
             campos["criado_em"] = agora
             campos["atualizado_em"] = agora
             campos["nosso_numero"] = str(nosso_numero)

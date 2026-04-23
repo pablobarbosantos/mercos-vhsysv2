@@ -1,17 +1,18 @@
 """
-Sincroniza boletos do Sicoob → banco local.
-Roda periodicamente (APScheduler) e pode ser disparado manualmente via endpoint.
+Sincroniza boletos do banco local → Sicoob.
+Estratégia: a API Sicoob V3 requer nossoNumero para cada consulta,
+não expõe listagem por período. O sync itera sobre os boletos locais
+em status aberto e atualiza o status consultando o Sicoob um a um.
 """
 import logging
-from datetime import date, timedelta
 
 from services import boleto_service, database
-from services.exceptions import BoletoError
+from services.exceptions import BoletoError, BoletoNaoEncontrado
 
 logger = logging.getLogger(__name__)
 
-# Mapeamento status Sicoob → status interno
-_STATUS_MAP = {
+# Status Sicoob → status interno
+_SITUACAO_PARA_STATUS = {
     "LIQUIDADO":         "LIQUIDADO",
     "BAIXADO":           "BAIXADO",
     "VENCIDO":           "VENCIDO",
@@ -21,86 +22,90 @@ _STATUS_MAP = {
     "RECUSADO":          "BAIXADO",
 }
 
-# Mapeamento status → tipo de evento a registrar
-_EVENTO_MAP = {
-    "LIQUIDADO": "PAGO_SICOOB",
-    "BAIXADO":   "BAIXADO",
-    "VENCIDO":   "VENCIDO",
-}
+# Status que ainda estão "em aberto" e precisam ser verificados
+_STATUS_ABERTOS = ("EMITIDO", "VENCIDO")
 
 
 def sincronizar(dias: int = 60) -> dict:
     """
-    Busca boletos no Sicoob dos últimos `dias` dias, atualiza banco local.
-    Sempre mantém em aberto (EMITIDO/VENCIDO) independente de data.
-    Retorna: {"novos": N, "atualizados": M, "erros": K}
+    Para cada boleto local com status em aberto, consulta o Sicoob
+    e atualiza status se houver mudança.
+    Retorna: {"verificados": N, "atualizados": M, "erros": K}
     """
-    logger.info("Iniciando sincronização Sicoob (últimos %d dias)...", dias)
-    novos = atualizados = erros = 0
+    logger.info("Iniciando sincronização: consultando boletos em aberto no Sicoob...")
 
-    try:
-        boletos_sicoob = boleto_service.listar(dias=dias)
-    except BoletoError as e:
-        logger.error("Falha ao listar boletos no Sicoob: %s", e)
-        return {"novos": 0, "atualizados": 0, "erros": 1, "detalhe": str(e)}
+    boletos_abertos = database.listar_boletos(
+        status=list(_STATUS_ABERTOS),
+        limit=500,
+    )
 
-    for item in boletos_sicoob:
+    if not boletos_abertos:
+        logger.info("Nenhum boleto em aberto para sincronizar.")
+        return {"verificados": 0, "atualizados": 0, "erros": 0}
+
+    verificados = atualizados = erros = 0
+
+    for b in boletos_abertos:
+        nosso_numero = b["nosso_numero"]
+        # Pular registros de teste/webhook sem nosso_numero real
+        if not nosso_numero or len(nosso_numero) < 4:
+            continue
+
         try:
-            nosso_numero = str(item.get("nossoNumero") or item.get("nosso_numero", ""))
-            if not nosso_numero:
-                continue
+            verificados += 1
+            dados_sicoob = boleto_service.consultar(nosso_numero)
 
-            status_sicoob = (
-                item.get("situacaoBoleto", {}).get("codigo")
-                or item.get("codigoSituacao")
-                or item.get("situacao", "")
+            # Extrair situação do retorno (estrutura pode variar)
+            situacao_raw = (
+                dados_sicoob.get("situacaoBoleto", {}).get("codigo")
+                or dados_sicoob.get("codigoSituacao")
+                or dados_sicoob.get("situacao", "")
             ).upper()
 
-            status_interno = _STATUS_MAP.get(status_sicoob, "EMITIDO")
+            novo_status = _SITUACAO_PARA_STATUS.get(situacao_raw)
 
-            pagador = item.get("pagador", {})
-            campos = {
-                "nosso_numero":    nosso_numero,
-                "seu_numero":      item.get("seuNumero") or item.get("seu_numero"),
-                "cliente_nome":    pagador.get("nome"),
-                "cliente_doc":     pagador.get("numeroCpfCnpj"),
-                "valor":           item.get("valor"),
-                "vencimento":      _normalizar_data(item.get("dataVencimento")),
-                "linha_digitavel": item.get("linhaDigitavel") or item.get("codigoLinhaDigitavel"),
-                "codigo_barras":   item.get("codigoBarras"),
-            }
-            campos = {k: v for k, v in campos.items() if v is not None}
+            if novo_status and novo_status != b["status_atual"]:
+                # Status mudou → registrar evento
+                tipo_evento = _evento_para_status(novo_status)
+                campos = {"status_atual": novo_status}
+                if novo_status == "LIQUIDADO":
+                    campos["origem_pagamento"] = "SICOOB"
 
-            existia = database.get_boleto(nosso_numero)
-            boleto_id = database.upsert_boleto(nosso_numero, campos)
+                # Atualizar linha digitável se veio na resposta
+                linha = dados_sicoob.get("linhaDigitavel") or dados_sicoob.get("codigoLinhaDigitavel")
+                if linha:
+                    campos["linha_digitavel"] = linha
 
-            if existia is None:
-                novos += 1
-                database.registrar_evento(boleto_id, "EMITIDO", "SICOOB", dados=item)
-            else:
-                status_anterior = existia["status_atual"]
-                if status_interno != status_anterior:
-                    tipo_evento = _EVENTO_MAP.get(status_interno, "SINCRONIZADO")
-                    database.registrar_evento(
-                        boleto_id, tipo_evento, "SICOOB",
-                        dados={"status_sicoob": status_sicoob, "status_anterior": status_anterior},
-                    )
-                    atualizados += 1
+                bid = database.upsert_boleto(nosso_numero, campos)
+                database.registrar_evento(
+                    bid,
+                    tipo_evento,
+                    "SICOOB",
+                    dados={"status_sicoob": situacao_raw, "status_anterior": b["status_atual"]},
+                )
+                atualizados += 1
+                logger.info(
+                    "Boleto %s: %s → %s", nosso_numero, b["status_atual"], novo_status
+                )
 
+        except BoletoNaoEncontrado:
+            # Boleto emitido localmente mas não encontrado no Sicoob (sandbox? erro?)
+            logger.warning("Boleto %s não encontrado no Sicoob — mantendo status local.", nosso_numero)
         except Exception as e:
-            logger.error("Erro ao sincronizar boleto %s: %s", item.get("nossoNumero"), e)
+            logger.error("Erro ao sincronizar boleto %s: %s", nosso_numero, e)
             erros += 1
 
     logger.info(
-        "Sincronização concluída: novos=%d atualizados=%d erros=%d",
-        novos, atualizados, erros,
+        "Sincronização concluída: verificados=%d atualizados=%d erros=%d",
+        verificados, atualizados, erros,
     )
-    return {"novos": novos, "atualizados": atualizados, "erros": erros}
+    return {"verificados": verificados, "atualizados": atualizados, "erros": erros}
 
 
-def _normalizar_data(valor) -> str | None:
-    """Converte datas ISO com fuso ou datetime para YYYY-MM-DD."""
-    if not valor:
-        return None
-    s = str(valor)
-    return s[:10]  # pega só YYYY-MM-DD independente do formato
+def _evento_para_status(status: str) -> str:
+    m = {
+        "LIQUIDADO":    "PAGO_SICOOB",
+        "BAIXADO":      "BAIXADO",
+        "VENCIDO":      "VENCIDO",
+    }
+    return m.get(status, "SINCRONIZADO")
