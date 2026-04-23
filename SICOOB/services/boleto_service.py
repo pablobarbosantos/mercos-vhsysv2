@@ -111,6 +111,37 @@ def segunda_via(nosso_numero: str) -> dict:
         raise BoletoError(f"Erro na segunda via: {e}") from e
 
 
+def listar(dias: int = 60) -> list[dict]:
+    """Lista boletos dos últimos N dias + todos os em aberto (status IN_OPEN)."""
+    from datetime import date, timedelta
+    scope = "boletos_consulta"
+    session, token = _session_e_token(scope)
+    url = f"{_BASE_URL}{_BOLETOS_PATH}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    data_inicio = (date.today() - timedelta(days=dias)).isoformat()
+    data_fim = date.today().isoformat()
+
+    params = {
+        "numeroCliente": config.NUMERO_CLIENTE,
+        "codigoModalidade": 1,
+        "dataInicio": data_inicio,
+        "dataFim": data_fim,
+    }
+    try:
+        resp = session.get(url, params=params, headers=headers, timeout=config.TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        resultado = data.get("resultado", data)
+        if isinstance(resultado, list):
+            return resultado
+        if isinstance(resultado, dict):
+            return resultado.get("itens", resultado.get("boletos", []))
+        return []
+    except Exception as e:
+        raise BoletoError(f"Erro ao listar boletos: {e}") from e
+
+
 def segunda_via_pdf(nosso_numero: str) -> bytes:
     """Retorna o PDF oficial do boleto via segunda via SICOOB.
     modeloImpressao=2 = A4 sem envelopamento 3 vias.
