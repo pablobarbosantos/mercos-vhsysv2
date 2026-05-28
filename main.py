@@ -5,6 +5,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import requests as _requests
 import logging
 import logging.handlers
@@ -253,6 +254,14 @@ def _job_relatorio_boletos():
         logger.error(f"[BoletoReport] Erro: {e}", exc_info=True)
 
 
+def _job_relatorio_email():
+    try:
+        from boletos.email_report import relatorio_email
+        relatorio_email()
+    except Exception as e:
+        logger.error(f"[EmailReport] Erro: {e}", exc_info=True)
+
+
 def _job_marcar_vencidos_boletos():
     try:
         from boletos.database import marcar_vencidos
@@ -442,6 +451,11 @@ scheduler.add_job(
     id="relatorio_boletos_manha"
 )
 scheduler.add_job(
+    _job_relatorio_email,
+    CronTrigger(hour=7, minute=31, day_of_week="mon-fri", timezone="America/Sao_Paulo"),
+    id="relatorio_email_manha"
+)
+scheduler.add_job(
     _job_marcar_vencidos_boletos,
     CronTrigger(hour=0, minute=5, timezone="America/Sao_Paulo"),
     id="boletos_marcar_vencidos"
@@ -537,13 +551,24 @@ app.include_router(boletos_webhook_router)  # sem auth — SICOOB chama diretame
 from nfe_emitidas.admin_routes import router as nfe_emitidas_router
 app.include_router(nfe_emitidas_router)
 
+from src.api_frontend import router as api_frontend_router
+app.include_router(api_frontend_router)
+
+# Serve o prototype como arquivos estáticos (mesmo processo, sem CORS)
+_PROTOTYPE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "THE_ONE", "prototype")
+if os.path.isdir(_PROTOTYPE_DIR):
+    app.mount("/", StaticFiles(directory=_PROTOTYPE_DIR, html=True), name="prototype")
+    logger.info(f"[Prototype] Static files em: {_PROTOTYPE_DIR}")
+else:
+    logger.warning(f"[Prototype] Diretório não encontrado: {_PROTOTYPE_DIR}")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Endpoints
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.get("/")
-async def root():
+@app.get("/health")
+async def health():
     return {"status": "online"}
 
 
@@ -601,6 +626,7 @@ async def receive_mercos_order(request: Request):
                         valor=float(dados.get("valor_total", 0) or 0),
                         cidade=dados.get("cliente_cidade", "") or "",
                         bairro=dados.get("cliente_bairro", "") or "",
+                        cnpj_cpf=dados.get("cliente_cnpj", "") or "",
                     )
 
                 logger.info(f"[Webhook] Pedido #{numero} persistido na fila (id={fila_id}).")
@@ -647,6 +673,7 @@ async def receive_mercos_order(request: Request):
                         valor=float(dados.get("valor_total", 0) or 0),
                         cidade=dados.get("cliente_cidade", "") or "",
                         bairro=dados.get("cliente_bairro", "") or "",
+                        cnpj_cpf=dados.get("cliente_cnpj", "") or "",
                     )
                     logger.info(f"[Webhook] Pedido #{numero} persistido na fila (id={fila_id}).")
 
@@ -683,4 +710,4 @@ async def receive_mercos_order(request: Request):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=2525)

@@ -147,6 +147,135 @@ def init_db():
                 feito_em  TEXT NOT NULL
             );
         """)
+    # ── Tabelas ERP (dados mestres e fluxo completo) ─────────────────────────
+    with get_conn() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS clientes_base (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj_cpf        TEXT UNIQUE NOT NULL,
+                razao_social    TEXT,
+                fantasia        TEXT,
+                endereco        TEXT,
+                numero          TEXT,
+                bairro          TEXT,
+                complemento     TEXT,
+                cep             TEXT,
+                cidade          TEXT,
+                uf              TEXT,
+                telefone        TEXT,
+                celular         TEXT,
+                email           TEXT,
+                ie              TEXT,
+                situacao        TEXT DEFAULT 'Ativo',
+                tipo_pessoa     TEXT DEFAULT 'PJ',
+                regime_trib     TEXT,
+                vendedor        TEXT,
+                obs             TEXT,
+                criado_em       TEXT NOT NULL,
+                atualizado_em   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS produtos_base (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo          TEXT UNIQUE NOT NULL,
+                nome            TEXT NOT NULL,
+                tipo            TEXT DEFAULT 'Produto',
+                fornecedor      TEXT,
+                marca           TEXT,
+                unidade         TEXT,
+                estoque_minimo  REAL DEFAULT 0,
+                estoque_maximo  REAL DEFAULT 0,
+                estoque_atual   REAL DEFAULT 0,
+                preco_venda     REAL DEFAULT 0,
+                preco_custo     REAL DEFAULT 0,
+                peso            REAL DEFAULT 0,
+                peso_liq        REAL DEFAULT 0,
+                ncm             TEXT,
+                ean             TEXT,
+                situacao        TEXT DEFAULT 'Ativo',
+                familia         TEXT,
+                criado_em       TEXT NOT NULL,
+                atualizado_em   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS fornecedores_base (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj_cpf        TEXT UNIQUE NOT NULL,
+                razao_social    TEXT,
+                fantasia        TEXT,
+                endereco        TEXT,
+                numero          TEXT,
+                bairro          TEXT,
+                complemento     TEXT,
+                cep             TEXT,
+                cidade          TEXT,
+                uf              TEXT,
+                telefone        TEXT,
+                celular         TEXT,
+                email           TEXT,
+                ie              TEXT,
+                situacao        TEXT DEFAULT 'Ativo',
+                tipo_pessoa     TEXT DEFAULT 'PJ',
+                regime_trib     TEXT,
+                vendedor        TEXT,
+                obs             TEXT,
+                criado_em       TEXT NOT NULL,
+                atualizado_em   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS conversoes_unidade (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                unidade_origem  TEXT NOT NULL,
+                unidade_destino TEXT NOT NULL,
+                fator           REAL NOT NULL,
+                UNIQUE(unidade_origem, unidade_destino)
+            );
+
+            CREATE TABLE IF NOT EXISTS romaneios (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                data            TEXT NOT NULL,
+                motorista       TEXT,
+                veiculo         TEXT,
+                status          TEXT DEFAULT 'aberto',
+                -- aberto | saiu | finalizado
+                criado_em       TEXT NOT NULL,
+                finalizado_em   TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS romaneio_pedidos (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                romaneio_id     INTEGER NOT NULL REFERENCES romaneios(id),
+                mercos_id       INTEGER NOT NULL,
+                ordem           INTEGER DEFAULT 0,
+                resultado       TEXT,
+                -- entregue | devolvido | parcial
+                forma_pgto      TEXT,
+                -- dinheiro | pix | boleto | assinou | cartao
+                assinou_nota    INTEGER DEFAULT 0,
+                obs             TEXT,
+                atualizado_em   TEXT,
+                UNIQUE(romaneio_id, mercos_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_romaneio_pedidos_rom ON romaneio_pedidos(romaneio_id);
+            CREATE INDEX IF NOT EXISTS idx_romaneio_pedidos_mer ON romaneio_pedidos(mercos_id);
+
+            CREATE TABLE IF NOT EXISTS motoristas (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome    TEXT NOT NULL,
+                cnh     TEXT,
+                tel     TEXT,
+                ativo   INTEGER DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS veiculos (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                placa   TEXT UNIQUE NOT NULL,
+                modelo  TEXT,
+                cap_kg  REAL DEFAULT 0,
+                ativo   INTEGER DEFAULT 1
+            );
+        """)
+
     # Migrations seguras (ADD COLUMN é idempotente no SQLite via try/except)
     for col, typedef in [("cidade", "TEXT"), ("bairro", "TEXT"), ("rua", "TEXT"), ("numero_end", "TEXT"), ("cep", "TEXT")]:
         try:
@@ -156,11 +285,46 @@ def init_db():
     try:
         conn.execute("ALTER TABLE pedidos_processados ADD COLUMN vhsys_nro TEXT")
     except Exception:
-        pass  # coluna já existe
+        pass
     try:
         conn.execute("ALTER TABLE pedidos_fluxo ADD COLUMN ultimo_alerta_fluxo_em TEXT")
     except Exception:
-        pass  # coluna já existe
+        pass
+    # Tabela de vendas no cartão (PDV + entregas)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS vendas_cartao (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                data        TEXT NOT NULL,
+                valor       REAL NOT NULL,
+                desconto_pct REAL DEFAULT 2.5,
+                origem      TEXT DEFAULT 'manual',
+                obs         TEXT,
+                criado_em   TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_vendas_cartao_data ON vendas_cartao(data)")
+    except Exception:
+        pass
+    # Novos campos do fluxo completo de entrega
+    for col, typedef in [
+        ("tipo",               "TEXT DEFAULT 'atacado'"),
+        ("precisa_nfe",        "INTEGER DEFAULT 0"),
+        ("romaneio_id",        "INTEGER"),
+        ("resultado_entrega",  "TEXT"),
+        ("forma_pgto_retorno", "TEXT"),
+        ("assinou_nota",       "INTEGER DEFAULT 0"),
+        ("entregue_em",        "TEXT"),
+        ("cancelado_em",       "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE pedidos_fluxo ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass
+    try:
+        conn.execute("ALTER TABLE pedidos_fluxo ADD COLUMN cnpj_cpf TEXT")
+    except Exception:
+        pass
 
     logger.info("[DB] Banco inicializado.")
 
@@ -201,17 +365,18 @@ def registrar_erro(entidade: str, referencia_id: str, erro: str):
 
 def fluxo_registrar_recebido(mercos_id: int, numero: str, cliente: str,
                               valor: float = 0, cidade: str = "", bairro: str = "",
-                              rua: str = "", numero_end: str = "", cep: str = ""):
+                              rua: str = "", numero_end: str = "", cep: str = "",
+                              cnpj_cpf: str = ""):
     """Chamado quando o webhook chega — primeira etapa do fluxo."""
     agora = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
         conn.execute("""
             INSERT OR IGNORE INTO pedidos_fluxo
-                (mercos_id, numero, cliente, valor, cidade, bairro, rua, numero_end, cep, recebido_em, status_fluxo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recebido')
-        """, (mercos_id, str(numero), cliente, valor, cidade or "", bairro or "", rua or "", numero_end or "", cep or "", agora))
+                (mercos_id, numero, cliente, valor, cidade, bairro, rua, numero_end, cep, cnpj_cpf, recebido_em, status_fluxo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recebido')
+        """, (mercos_id, str(numero), cliente, valor, cidade or "", bairro or "", rua or "", numero_end or "", cep or "", cnpj_cpf or "", agora))
         # Atualiza campos de endereço mesmo se row já existia
-        if valor > 0 or cidade or bairro or rua or numero_end or cep:
+        if valor > 0 or cidade or bairro or rua or numero_end or cep or cnpj_cpf:
             conn.execute("""
                 UPDATE pedidos_fluxo
                 SET valor      = CASE WHEN ? > 0  THEN ? ELSE valor      END,
@@ -219,7 +384,8 @@ def fluxo_registrar_recebido(mercos_id: int, numero: str, cliente: str,
                     bairro     = CASE WHEN ? != '' THEN ? ELSE bairro     END,
                     rua        = CASE WHEN ? != '' THEN ? ELSE rua        END,
                     numero_end = CASE WHEN ? != '' THEN ? ELSE numero_end END,
-                    cep        = CASE WHEN ? != '' THEN ? ELSE cep        END
+                    cep        = CASE WHEN ? != '' THEN ? ELSE cep        END,
+                    cnpj_cpf   = CASE WHEN ? != '' THEN ? ELSE cnpj_cpf  END
                 WHERE mercos_id = ?
             """, (valor, valor,
                   cidade or "", cidade or "",
@@ -227,6 +393,7 @@ def fluxo_registrar_recebido(mercos_id: int, numero: str, cliente: str,
                   rua or "", rua or "",
                   numero_end or "", numero_end or "",
                   cep or "", cep or "",
+                  cnpj_cpf or "", cnpj_cpf or "",
                   mercos_id))
 
 
@@ -658,3 +825,327 @@ def salvar_itens_pedido(mercos_id: int, itens: list[dict]):
                 item.get("valor_total") or item.get("total", 0),
                 agora,
             ))
+
+
+# ──────────────────────────────────────────────────────────────
+# Clientes base (importados do CSV Omie)
+# ──────────────────────────────────────────────────────────────
+
+def clientes_upsert(clientes: list[dict]) -> int:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        for c in clientes:
+            conn.execute("""
+                INSERT INTO clientes_base
+                    (cnpj_cpf, razao_social, fantasia, endereco, numero, bairro,
+                     complemento, cep, cidade, uf, telefone, celular, email, ie,
+                     situacao, tipo_pessoa, regime_trib, vendedor, obs,
+                     criado_em, atualizado_em)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(cnpj_cpf) DO UPDATE SET
+                    razao_social=excluded.razao_social,
+                    fantasia=excluded.fantasia,
+                    endereco=excluded.endereco,
+                    numero=excluded.numero,
+                    bairro=excluded.bairro,
+                    complemento=excluded.complemento,
+                    cep=excluded.cep,
+                    cidade=excluded.cidade,
+                    uf=excluded.uf,
+                    telefone=excluded.telefone,
+                    celular=excluded.celular,
+                    email=excluded.email,
+                    ie=excluded.ie,
+                    situacao=excluded.situacao,
+                    tipo_pessoa=excluded.tipo_pessoa,
+                    regime_trib=excluded.regime_trib,
+                    vendedor=excluded.vendedor,
+                    obs=excluded.obs,
+                    atualizado_em=excluded.atualizado_em
+            """, (
+                c.get("cnpj_cpf", ""), c.get("razao_social", ""), c.get("fantasia", ""),
+                c.get("endereco", ""), c.get("numero", ""), c.get("bairro", ""),
+                c.get("complemento", ""), c.get("cep", ""), c.get("cidade", ""),
+                c.get("uf", ""), c.get("telefone", ""), c.get("celular", ""),
+                c.get("email", ""), c.get("ie", ""), c.get("situacao", "Ativo"),
+                c.get("tipo_pessoa", "PJ"), c.get("regime_trib", ""), c.get("vendedor", ""),
+                c.get("obs", ""), agora, agora,
+            ))
+    return len(clientes)
+
+
+def clientes_listar(busca: str = "", uf: str = "", situacao: str = "", limit: int = 500) -> list[dict]:
+    with get_conn() as conn:
+        conds, params = [], []
+        if busca:
+            conds.append("(razao_social LIKE ? OR fantasia LIKE ? OR cnpj_cpf LIKE ?)")
+            params += [f"%{busca}%", f"%{busca}%", f"%{busca}%"]
+        if uf:
+            conds.append("uf = ?"); params.append(uf)
+        if situacao:
+            conds.append("situacao = ?"); params.append(situacao)
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        rows = conn.execute(
+            f"SELECT * FROM clientes_base {where} ORDER BY fantasia, razao_social LIMIT ?",
+            params + [limit]
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def clientes_count() -> int:
+    with get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM clientes_base").fetchone()[0]
+
+
+# ──────────────────────────────────────────────────────────────
+# Fornecedores base
+# ──────────────────────────────────────────────────────────────
+
+def fornecedores_upsert(fornecedores: list[dict]) -> int:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        for f in fornecedores:
+            conn.execute("""
+                INSERT INTO fornecedores_base
+                    (cnpj_cpf, razao_social, fantasia, endereco, numero, bairro,
+                     complemento, cep, cidade, uf, telefone, celular, email, ie,
+                     situacao, tipo_pessoa, regime_trib, vendedor, obs,
+                     criado_em, atualizado_em)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(cnpj_cpf) DO UPDATE SET
+                    razao_social=excluded.razao_social, fantasia=excluded.fantasia,
+                    endereco=excluded.endereco, numero=excluded.numero,
+                    bairro=excluded.bairro, complemento=excluded.complemento,
+                    cep=excluded.cep, cidade=excluded.cidade, uf=excluded.uf,
+                    telefone=excluded.telefone, celular=excluded.celular,
+                    email=excluded.email, ie=excluded.ie,
+                    situacao=excluded.situacao, tipo_pessoa=excluded.tipo_pessoa,
+                    regime_trib=excluded.regime_trib, vendedor=excluded.vendedor,
+                    obs=excluded.obs, atualizado_em=excluded.atualizado_em
+            """, (
+                f.get("cnpj_cpf", ""), f.get("razao_social", ""), f.get("fantasia", ""),
+                f.get("endereco", ""), f.get("numero", ""), f.get("bairro", ""),
+                f.get("complemento", ""), f.get("cep", ""), f.get("cidade", ""),
+                f.get("uf", ""), f.get("telefone", ""), f.get("celular", ""),
+                f.get("email", ""), f.get("ie", ""), f.get("situacao", "Ativo"),
+                f.get("tipo_pessoa", "PJ"), f.get("regime_trib", ""), f.get("vendedor", ""),
+                f.get("obs", ""), agora, agora,
+            ))
+    return len(fornecedores)
+
+
+def fornecedores_listar(busca: str = "", uf: str = "", situacao: str = "", limit: int = 500) -> list[dict]:
+    with get_conn() as conn:
+        conds, params = [], []
+        if busca:
+            conds.append("(razao_social LIKE ? OR fantasia LIKE ? OR cnpj_cpf LIKE ?)")
+            params += [f"%{busca}%", f"%{busca}%", f"%{busca}%"]
+        if uf:
+            conds.append("uf = ?"); params.append(uf)
+        if situacao:
+            conds.append("situacao = ?"); params.append(situacao)
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        rows = conn.execute(
+            f"SELECT * FROM fornecedores_base {where} ORDER BY fantasia, razao_social LIMIT ?",
+            params + [limit]
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def fornecedores_count() -> int:
+    with get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM fornecedores_base").fetchone()[0]
+
+
+# ──────────────────────────────────────────────────────────────
+# Produtos base (importados do CSV Omie)
+# ──────────────────────────────────────────────────────────────
+
+def produtos_upsert(produtos: list[dict]) -> int:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        for p in produtos:
+            conn.execute("""
+                INSERT INTO produtos_base
+                    (codigo, nome, tipo, fornecedor, marca, unidade,
+                     estoque_minimo, estoque_maximo, estoque_atual,
+                     preco_venda, preco_custo, peso, peso_liq, ncm, ean,
+                     situacao, familia, criado_em, atualizado_em)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(codigo) DO UPDATE SET
+                    nome=excluded.nome,
+                    tipo=excluded.tipo,
+                    fornecedor=excluded.fornecedor,
+                    marca=excluded.marca,
+                    unidade=excluded.unidade,
+                    estoque_minimo=excluded.estoque_minimo,
+                    estoque_maximo=excluded.estoque_maximo,
+                    estoque_atual=excluded.estoque_atual,
+                    preco_venda=excluded.preco_venda,
+                    preco_custo=excluded.preco_custo,
+                    peso=excluded.peso,
+                    peso_liq=excluded.peso_liq,
+                    ncm=excluded.ncm,
+                    ean=excluded.ean,
+                    situacao=excluded.situacao,
+                    familia=excluded.familia,
+                    atualizado_em=excluded.atualizado_em
+            """, (
+                p.get("codigo", ""), p.get("nome", ""), p.get("tipo", "Produto"),
+                p.get("fornecedor", ""), p.get("marca", ""), p.get("unidade", "un"),
+                float(p.get("estoque_minimo") or 0), float(p.get("estoque_maximo") or 0),
+                float(p.get("estoque_atual") or 0),
+                float(p.get("preco_venda") or 0), float(p.get("preco_custo") or 0),
+                float(p.get("peso") or 0), float(p.get("peso_liq") or 0),
+                p.get("ncm", ""), p.get("ean", ""), p.get("situacao", "Ativo"),
+                p.get("familia", ""), agora, agora,
+            ))
+    return len(produtos)
+
+
+def produtos_listar(busca: str = "", familia: str = "", situacao: str = "Ativo",
+                    estoque_critico: bool = False, limit: int = 1000) -> list[dict]:
+    with get_conn() as conn:
+        conds, params = [], []
+        if busca:
+            conds.append("(nome LIKE ? OR codigo LIKE ? OR ean LIKE ?)")
+            params += [f"%{busca}%", f"%{busca}%", f"%{busca}%"]
+        if familia:
+            conds.append("familia = ?"); params.append(familia)
+        if situacao:
+            conds.append("situacao = ?"); params.append(situacao)
+        if estoque_critico:
+            conds.append("estoque_atual <= estoque_minimo AND estoque_minimo > 0")
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        rows = conn.execute(
+            f"SELECT * FROM produtos_base {where} ORDER BY nome LIMIT ?",
+            params + [limit]
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def produtos_count() -> int:
+    with get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM produtos_base").fetchone()[0]
+
+
+# ──────────────────────────────────────────────────────────────
+# Romaneios
+# ──────────────────────────────────────────────────────────────
+
+def romaneio_criar(data: str, motorista: str = "", veiculo: str = "",
+                   pedido_ids: list | None = None) -> int:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO romaneios (data, motorista, veiculo, status, criado_em)
+            VALUES (?, ?, ?, 'aberto', ?)
+        """, (data, motorista, veiculo, agora))
+        rom_id = cur.lastrowid
+        if pedido_ids:
+            for i, mid in enumerate(pedido_ids):
+                conn.execute("""
+                    INSERT OR IGNORE INTO romaneio_pedidos (romaneio_id, mercos_id, ordem, atualizado_em)
+                    VALUES (?, ?, ?, ?)
+                """, (rom_id, mid, i, agora))
+            conn.execute("""
+                UPDATE pedidos_fluxo SET romaneio_id=?, status_fluxo='separado', separado_em=?
+                WHERE mercos_id IN ({})
+            """.format(",".join("?" * len(pedido_ids))),
+                [rom_id, agora] + list(pedido_ids)
+            )
+    return rom_id
+
+
+def romaneio_get(rom_id: int) -> dict | None:
+    with get_conn() as conn:
+        rom = conn.execute("SELECT * FROM romaneios WHERE id=?", (rom_id,)).fetchone()
+        if not rom:
+            return None
+        paradas = conn.execute("""
+            SELECT rp.*, pf.numero, pf.cliente, pf.valor, pf.cidade,
+                   pf.bairro, pf.rua, pf.numero_end, pf.cep, pf.status_fluxo,
+                   pf.precisa_nfe, pf.tipo
+            FROM romaneio_pedidos rp
+            LEFT JOIN pedidos_fluxo pf ON pf.mercos_id = rp.mercos_id
+            WHERE rp.romaneio_id = ?
+            ORDER BY rp.ordem
+        """, (rom_id,)).fetchall()
+    result = dict(rom)
+    result["paradas"] = [dict(p) for p in paradas]
+    return result
+
+
+def romaneio_listar(status: str = "", limit: int = 50) -> list[dict]:
+    with get_conn() as conn:
+        where = "WHERE status=?" if status else ""
+        params = [status] if status else []
+        rows = conn.execute(
+            f"SELECT * FROM romaneios {where} ORDER BY criado_em DESC LIMIT ?",
+            params + [limit]
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def romaneio_iniciar(rom_id: int) -> bool:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE romaneios SET status='saiu' WHERE id=? AND status='aberto'", (rom_id,)
+        )
+        if cur.rowcount == 0:
+            return False
+        conn.execute("""
+            UPDATE pedidos_fluxo SET status_fluxo='enviado', enviado_em=?
+            WHERE romaneio_id=? AND status_fluxo='separado'
+        """, (agora, rom_id))
+    return True
+
+
+def romaneio_registrar_retorno(rom_id: int, mercos_id: int,
+                               resultado: str, forma_pgto: str,
+                               assinou: bool = False, obs: str = "") -> bool:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute("""
+            UPDATE romaneio_pedidos
+            SET resultado=?, forma_pgto=?, assinou_nota=?, obs=?, atualizado_em=?
+            WHERE romaneio_id=? AND mercos_id=?
+        """, (resultado, forma_pgto, 1 if assinou else 0, obs, agora, rom_id, mercos_id))
+        if cur.rowcount == 0:
+            return False
+        novo_status = "finalizado" if resultado == "entregue" and not assinou else "entregue"
+        conn.execute("""
+            UPDATE pedidos_fluxo
+            SET resultado_entrega=?, forma_pgto_retorno=?, assinou_nota=?,
+                entregue_em=?, status_fluxo=?
+            WHERE mercos_id=?
+        """, (resultado, forma_pgto, 1 if assinou else 0, agora, novo_status, mercos_id))
+    return True
+
+
+def romaneio_finalizar(rom_id: int) -> bool:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE romaneios SET status='finalizado', finalizado_em=? WHERE id=? AND status='saiu'",
+            (agora, rom_id)
+        )
+    return cur.rowcount > 0
+
+
+def pedido_criar_manual(numero: str, cliente_cnpj: str, cliente_nome: str,
+                        valor: float, cidade: str = "", tipo: str = "atacado",
+                        precisa_nfe: bool = False) -> int:
+    agora = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO pedidos_fluxo
+                (mercos_id, numero, cliente, valor, cidade, recebido_em,
+                 status_fluxo, tipo, precisa_nfe)
+            VALUES (
+                (SELECT COALESCE(MIN(mercos_id), 0) - 1 FROM pedidos_fluxo WHERE mercos_id < 0),
+                ?, ?, ?, ?, ?, 'recebido', ?, ?
+            )
+        """, (numero, cliente_nome, valor, cidade, agora, tipo, 1 if precisa_nfe else 0))
+    return cur.lastrowid

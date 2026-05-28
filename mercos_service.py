@@ -82,7 +82,8 @@ class MercosService:
                     rua        = dados_mercos.get("cliente_rua", "")
                     numero_end = dados_mercos.get("cliente_numero", "")
                     cep        = dados_mercos.get("cliente_cep", "")
-                    if cidade or bairro or rua or cep:
+                    cnpj_cpf   = dados_mercos.get("cliente_cnpj", "")
+                    if cidade or bairro or rua or cep or cnpj_cpf:
                         db.fluxo_registrar_recebido(
                             mercos_id=mercos_id,
                             numero=str(numero or mercos_id),
@@ -93,6 +94,7 @@ class MercosService:
                             rua=rua,
                             numero_end=numero_end,
                             cep=cep,
+                            cnpj_cpf=cnpj_cpf,
                         )
                 except Exception as e:
                     logger.warning(f"[MercosService] Falha ao salvar endereço (não crítico): {e}")
