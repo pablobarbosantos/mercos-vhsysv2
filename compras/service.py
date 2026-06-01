@@ -8,9 +8,10 @@ import threading
 
 from compras import database as db
 from compras.nfe_parser import parse_nfe
-from compras.vhsys_adapter import atualizar_custo_produto, lancar_entrada_compra
-from consulta_vhsys.database.database import get_produto_by_vhsys_id, set_ean
-from consulta_vhsys.services.vhsys_adapter import requisitar as _vhsys_requisitar
+from compras.erp_adapter import (
+    atualizar_custo_produto, lancar_entrada_compra,
+    atualizar_ean_produto, atualizar_unidade_produto,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,16 +133,16 @@ def _processar_nota(fila_id: int, chave_nfe: str) -> str:
         atualizar_custo_produto(vhsys_id, valor_unitario)
         db.registrar_historico_custo(vhsys_id, valor_unitario, chave_nfe)
 
-        # Atualiza unidade no VHSys se a NF-e trouxer uma
+        # Atualiza unidade no ERP se a NF-e trouxer uma
         unidade_nfe = item_db.get("unidade", "")
         if unidade_nfe:
-            _vhsys_requisitar("PUT", f"produtos/{vhsys_id}", body={"unidade_produto": unidade_nfe})
-            logger.info("[Compras] Unidade atualizada vhsys_id=%d → %s", vhsys_id, unidade_nfe)
+            atualizar_unidade_produto(vhsys_id, unidade_nfe)
+            logger.info("[Compras] Unidade atualizada erp_id=%d → %s", vhsys_id, unidade_nfe)
 
-        # Atualiza EAN se a NF-e trouxer um e for diferente do cadastrado
+        # Atualiza EAN se a NF-e trouxer um
         ean_nfe = ean_por_codigo.get(item_db["codigo_fornecedor"], "")
         if ean_nfe:
-            _atualizar_ean_se_necessario(vhsys_id, ean_nfe)
+            atualizar_ean_produto(vhsys_id, ean_nfe)
 
         # Lançamento de estoque desativado — balanço sendo feito manualmente
         # ok_estoque = lancar_entrada_compra(...)
@@ -170,26 +171,6 @@ def _processar_nota(fila_id: int, chave_nfe: str) -> str:
     return "concluido"
 
 
-def _atualizar_ean_se_necessario(vhsys_id: int, ean_nfe: str) -> None:
-    """
-    Atualiza EAN no consulta_vhsys.db e no VHSys apenas se:
-    - a NF-e trouxe um EAN válido
-    - e o cadastro está vazio ou com valor diferente
-    """
-    try:
-        produto = get_produto_by_vhsys_id(vhsys_id)
-        ean_atual = (produto.get("ean") or "") if produto else ""
-        if ean_atual == ean_nfe:
-            return  # já correto, não toca
-
-        set_ean(vhsys_id, ean_nfe)
-        _vhsys_requisitar("PUT", f"produtos/{vhsys_id}", body={"codigo_barra_produto": ean_nfe})
-        logger.info(
-            "[Compras] EAN atualizado vhsys_id=%d: '%s' → '%s'",
-            vhsys_id, ean_atual or "(vazio)", ean_nfe
-        )
-    except Exception as exc:
-        logger.warning("[Compras] Falha ao atualizar EAN vhsys_id=%d: %s", vhsys_id, exc)
 
 
 def _criar_contas_pagar(chave_nfe: str, parsed: dict,

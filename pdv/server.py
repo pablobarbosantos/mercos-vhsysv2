@@ -43,7 +43,7 @@ def _sync_periodico(intervalo_seg: int = 1800):
     while True:
         time.sleep(intervalo_seg)
         try:
-            from pdv.vhsys import sincronizar_produtos
+            from pdv.erp_adapter import sincronizar_produtos
             resultado = sincronizar_produtos()
             if resultado["erro"]:
                 logger.warning(f"[PDV auto-sync] {resultado['erro']}")
@@ -102,7 +102,7 @@ async def api_reativar_produto(produto_id: int):
 
 @app.post("/pdv/api/produtos/sync")
 async def api_sync_produtos():
-    from pdv.vhsys import sincronizar_produtos
+    from pdv.erp_adapter import sincronizar_produtos
     resultado = sincronizar_produtos()
     if resultado["erro"]:
         raise HTTPException(status_code=502, detail=resultado["erro"])
@@ -181,7 +181,7 @@ async def api_criar_venda(payload: VendaPayload):
     # Sync VHSys em background (não bloqueia o caixa)
     def _sync():
         try:
-            from pdv.vhsys import sincronizar_venda
+            from pdv.erp_adapter import sincronizar_venda
             sincronizar_venda(venda_id)
         except Exception as e:
             logger.error(f"[PDV sync venda {venda_id}] {e}", exc_info=True)
@@ -203,7 +203,7 @@ async def api_retentar_sync(venda_id: int):
 
     def _sync():
         try:
-            from pdv.vhsys import sincronizar_venda
+            from pdv.erp_adapter import sincronizar_venda
             sincronizar_venda(venda_id)
         except Exception as e:
             logger.error(f"[PDV retentar sync venda {venda_id}] {e}", exc_info=True)

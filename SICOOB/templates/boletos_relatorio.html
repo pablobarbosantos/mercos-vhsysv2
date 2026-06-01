@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sicoob · Relatório 120 dias</title>
+<style>
+:root {
+  --bg:      #0f1117;
+  --surface: #1a1d27;
+  --border:  #2a2d3a;
+  --text:    #e2e8f0;
+  --muted:   #64748b;
+  --accent:  #3b82f6;
+  --ok:      #22c55e;
+  --warn:    #f59e0b;
+  --erro:    #ef4444;
+  --info:    #06b6d4;
+  --purple:  #a855f7;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.sidebar-logo { font-size: 17px; font-weight: 700; color: var(--accent); padding: 0 8px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: none; transition: all 0.15s; }
+.sidebar-item.active { background: rgba(59,130,246,0.15); color: var(--accent); }
+.sidebar-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--text); }
+.sidebar-icon { font-size: 15px; width: 20px; text-align: center; }
+.sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+.sidebar-footer { margin-top: auto; }
+.main { flex: 1; padding: 28px; overflow-x: hidden; }
+
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.subtitle { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
+
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; display: flex; align-items: center; gap: 7px; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.progress { display: none; margin-top: 14px; }
+.progress.show { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-top: 14px; display: none; }
+.alert.show { display: block; }
+.alert-ok   { background: rgba(34,197,94,0.1);  border: 1px solid rgba(34,197,94,0.3);  color: var(--ok); }
+.alert-erro { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.3);  color: var(--erro); }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.stat-box .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.stat-box .value { font-size: 19px; font-weight: 700; margin-top: 4px; }
+.stat-box .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.stat-box.ok     .value { color: var(--ok); }
+.stat-box.erro   .value { color: var(--erro); }
+.stat-box.warn   .value { color: var(--warn); }
+.stat-box.info   .value { color: var(--info); }
+.stat-box.purple .value { color: var(--purple); }
+
+.mes-grupo { margin-bottom: 4px; }
+.mes-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  user-select: none; margin-bottom: 2px;
+}
+.mes-header:hover { background: rgba(255,255,255,0.06); }
+.mes-header .chevron { transition: transform 0.2s; }
+.mes-header.open .chevron { transform: rotate(90deg); }
+.mes-body { display: none; }
+.mes-body.open { display: block; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody tr { border-bottom: 1px solid rgba(42,45,58,0.6); }
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+td { padding: 9px 12px; vertical-align: middle; }
+
+.badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.badge-emitido    { background: rgba(59,130,246,0.15); color: var(--accent); }
+.badge-liquidado  { background: rgba(34,197,94,0.15);  color: var(--ok); }
+.badge-pago_ext   { background: rgba(34,197,94,0.15);  color: var(--ok); }
+.badge-vencido    { background: rgba(239,68,68,0.15);  color: var(--erro); }
+.badge-baixado    { background: rgba(100,116,139,0.15);color: var(--muted); }
+
+.valor-text { font-variant-numeric: tabular-nums; }
+
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+.print-header { display: none; }
+
+/* ---- Print ---- */
+@media print {
+  body { background: #fff; color: #111; font-size: 11px; }
+  .sidebar, .card:first-child { display: none !important; }
+  .main { padding: 0; }
+  .print-header { display: block; text-align: center; margin-bottom: 16px; }
+  .print-header h1 { font-size: 16px; }
+  .card { border: 1px solid #ddd; border-radius: 0; page-break-inside: avoid; }
+  .badge { border: 1px solid currentColor; }
+  table { font-size: 10px; }
+  .stat-box { border: 1px solid #ddd; }
+  .stats-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  thead th { background: #f5f5f5; color: #333; border-bottom: 2px solid #ccc; }
+  .mes-body { display: block !important; }
+  .mes-header .chevron { display: none; }
+  tbody tr { border-bottom: 1px solid #eee; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+{% if not modo_impressao %}
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo">🏦 SICOOB</div>
+    <a class="sidebar-item" href="/admin">📋 Boletos</a>
+    <hr class="sidebar-divider">
+    <a class="sidebar-item" href="/admin/relatorios/extrato">📊 Extrato</a>
+    <a class="sidebar-item active" href="/admin/relatorios/boletos">📁 Rel. 120 dias</a>
+    <div class="sidebar-footer">
+      <a class="sidebar-item" href="/docs" target="_blank">📖 Docs API</a>
+    </div>
+  </nav>
+  <div class="main">
+{% endif %}
+
+<div class="print-header">
+  <h1>Relatório de Boletos — Últimos 120 dias</h1>
+  <p style="color:#666; font-size:12px">Gerado em: {{ data_fim or '' }}</p>
+</div>
+
+{% if not modo_impressao %}
+    <h1>Relatório de Boletos</h1>
+    <p class="subtitle">Últimos 120 dias — situação atual de cada boleto</p>
+
+    <div class="card">
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-gerar" onclick="gerarRelatorio()">
+          🔄 Sincronizar SICOOB e Atualizar
+        </button>
+        <a class="btn btn-outline" href="/admin/api/relatorios/boletos-120-dias/csv">
+          ⬇ CSV (dados atuais)
+        </a>
+        <a class="btn btn-outline" href="/admin/api/relatorios/boletos-120-dias/pdf" target="_blank">
+          🖨 Imprimir / PDF
+        </a>
+      </div>
+      <div class="progress" id="progress">
+        <div class="spinner"></div>
+        <span>Sincronizando com o SICOOB… pode levar alguns minutos.</span>
+      </div>
+      <div class="alert" id="alert"></div>
+    </div>
+{% endif %}
+
+    {% if stats is defined %}
+    {% set ps = stats.por_status %}
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="label">Total Boletos</div>
+        <div class="value">{{ stats.total_qtd }}</div>
+        <div class="sub">R$ {{ "%.2f"|format(stats.total_valor) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box ok">
+        <div class="label">Liquidados / Pagos</div>
+        <div class="value">
+          {{ (ps.get('LIQUIDADO', {}).get('qtd', 0) or 0) + (ps.get('PAGO_EXTERNO', {}).get('qtd', 0) or 0) }}
+        </div>
+        <div class="sub">R$ {{ "%.2f"|format(
+          (ps.get('LIQUIDADO', {}).get('valor', 0) or 0) +
+          (ps.get('PAGO_EXTERNO', {}).get('valor', 0) or 0)
+        ) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box info">
+        <div class="label">Em Aberto</div>
+        <div class="value">{{ ps.get('EMITIDO', {}).get('qtd', 0) or 0 }}</div>
+        <div class="sub">R$ {{ "%.2f"|format(ps.get('EMITIDO', {}).get('valor', 0) or 0) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box erro">
+        <div class="label">Vencidos</div>
+        <div class="value">{{ ps.get('VENCIDO', {}).get('qtd', 0) or 0 }}</div>
+        <div class="sub">R$ {{ "%.2f"|format(ps.get('VENCIDO', {}).get('valor', 0) or 0) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Baixados</div>
+        <div class="value">{{ ps.get('BAIXADO', {}).get('qtd', 0) or 0 }}</div>
+        <div class="sub">R$ {{ "%.2f"|format(ps.get('BAIXADO', {}).get('valor', 0) or 0) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box warn">
+        <div class="label">Inadimplência</div>
+        <div class="value">{{ stats.taxa_inadimplencia }}%</div>
+        <div class="sub">dos boletos emitidos</div>
+      </div>
+      <div class="stat-box purple">
+        <div class="label">Ticket Médio</div>
+        <div class="value">R$ {{ "%.2f"|format(stats.ticket_medio) | replace('.', ',') }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if boletos is defined and boletos %}
+    <div class="card">
+      <div class="card-title">
+        Boletos por mês
+        {% if data_inicio and data_fim %} · {{ data_inicio }} → {{ data_fim }}{% endif %}
+        · {{ boletos | length }} boleto(s)
+      </div>
+
+      {% for mes, lista in boletos | groupby('mes') | sort(attribute='grouper', reverse=true) %}
+      {% set total_mes = namespace(v=0) %}
+      {% for b in lista %}{% set total_mes.v = total_mes.v + (b.valor or 0) %}{% endfor %}
+      <div class="mes-grupo">
+        <div class="mes-header" onclick="toggleMes(this)">
+          <span>📅 {{ mes }} &nbsp;·&nbsp; {{ lista | list | length }} boleto(s) &nbsp;·&nbsp; R$ {{ "%.2f"|format(total_mes.v) | replace('.', ',') }}</span>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="mes-body">
+          <table>
+            <thead>
+              <tr>
+                <th>Nosso Nº</th>
+                <th>Cliente</th>
+                <th>CPF/CNPJ</th>
+                <th>Emissão</th>
+                <th>Vencimento</th>
+                <th style="text-align:right">Valor (R$)</th>
+                <th style="text-align:center">Situação Atual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in lista %}
+              <tr>
+                <td>{{ b.nosso_numero or '—' }}</td>
+                <td>{{ b.cliente_nome or '—' }}</td>
+                <td>{{ b.cliente_doc or '—' }}</td>
+                <td>{{ b.criado_em[:10] if b.criado_em else '—' }}</td>
+                <td>{{ b.vencimento[:10] if b.vencimento else '—' }}</td>
+                <td style="text-align:right" class="valor-text">
+                  {{ "%.2f"|format(b.valor) | replace('.', ',') if b.valor else '—' }}
+                </td>
+                <td style="text-align:center">
+                  {% set s = (b.status_atual or '') | upper %}
+                  {% if s == 'LIQUIDADO' %}
+                    <span class="badge badge-liquidado">Liquidado</span>
+                  {% elif s == 'PAGO_EXTERNO' %}
+                    <span class="badge badge-pago_ext">Pago Externo</span>
+                  {% elif s == 'VENCIDO' %}
+                    <span class="badge badge-vencido">Vencido</span>
+                  {% elif s == 'BAIXADO' %}
+                    <span class="badge badge-baixado">Baixado</span>
+                  {% else %}
+                    <span class="badge badge-emitido">Em Aberto</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% elif modo_impressao is not defined or not modo_impressao %}
+    <div class="card">
+      <div class="empty">Clique em "Sincronizar SICOOB e Atualizar" para carregar os boletos.</div>
+    </div>
+    {% endif %}
+
+{% if not modo_impressao %}
+  </div>
+</div>
+
+<script>
+async function gerarRelatorio() {
+  const btn = document.getElementById('btn-gerar');
+  const prog = document.getElementById('progress');
+  const alertEl = document.getElementById('alert');
+  btn.disabled = true;
+  prog.className = 'progress show';
+  alertEl.className = 'alert';
+
+  try {
+    const resp = await fetch('/admin/api/relatorios/boletos-120-dias/gerar', { method: 'POST' });
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      alertEl.className = 'alert alert-ok show';
+      alertEl.innerHTML = `✓ ${data.total_boletos} boletos carregados.<br>
+        CSV salvo em: <strong>${data.arquivo_csv}</strong><br>
+        HTML salvo em: <strong>${data.arquivo_html}</strong>`;
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      throw new Error(data.detail || JSON.stringify(data));
+    }
+  } catch(e) {
+    alertEl.className = 'alert alert-erro show';
+    alertEl.textContent = 'Erro: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    prog.className = 'progress';
+  }
+}
+
+function toggleMes(header) {
+  header.classList.toggle('open');
+  header.nextElementSibling.classList.toggle('open');
+}
+
+// Abre o mês mais recente por padrão
+document.addEventListener('DOMContentLoaded', () => {
+  const primeiro = document.querySelector('.mes-header');
+  if (primeiro) {
+    primeiro.classList.add('open');
+    primeiro.nextElementSibling.classList.add('open');
+  }
+});
+</script>
+{% endif %}
+</body>
+</html>

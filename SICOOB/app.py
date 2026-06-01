@@ -9,21 +9,55 @@ Executar:
 """
 import csv
 import io
+import json
 import logging
 import sys
 from contextlib import asynccontextmanager
 from typing import Any
 
+import requests as _requests_lib
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import BaseModel
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Config de boleto (defaults salvos em data/boleto_config.json)
+# ---------------------------------------------------------------------------
+_CONFIG_PATH = Path(__file__).parent / "data" / "boleto_config.json"
+_CONFIG_DEFAULT: dict = {
+    "valorMulta": 2.0, "tipoMulta": 2,
+    "valorJurosMora": 0.2, "tipoJurosMora": 2,
+    "codigoProtesto": 3, "diasProtesto": 0,
+    "codigoNegativacao": 3, "diasNegativacao": 0,
+    "vencimentoPadraoADias": 7,
+    "mensagens": [
+        "Apos vencimento, Juros 0,2%/dia.",
+        "Apos vencimento, Multa de 2%.",
+        "Nao conceder desconto.",
+    ],
+}
+
+
+def _ler_config() -> dict:
+    if _CONFIG_PATH.exists():
+        try:
+            return {**_CONFIG_DEFAULT, **json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))}
+        except Exception:
+            pass
+    return _CONFIG_DEFAULT.copy()
+
+
+def _salvar_config(cfg: dict) -> None:
+    _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _CONFIG_PATH.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
 import config
-from services import boleto_manager, boleto_service, database, sync_service, vhsys_adapter
+from services import boleto_manager, boleto_service, database, movimentacao_service, sync_service, erp_adapter
 from services.exceptions import BoletoError, BoletoNaoEncontrado, SicoobConfigError
 from webhooks.sicoob_webhook import router as webhook_router
 
@@ -175,13 +209,62 @@ def admin_ui(request: Request):
     return templates.TemplateResponse("boletos.html", {"request": request})
 
 
+@app.get("/admin/imprimir", include_in_schema=False)
+def imprimir_boletos(
+    request: Request,
+    status: list[str] | None = Query(default=None),
+    data_inicio: str | None = Query(default=None),
+    data_fim: str | None = Query(default=None),
+    tipo_data: str = Query(default="vencimento"),
+    cliente: str | None = Query(default=None),
+    valor_min: float | None = Query(default=None),
+    valor_max: float | None = Query(default=None),
+):
+    from datetime import datetime
+    boletos = database.listar_boletos(
+        status=status,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tipo_data=tipo_data,
+        cliente=cliente,
+        valor_min=valor_min,
+        valor_max=valor_max,
+        limit=5000,
+    )
+    partes = []
+    if status:       partes.append("Status: " + ", ".join(status))
+    if data_inicio:  partes.append(f"De {data_inicio}")
+    if data_fim:     partes.append(f"Até {data_fim}")
+    if cliente:      partes.append(f"Cliente: {cliente}")
+    return templates.TemplateResponse("imprimir.html", {
+        "request": request,
+        "boletos": boletos,
+        "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "filtros": " · ".join(partes) if partes else None,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Admin — API: sincronização
 # ---------------------------------------------------------------------------
 @app.post("/admin/api/sync")
 def sync_manual(dias: int = Query(default=60, ge=1, le=365)):
-    """Dispara sincronização manual com o Sicoob."""
+    """Verifica status dos boletos locais em aberto no Sicoob."""
     resultado = sync_service.sincronizar(dias=dias)
+    return resultado
+
+
+@app.post("/admin/api/sync/pagador")
+def sync_por_pagador(cpf_cnpj: str = Query(...), dias: int = Query(default=365, ge=1, le=730)):
+    """Importa histórico de boletos de um pagador (CPF/CNPJ) do Sicoob."""
+    resultado = sync_service.sincronizar_por_pagador(cpf_cnpj, dias=dias)
+    return resultado
+
+
+@app.post("/admin/api/sync/todos")
+def sync_todos(dias: int = Query(default=60, ge=1, le=730)):
+    """Importa boletos de todos os clientes VHSys dos últimos N dias."""
+    resultado = sync_service.sincronizar_todos(dias=dias)
     return resultado
 
 
@@ -244,6 +327,73 @@ def exportar_csv(
     )
 
 
+class ConsultaListaRequest(BaseModel):
+    nossos_numeros: list[str]
+
+
+@app.post("/admin/api/boletos/consultar-lista")
+def consultar_lista_boletos(req: ConsultaListaRequest):
+    """Consulta múltiplos boletos por lista de nosso_numero (DB local + Sicoob)."""
+    _TERMINAIS = {"LIQUIDADO", "BAIXADO", "PAGO_EXTERNO"}
+    _STATUS_MAP = {
+        "LIQUIDADO": "LIQUIDADO", "BAIXADO": "BAIXADO",
+        "EM_ABERTO": "EMITIDO",   "VENCIDO":  "VENCIDO",
+    }
+    resultados = []
+    for n in req.nossos_numeros:
+        n = n.strip()
+        if not n:
+            continue
+        local = database.get_boleto(n)
+        if local and local.get("status_atual") in _TERMINAIS:
+            resultados.append({
+                "nosso_numero":   n,
+                "cliente_nome":   local.get("cliente_nome"),
+                "valor":          local.get("valor"),
+                "vencimento":     local.get("vencimento"),
+                "status":         local.get("status_atual"),
+                "linha_digitavel": local.get("linha_digitavel"),
+                "origem":         "LOCAL",
+                "erro":           None,
+            })
+            continue
+        try:
+            dados = boleto_service.consultar(n)
+            res = dados.get("resultado", dados)
+            status_raw = res.get("situacaoBoleto") or ""
+            if isinstance(status_raw, dict):
+                status_raw = status_raw.get("codigo", "")
+            status = _STATUS_MAP.get((status_raw or "").upper(), status_raw or "EMITIDO")
+            linha = res.get("linhaDigitavel") or res.get("codigoLinhaDigitavel") or ""
+            pagador = res.get("pagador") or {}
+            nome = pagador.get("nome") or (local.get("cliente_nome") if local else None)
+            resultados.append({
+                "nosso_numero":   n,
+                "cliente_nome":   nome,
+                "valor":          res.get("valor") or res.get("valorNominal"),
+                "vencimento":     res.get("dataVencimento"),
+                "status":         status,
+                "linha_digitavel": linha,
+                "origem":         "SICOOB",
+                "erro":           None,
+            })
+        except BoletoNaoEncontrado:
+            resultados.append({
+                "nosso_numero": n, "cliente_nome": None, "valor": None,
+                "vencimento": None, "status": "NAO_ENCONTRADO",
+                "linha_digitavel": None, "origem": None,
+                "erro": "Boleto não encontrado no Sicoob",
+            })
+        except Exception as exc:
+            resultados.append({
+                "nosso_numero": n, "cliente_nome": None, "valor": None,
+                "vencimento": None, "status": "ERRO",
+                "linha_digitavel": None, "origem": None,
+                "erro": str(exc),
+            })
+    return {"resultados": resultados, "total": len(resultados)}
+
+
 @app.get("/admin/api/boletos/{nosso_numero}")
 def detalhe_boleto(nosso_numero: str):
     boleto = database.get_boleto(nosso_numero)
@@ -296,9 +446,7 @@ def listar_pedidos_vhsys(
     data_inicio: str | None = Query(default=None),
     limite: int = Query(default=50, ge=1, le=200),
 ):
-    if not config.VHSYS_ACCESS_TOKEN:
-        return {"pedidos": [], "aviso": "VHSys não configurado"}
-    pedidos = vhsys_adapter.buscar_pedidos(
+    pedidos = erp_adapter.buscar_pedidos(
         situacao=situacao, data_inicio=data_inicio, limite=limite
     )
     return {"pedidos": pedidos}
@@ -306,25 +454,281 @@ def listar_pedidos_vhsys(
 
 @app.get("/admin/api/vhsys/pedidos/{pedido_id}")
 def detalhe_pedido_vhsys(pedido_id: int):
-    if not config.VHSYS_ACCESS_TOKEN:
-        raise HTTPException(status_code=503, detail="VHSys não configurado")
-    pedido = vhsys_adapter.buscar_pedido(pedido_id)
+    pedido = erp_adapter.buscar_pedido(pedido_id)
     if pedido is None:
-        raise HTTPException(status_code=404, detail=f"Pedido VHSys #{pedido_id} não encontrado")
+        raise HTTPException(status_code=404, detail=f"Pedido ERP #{pedido_id} não encontrado")
     return pedido
 
 
 @app.get("/admin/api/vhsys/clientes")
 def buscar_cliente_vhsys(doc: str = Query(..., description="CPF ou CNPJ")):
-    if not config.VHSYS_ACCESS_TOKEN:
-        return {"cliente": None, "aviso": "VHSys não configurado"}
-    cliente = vhsys_adapter.buscar_cliente(doc)
+    cliente = erp_adapter.buscar_cliente(doc)
     return {"cliente": cliente}
 
 
 @app.get("/admin/api/stats")
 def dashboard_stats():
     return database.stats()
+
+
+# ---------------------------------------------------------------------------
+# Admin — API: configuração de boleto
+# ---------------------------------------------------------------------------
+@app.get("/admin/api/config")
+def get_config():
+    """Retorna configurações globais de emissão de boleto."""
+    return _ler_config()
+
+
+@app.put("/admin/api/config")
+def save_config(cfg: dict):
+    """Salva configurações globais de emissão de boleto."""
+    _salvar_config(cfg)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Admin — API: busca de clientes VHSys
+# ---------------------------------------------------------------------------
+@app.get("/admin/api/clientes")
+def buscar_clientes(q: str = Query(..., min_length=2)):
+    """Busca clientes no VHSys por nome ou CNPJ para pré-preenchimento."""
+    if not config.VHSYS_ACCESS_TOKEN:
+        return {"clientes": []}
+    headers = {
+        "access-token":        config.VHSYS_ACCESS_TOKEN,
+        "secret-access-token": config.VHSYS_SECRET_TOKEN,
+        "Content-Type":        "application/json",
+    }
+    try:
+        r = _requests_lib.get(
+            f"{config.VHSYS_BASE_URL}/clientes",
+            headers=headers,
+            params={"razao_cliente": q, "limit": 15},
+            timeout=10,
+        )
+        r.raise_for_status()
+        clientes = r.json().get("data", [])
+        return {"clientes": [
+            {
+                "nome":     c.get("razao_cliente") or c.get("fantasia_cliente") or "",
+                "doc":      c.get("cnpj_cliente") or c.get("cpf_cliente") or "",
+                "cidade":   c.get("cidade_cliente") or "",
+                "uf":       c.get("uf_cliente") or "MG",
+                "endereco": (c.get("endereco_cliente") or "") + (
+                    ", " + c.get("numero_cliente") if c.get("numero_cliente") else ""
+                ),
+                "bairro":   c.get("bairro_cliente") or "",
+                "cep":      (c.get("cep_cliente") or "").replace("-", "").replace(".", ""),
+            }
+            for c in clientes
+            if c.get("razao_cliente") or c.get("fantasia_cliente")
+        ]}
+    except Exception as e:
+        logger.error("Busca de clientes VHSys falhou: %s", e)
+        return {"clientes": []}
+
+
+# ---------------------------------------------------------------------------
+# Relatórios
+# ---------------------------------------------------------------------------
+_DESKTOP = Path.home() / "Desktop"
+
+_TIPO_NOME = {1: "Entrada", 2: "Prorrogação", 3: "A Vencer", 4: "Vencido", 5: "Liquidação", 6: "Baixa"}
+
+
+def _salvar_desktop(nome: str, conteudo: str | bytes, encoding: str = "utf-8") -> Path:
+    _DESKTOP.mkdir(parents=True, exist_ok=True)
+    caminho = _DESKTOP / nome
+    if isinstance(conteudo, bytes):
+        caminho.write_bytes(conteudo)
+    else:
+        caminho.write_text(conteudo, encoding=encoding)
+    return caminho
+
+
+def _csv_extrato(registros: list[dict]) -> str:
+    output = io.StringIO()
+    campos = ["data_evento", "descricao", "nosso_numero", "cliente_nome", "cliente_doc", "valor"]
+    writer = csv.DictWriter(output, fieldnames=campos, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(registros)
+    return output.getvalue()
+
+
+def _enriquecer_boletos(boletos: list[dict]) -> list[dict]:
+    """Adiciona campo 'mes' (YYYY-MM) para agrupamento no template."""
+    for b in boletos:
+        b["mes"] = (b.get("criado_em") or "")[:7] or "—"
+    return boletos
+
+
+def _csv_boletos(boletos: list[dict]) -> str:
+    output = io.StringIO()
+    campos = ["nosso_numero", "seu_numero", "cliente_nome", "cliente_doc",
+              "valor", "vencimento", "status_atual", "linha_digitavel", "criado_em"]
+    writer = csv.DictWriter(output, fieldnames=campos, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(boletos)
+    return output.getvalue()
+
+
+# --- Extrato ---
+
+@app.get("/admin/relatorios/extrato", include_in_schema=False)
+def extrato_ui(request: Request):
+    return templates.TemplateResponse("extrato_relatorio.html", {"request": request})
+
+
+@app.post("/admin/api/relatorios/extrato/gerar")
+def extrato_gerar(
+    data_inicio: str = Query(..., description="YYYY-MM-DD"),
+    data_fim:    str = Query(..., description="YYYY-MM-DD"),
+    tipos: list[int] = Query(default=[1, 5, 6]),
+):
+    """Busca movimentações no SICOOB, salva no DB e exporta CSV+HTML para o Desktop."""
+    from datetime import datetime
+    stats = movimentacao_service.solicitar_e_salvar(data_inicio, data_fim, tipos)
+    registros = database.listar_movimentacoes(data_inicio, data_fim, tipos)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    csv_str = _csv_extrato(registros)
+    csv_path = _salvar_desktop(f"extrato_{ts}.csv", csv_str)
+
+    html_str = templates.env.get_template("extrato_relatorio.html").render(
+        registros=registros,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tipos_selecionados=tipos,
+        tipo_nome=_TIPO_NOME,
+        total_entrada=sum(r["valor"] or 0 for r in registros if r["tipo_movimento"] == 5),
+        total_saida=sum(r["valor"] or 0 for r in registros if r["tipo_movimento"] == 6),
+        modo_impressao=True,
+    )
+    html_path = _salvar_desktop(f"extrato_{ts}.html", html_str)
+
+    return {
+        "ok": True,
+        "stats_sicoob": stats,
+        "registros": len(registros),
+        "arquivo_csv": str(csv_path),
+        "arquivo_html": str(html_path),
+    }
+
+
+@app.get("/admin/api/relatorios/extrato/csv")
+def extrato_csv(
+    data_inicio: str = Query(...),
+    data_fim:    str = Query(...),
+    tipos: list[int] = Query(default=[1, 5, 6]),
+):
+    """Retorna CSV dos registros já no DB (sem nova busca ao SICOOB)."""
+    registros = database.listar_movimentacoes(data_inicio, data_fim, tipos)
+    return StreamingResponse(
+        iter([_csv_extrato(registros)]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=extrato_{data_inicio}_{data_fim}.csv"},
+    )
+
+
+@app.get("/admin/api/relatorios/extrato/pdf", include_in_schema=False)
+def extrato_pdf(
+    request: Request,
+    data_inicio: str = Query(...),
+    data_fim:    str = Query(...),
+    tipos: list[int] = Query(default=[1, 5, 6]),
+):
+    """Retorna HTML imprimível do extrato."""
+    registros = database.listar_movimentacoes(data_inicio, data_fim, tipos)
+    return templates.TemplateResponse("extrato_relatorio.html", {
+        "request": request,
+        "registros": registros,
+        "data_inicio": data_inicio,
+        "data_fim": data_fim,
+        "tipos_selecionados": tipos,
+        "tipo_nome": _TIPO_NOME,
+        "total_entrada": sum(r["valor"] or 0 for r in registros if r["tipo_movimento"] == 5),
+        "total_saida": sum(r["valor"] or 0 for r in registros if r["tipo_movimento"] == 6),
+        "modo_impressao": True,
+    })
+
+
+# --- Boletos 120 dias ---
+
+@app.get("/admin/relatorios/boletos", include_in_schema=False)
+def boletos_relatorio_ui(request: Request):
+    return templates.TemplateResponse("boletos_relatorio.html", {"request": request})
+
+
+@app.post("/admin/api/relatorios/boletos-120-dias/gerar")
+def boletos_120_gerar():
+    """Sincroniza SICOOB (120 dias) → gera CSV + HTML → salva no Desktop."""
+    from datetime import datetime, date, timedelta
+    sync_resultado = sync_service.sincronizar_todos(dias=120)
+
+    hoje = date.today()
+    data_inicio = (hoje - timedelta(days=120)).isoformat()
+    boletos = _enriquecer_boletos(database.listar_boletos(
+        data_inicio=data_inicio,
+        tipo_data="criado_em",
+        limit=5000,
+    ))
+    stats = database.stats_periodo(data_inicio, hoje.isoformat(), tipo_data="criado_em")
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    csv_str = _csv_boletos(boletos)
+    csv_path = _salvar_desktop(f"boletos_120dias_{ts}.csv", csv_str)
+
+    html_str = templates.env.get_template("boletos_relatorio.html").render(
+        boletos=boletos,
+        stats=stats,
+        data_inicio=data_inicio,
+        data_fim=hoje.isoformat(),
+        modo_impressao=True,
+    )
+    html_path = _salvar_desktop(f"boletos_120dias_{ts}.html", html_str)
+
+    return {
+        "ok": True,
+        "sync": sync_resultado,
+        "total_boletos": len(boletos),
+        "stats": stats,
+        "arquivo_csv": str(csv_path),
+        "arquivo_html": str(html_path),
+    }
+
+
+@app.get("/admin/api/relatorios/boletos-120-dias/csv")
+def boletos_120_csv():
+    """Retorna CSV dos boletos 120 dias do DB local (sem novo sync)."""
+    from datetime import date, timedelta
+    data_inicio = (date.today() - timedelta(days=120)).isoformat()
+    boletos = database.listar_boletos(data_inicio=data_inicio, tipo_data="criado_em", limit=5000)
+    return StreamingResponse(
+        iter([_csv_boletos(boletos)]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=boletos_120dias.csv"},
+    )
+
+
+@app.get("/admin/api/relatorios/boletos-120-dias/pdf", include_in_schema=False)
+def boletos_120_pdf(request: Request):
+    """Retorna HTML imprimível com todos os boletos dos últimos 120 dias."""
+    from datetime import date, timedelta
+    hoje = date.today()
+    data_inicio = (hoje - timedelta(days=120)).isoformat()
+    boletos = _enriquecer_boletos(database.listar_boletos(data_inicio=data_inicio, tipo_data="criado_em", limit=5000))
+    stats = database.stats_periodo(data_inicio, hoje.isoformat(), tipo_data="criado_em")
+    return templates.TemplateResponse("boletos_relatorio.html", {
+        "request": request,
+        "boletos": boletos,
+        "stats": stats,
+        "data_inicio": data_inicio,
+        "data_fim": hoje.isoformat(),
+        "modo_impressao": True,
+    })
 
 
 # ---------------------------------------------------------------------------

@@ -128,11 +128,16 @@ def init_db():
         """)
     # Migrações para colunas adicionadas após criação inicial
     with get_conn() as conn:
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(notas_fiscais_itens)")}
-        if "ean" not in cols:
+        cols_itens = {r[1] for r in conn.execute("PRAGMA table_info(notas_fiscais_itens)")}
+        if "ean" not in cols_itens:
             conn.execute("ALTER TABLE notas_fiscais_itens ADD COLUMN ean TEXT DEFAULT ''")
-        if "ignorado" not in cols:
+        if "ignorado" not in cols_itens:
             conn.execute("ALTER TABLE notas_fiscais_itens ADD COLUMN ignorado INTEGER DEFAULT 0")
+        cols_nf = {r[1] for r in conn.execute("PRAGMA table_info(notas_fiscais)")}
+        if "recebida_em" not in cols_nf:
+            conn.execute("ALTER TABLE notas_fiscais ADD COLUMN recebida_em TEXT")
+        if "obs_recebimento" not in cols_nf:
+            conn.execute("ALTER TABLE notas_fiscais ADD COLUMN obs_recebimento TEXT")
     logger.info("[ComprasDB] Banco inicializado em %s", DB_PATH)
 
 
@@ -162,13 +167,28 @@ def nota_atualizar_status(chave_nfe: str, status: str, erro_msg: str | None = No
         )
 
 
-def nota_listar(limit: int = 100) -> list[dict]:
+def nota_listar(limit: int = 100, recebida: bool | None = None) -> list[dict]:
+    if recebida is True:
+        where = "WHERE recebida_em IS NOT NULL"
+    elif recebida is False:
+        where = "WHERE recebida_em IS NULL AND status != 'ignorado'"
+    else:
+        where = ""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM notas_fiscais ORDER BY criado_em DESC LIMIT ?",
+            f"SELECT * FROM notas_fiscais {where} ORDER BY criado_em DESC LIMIT ?",
             (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def nota_receber(chave_nfe: str, data_recebimento: str, obs: str = "") -> bool:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE notas_fiscais SET recebida_em=?, obs_recebimento=? WHERE chave_nfe=?",
+            (data_recebimento, obs or None, chave_nfe)
+        )
+        return cur.rowcount > 0
 
 
 def nota_get(chave_nfe: str) -> dict | None:

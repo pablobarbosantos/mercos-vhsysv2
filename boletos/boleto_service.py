@@ -8,7 +8,7 @@ import re
 import requests
 from datetime import datetime, timedelta
 from boletos import database as db
-from boletos.vhsys_adapter import buscar_conta_por_id, buscar_cliente_por_id
+from boletos.erp_adapter import buscar_conta_por_id, buscar_cliente_por_id
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +269,7 @@ def emitir_por_pedido(
         raise ValueError(f"Valor do pedido inválido: {valor}")
 
     # Buscar cliente no VHSys pelo ID
-    from boletos.vhsys_adapter import buscar_cliente_por_id
+    from boletos.erp_adapter import buscar_cliente_por_id
     cliente = buscar_cliente_por_id(vhsys_cliente_id)
     if not cliente:
         raise ValueError(f"Cliente {vhsys_cliente_id} não encontrado no VHSys")

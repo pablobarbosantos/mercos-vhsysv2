@@ -1,0 +1,2915 @@
+{
+	"info": {
+		"_postman_id": "9ff100f0-e5ef-427f-857f-1df5ac851d59",
+		"name": "API Cobrança Bancária Sicoob V3",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "20565799",
+		"_collection_link": "https://sicoobapi.postman.co/workspace/Cobran%25C3%25A7a-Banc%25C3%25A1ria-V3~487bdb86-c7e8-4f99-bde3-aa15c5e19732/collection/20565799-9ff100f0-e5ef-427f-857f-1df5ac851d59?action=share&source=collection_link&creator=20565799"
+	},
+	"item": [
+		{
+			"name": "Certificado Digital",
+			"item": [],
+			"description": "Na criação de credenciais para as APIs Sicoob será solicitado o certificado do cooperado. O certificado deve atender alguns requisitos para que a criação das credenciais seja bem sucedida, serão aceitos **somente os certificados emitidos pela ICP Brasil** e que tenham sido **emitidos para o próprio cooperado**. Serão extraídas as seguintes informações do certificado: CN (common name/nome comum) e CA (autoridade certificadora).\n\n> É possível conferir as entidades certificadoras que tem como entidade raiz a **ICP Brasil** [**aqui**](https://estrutura.iti.gov.br/).\n\n> Para conferir os detalhes do seu certificado com o OpenSSL você pode executar o comando a baixo usando a chave pública do seu certificado (geralmente no formato .pem).\n> \n> **`openssl x509 -in sua-chave-publica.pem -noout -text`**\n\n> Para extrair os arquivos **.crt**, **.pem** e o arquivo **.key** você pode seguir os passos descritos [**neste tutorial**](https://www.ibm.com/docs/en/arl/9.7?topic=certification-extracting-certificate-keys-from-pfx-file).\n\n#### Como configurar o certificado nas requisições do Postman\n\nÉ necessário abrir as **configurações** do Postman\n\n<img src=\"https://content.pstmn.io/eb63462f-8a8b-45f1-973f-9099482e81d4/MS5wbmc=\" alt=\"\">\n\nSelecionar **settings**\n\n<img src=\"https://content.pstmn.io/d5075ed9-6f0e-4461-8607-8cfc770cdfbb/Mi5wbmc=\" alt=\"\">\n\nSelecionar **Certificates e** **Add certificate**\n\n<img src=\"https://content.pstmn.io/104a18da-c1b3-4051-a309-3225a115f9a6/My5wbmc=\" alt=\"\">\n\nFornecer os seguintes hosts:  \n[https://auth.sicoob.com.br](https://auth.sicoob.com.br) e [https://api.sicoob.com.br](https://api.sicoob.com.br)\n\nInserir a chave pública do certificado (em formato .PEM ou .CER) e chave privada (formato .KEY) para o certificado (ou, alternativamente, você pode usar um PFX Arquivo e a senha correspondente).  \nLembre-se também de fornecer uma senha de sua chave privada, caso você use uma."
+		},
+		{
+			"name": "Requisição de Token",
+			"item": [
+				{
+					"name": "Requisição de Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Retorno é Status 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"pm.test(\"Possui access_token\", function () {\r",
+									"     pm.expect(pm.response.text()).to.include(\"access_token\");  \r",
+									"     let jsonData = pm.response.json();  \r",
+									"     pm.environment.set(\"token\",jsonData.access_token);\r",
+									"});\r",
+									"\r",
+									"\r",
+									"\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "client_credentials",
+									"description": "Tipo de Autenticação (com Certificado Digital - SSL)",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{client_id}}",
+									"description": "Uma String, o client_id gerado na criação das credenciais pelo portal developers.sicoob.com.br",
+									"type": "text"
+								},
+								{
+									"key": "scope",
+									"value": "boletos_inclusao boletos_consulta boletos_alteracao",
+									"description": "Escopos Cobrança Bancária que serão utilizados nas requisições, os escopos devem ser separados apenas por espaço, sem escape",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{auth.url.cobranca}}/auth/realms/cooperado/protocol/openid-connect/token",
+							"host": [
+								"{{auth.url.cobranca}}"
+							],
+							"path": [
+								"auth",
+								"realms",
+								"cooperado",
+								"protocol",
+								"openid-connect",
+								"token"
+							]
+						},
+						"description": "Endpoint de geração de Token, o token gerado tem a duração de 300 segundos ou 5 minutos devendo ser solicitado novamente ao término do tempo de expiração."
+					},
+					"response": [
+						{
+							"name": "Requisição de Token",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/x-www-form-urlencoded"
+									}
+								],
+								"body": {
+									"mode": "urlencoded",
+									"urlencoded": [
+										{
+											"key": "grant_type",
+											"value": "client_credentials",
+											"description": "Tipo de Autenticação (com Certificado Digital - SSL)",
+											"type": "text"
+										},
+										{
+											"key": "client_id",
+											"value": "{{client_id}}",
+											"description": "Uma String, o client_id gerado na criação das credenciais pelo portal developers.sicoob.com.br",
+											"type": "text"
+										},
+										{
+											"key": "scope",
+											"value": "cobranca_boletos_consultar cobranca_boletos_incluir",
+											"description": "Escopos Cobrança Bancária que serão utilizados nas requisições, os escopos devem ser separados apenas por espaço, sem escape",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{auth.url.cobranca}}/auth/realms/cooperado/protocol/openid-connect/token",
+									"host": [
+										"{{auth.url.cobranca}}"
+									],
+									"path": [
+										"auth",
+										"realms",
+										"cooperado",
+										"protocol",
+										"openid-connect",
+										"token"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Cache-Control",
+									"value": "no-store"
+								},
+								{
+									"key": "X-XSS-Protection",
+									"value": "1; mode=block"
+								},
+								{
+									"key": "Pragma",
+									"value": "no-cache"
+								},
+								{
+									"key": "X-Frame-Options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "Referrer-Policy",
+									"value": "no-referrer"
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 24 Feb 2023 20:10:06 GMT"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "X-Content-Type-Options",
+									"value": "nosniff"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "Content-Length",
+									"value": "75"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"access_token\": \"token\",\n  \"expires_in\": 300,\n  \"refresh_expires_in\": 0,\n  \"token_type\": \"Bearer\",\n  \"not-before-policy\": 0,\n  \"scope\": \"boletos_inclusao boletos_consulta boletos_alteracao\"\n}"
+						}
+					]
+				}
+			],
+			"description": "O Token deve ser gerado para ser anexado as demais requisições da API, sem isso não é possível realizar os próximos passos\n\nPara gerar o Token da API será necessário o **client_id** gerado no momento da criação das suas credenciais pelo portal [<b>Developers Sicoob</b>](https://developers.sicoob.com.br/), você também precisará dos **escopos** de utilização da API e do **certificado** corretamente configurado na requisição SSL.\n\n> \n\n## **Lista de escopos da API Cobrança Bancária**\n\n \n  \n> boletos_inclusao\n> boletos_consulta\n> boletos_alteracao"
+		},
+		{
+			"name": "Boleto",
+			"item": [
+				{
+					"name": "Incluir boleto",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"incluindo Boleto\",function(){\r",
+									"    pm.response.to.have.status(207);   \r",
+									"});\r",
+									"\r",
+									"pm.test(\"Obtem código de barras\",function(){\r",
+									"    let jsonresultados = pm.response.json();\r",
+									"     console.log(jsonresultados);\r",
+									"\r",
+									"    let resultados = jsonresultados[1];\r",
+									"    console.log(resultados);\r",
+									"\r",
+									"\r",
+									"      /*  for(let boleto in resultados){\r",
+									"            console.log(boleto);\r",
+									"            let boleto = JSON.parse(result);\r",
+									"            console.log(boleto);\r",
+									"        }*/\r",
+									"\r",
+									"    //pm.environment.set(\"codigoBarras\",jsonRetorno.resultado.boleto.codigoBarras);\r",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{client_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1,\r\n    \"numeroContaCorrente\": 0,\r\n    \"codigoEspecieDocumento\": \"DM\",\r\n    \"dataEmissao\": \"2018-09-20\",\r\n    \"nossoNumero\": 2588658,\r\n    \"seuNumero\": \"1235512\",\r\n    \"identificacaoBoletoEmpresa\": \"4562\",\r\n    \"identificacaoEmissaoBoleto\": 1,\r\n    \"identificacaoDistribuicaoBoleto\": 1,\r\n    \"valor\": 156.23,\r\n    \"dataVencimento\": \"2018-09-20\",\r\n    \"dataLimitePagamento\": \"2018-09-20\",\r\n    \"valorAbatimento\": 1,\r\n    \"tipoDesconto\": 1,\r\n    \"dataPrimeiroDesconto\": \"2018-09-20\",\r\n    \"valorPrimeiroDesconto\": 1,\r\n    \"dataSegundoDesconto\": \"2018-09-20\",\r\n    \"valorSegundoDesconto\": 0,\r\n    \"dataTerceiroDesconto\": \"2018-09-20\",\r\n    \"valorTerceiroDesconto\": 0,\r\n    \"tipoMulta\": 1,\r\n    \"dataMulta\": \"2018-09-20\",\r\n    \"valorMulta\": 5,\r\n    \"tipoJurosMora\": 1,\r\n    \"dataJurosMora\": \"2018-09-20\",\r\n    \"valorJurosMora\": 4,\r\n    \"numeroParcela\": 1,\r\n    \"aceite\": true,\r\n    \"codigoNegativacao\": 2,\r\n    \"numeroDiasNegativacao\": 60,\r\n    \"codigoProtesto\": 1,\r\n    \"numeroDiasProtesto\": 30,\r\n    \"pagador\": {\r\n        \"numeroCpfCnpj\": \"98765432185\",\r\n        \"nome\": \"Marcelo dos Santos\",\r\n        \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\r\n        \"bairro\": \"Santa Rosa\",\r\n        \"cidade\": \"Luziânia\",\r\n        \"cep\": \"72320000\",\r\n        \"uf\": \"DF\",\r\n        \"email\": \"pagador@dominio.com.br\"\r\n    },\r\n    \"beneficiarioFinal\": {\r\n        \"numeroCpfCnpj\": \"98784978699\",\r\n        \"nome\": \"Lucas de Lima\"\r\n    },\r\n    \"mensagensInstrucao\": [\r\n        \"Descrição da Instrução 1\",\r\n        \"Descrição da Instrução 2\",\r\n        \"Descrição da Instrução 3\",\r\n        \"Descrição da Instrução 4\",\r\n        \"Descrição da Instrução 5\"\r\n    ],\r\n    \"gerarPdf\": false,\r\n    \"rateioCreditos\": [\r\n        {\r\n            \"numeroBanco\": 756,\r\n            \"numeroAgencia\": 4027,\r\n            \"numeroContaCorrente\": 0,\r\n            \"contaPrincipal\": true,\r\n            \"codigoTipoValorRateio\": 1,\r\n            \"valorRateio\": 100,\r\n            \"codigoTipoCalculoRateio\": 1,\r\n            \"numeroCpfCnpjTitular\": \"98765432185\",\r\n            \"nomeTitular\": \"Marcelo dos Santos\",\r\n            \"codigoFinalidadeTed\": 10,\r\n            \"codigoTipoContaDestinoTed\": \"CC\",\r\n            \"quantidadeDiasFloat\": 1,\r\n            \"dataFloatCredito\": \"2020-12-30\"\r\n        }\r\n    ],\r\n    \"codigoCadastrarPIX\": 1,\r\n    \"numeroContratoCobranca\": 1\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos"
+							]
+						},
+						"description": "**Número cliente:** Número que identifica o beneficiário na plataforma de atendimento da cooperativa.\n\n**codigoModalidade:** Identifica a modalidade do boleto.\n\n- 1 - SIMPLES COM REGISTRO\n    \n- 3 - CAUCIONADA\n    \n- 4 - VINCULADA\n    \n- 5 - CARNÊ DE PAGAMENTOS\n    \n- 6 - INDEXADA\n    \n- 8 - COBRANÇA CONTA CAPITAL\n    \n\n**Número Conta Corrente:** Número da Conta Corrente onde será realizado o crédito da liquidação do boleto.\n\n**Espécie Documento:** Informar valores listados abaixo. `Tamanho máximo 3 caracteres` `CH - Cheque` `DM - Duplicata Mercantil` `DMI - Duplicata Mercantil Indicação` `DS - Duplicata de Serviço` `DSI - Duplicata Serviço Indicação` `DR - Duplicata Rural` `LC - Letra de Câmbio` `NCC - Nota de Crédito Comercial` `NCE - Nota de Crédito Exportação` `NCI - Nota de Crédito Industrial` `NCR - Nota de Crédito Rural` `NP - Nota Promissória` `NPR - Nota Promissória Rural` `TM - Triplicata Mercantil` `TS - Triplicata de Serviço` `NS - Nota de Seguro` `RC - Recibo` `FAT - Fatura` `ND - Nota de Débito` `AP - Apólice de Seguro` `ME - Mensalidade Escolar` `PC - Pagamento de Consórcio` `NF - Nota Fiscal` `DD - Documento de Dívida` `CC - Cartão de Crédito` `BDP - Boleto Proposta` `OU - Outros`\n\n**Data Emissão:** Data de emissão do boleto. Caso não seja informado, o sistema atribui a data de registro do boleto no Sisbr. Formato _**yyyy-mm-ddT00:00:00-03:00.**_\n\n**Nosso Número:** (optional) Número que identifica o boleto de cobrança no Sisbr. Caso deseje, o beneficiário poderá informar o nossoNumero seguindo a regra abaixo informada. Caso contrário, o sistema gerará automaticamente. Para informar o NossoNumero deverá ser calculado o Dígito Verificador.\n\n`Constante para cálculo = 3197`\n\na) Concatenar na sequência completando com zero à esquerda.\n\n**Exemplo:** Número da cooperativa: 0001 Número do cliente: 19 Nosso número: 21\n\n| Número da Cooperativa (4) | Número do Cliente (10) | Nosso número (7) |\n| --- | --- | --- |\n| 0001 | 0000000019 | 0000021 |\n\nb) Alinhar a constante com a sequência repetindo de traz para frente. **Exemplo:** | 000100000000190000021 | | 319731973197319731973 |\n\nc) Multiplicar cada componente da sequência com o seu correspondente da constante e somar os resultados. **Exemplo:** 1 \\* 7 + 1 \\* 3 + 9 \\* 1 + 2 \\* 7 + 1 \\* 3 = 36\n\nd) Calcular o Resto através do Módulo 11. **Exemplo:** 36/11 = 3 resto = 3\n\ne) O resto da divisão deverá ser subtraído de 11 achando assim o DV (Se o Resto for igual a 0 ou 1 então o DV é igual a 0). **Exemplo:** 11 – 3 = 8, então Nosso Número + DV = 21-8\n\n**Seu Número:** Número identificador do boleto no sistema do beneficiário. `Tamanho máximo 18`\n\n**Identificação Boleto Empresa:** (optional) Campo destinado para uso da empresa do beneficiário para identificação do boleto. `Tamanho máximo 25`\n\n**Identificação Emissão Boleto:** Código de identificação de emissão do boleto. Informar os valores listados abaixo.\n\n- 1 - Banco Emite\n    \n- 2 - Cliente Emite\n    \n\n**Identificação Distribuição Boleto:** Código de identificação de distribuição do boleto. Informar os valores listados abaixo.\n\n- 1 - Banco Distribui\n    \n- 2 - Cliente Distribui\n    \n\n**Valor:** Valor nominal do boleto.\n\n**Data Vencimento:** Data de vencimento do boleto. Formato _**yyyy-mm-dd.**_\n\n**Data Limite Pagamento:** (optional) Data de limite para pagamento do boleto. Formato _**yyyy-mm-dd.**_\n\n**Valor Abatimento:** (optional) Valor do abatimento a ser aplicado no boleto.\n\n**Tipo Desconto:** Informar o tipo de desconto atribuído ao boleto.\n\n- 0 - Sem Desconto\n    \n- 1 - Valor Fixo Até a Data Informada\n    \n- 2 -Percentual até a data informada\n    \n- 3 - Valor por antecipação dia corrido\n    \n- 4 - Valor por antecipação dia útil\n    \n- 5 - Percentual por antecipação dia corrido\n    \n- 6 - Percentual por antecipação dia útil\n    \n\n**Data Primeiro Desconto:** (optional) Data do primeiro desconto. Formato _**yyyy-mm-dd.**_\n\n**Valor Primeiro Desconto:** (optional) Valor do primeiro desconto. Deve ser informado caso a data do primeiro desconto seja preenchida.\n\n**Data Segundo Desconto:** (optional) Data do segundo desconto. Formato _**yyyy-mm-dd.**_\n\n**Valor Segundo Desconto:** (optional) Valor do segundo desconto. Deve ser informado caso a data do segundo desconto seja preenchida.\n\n**Data Terceiro Desconto:** (optional) Data do terceiro desconto. Formato _**yyyy-mm-dd.**_\n\n**Valor Terceiro Desconto:** (optional) Valor do terceiro desconto. Deve ser preenchido caso a data do terceiro desconto seja preenchida.\n\n**Tipo Multa:** Tipo de multa a ser aplicado no boleto. Informar os valores listados abaixo.\n\n- 0 - Isento\n    \n- 1 - Valor Fixo\n    \n- 2 - Percentual\n    \n\n**Data Multa:** (optional) Deve ser maior que a data de vencimento do boleto e menor ou igual que data limite de pagamento. Formato _**yyyy-mm-dd.**_\n\n**Valor Multa:** (optional) Valor da multa. Deve ser preenchido o campo Data Multa seja preenchido.\n\n**Tipo Juros Mora:** Tipo de juros de mora. Informar os valores listados abaixo.\n\n- 1 - Valor por dia\n    \n- 2 - Taxa Mensal\n    \n- 3 - Isento\n    \n\n**Data Juros Mora:** (optional) Deve ser maior que a data de vencimento do boleto e menor ou igual que data limite de pagamento. Formato _**yyyy-mm-dd.**_\n\n**Valor Juros Mora:** (optional) Valor do juros de mora. Deve ser preenchido caso o campo dataJurosMora seja preenchido.\n\n**Número Parcela:** Número da parcela do boleto. `Valor máximo permitido 99`\n\n**Aceite:** (optional) Identificador do aceite do boleto.\n\n**Código Negativação:** (optional) Código de negativação do boleto. Informar os valores abaixo.\n\n- 2 - Negativar Dias Úteis\n    \n- 3 - Não Negativar\n    \n\n**Número Dias Negativação:** (optional) Número de dias para negativação do boleto. Deve ser preenchido caso o campo codigoNegativacao seja igual a ‘2’.\n\n**Código Protesto:** (optional) Código de protesto do boleto. Informar os valores abaixo.\n\n- 1 - Protestar Dias Corridos\n    \n- 2 - Protestar Dias Úteis\n    \n- 3 - Não Protestar\n    \n\n**Número Dias Protesto:** (optional) Número de dias para protesto do boleto. Deve ser preenchido caso o campo codigoProtesto seja ‘1’.\n\n### **Pagador**\n\nInformar dados do pagador\n\n**Número Cpf/Cnpj:** CPF ou CNPJ do pagador do boleto de cobrança. `CNPJ: Tamanho máximo 14 CPF: Tamanho máximo 11`\n\n**Nome:** Nome completo do pagador do boleto de cobrança. `Tamanho máximo 50`\n\n**Endereço:** Endereço do pagador do boleto de cobrança. `Tamanho máximo 40`\n\n**Bairro:** Bairro do pagador do boleto de cobrança. `Tamanho máximo 30`\n\n**Cidade:** Cidade do pagador do boleto de cobrança. `Tamanho máximo 40`\n\n**Cep:** CEP do pagador. `Tamanho máximo 8`\n\n**UF:** UF do pagador. `Tamanho máximo 2`\n\n**Email:** string (optional)\n\n### **Beneficiário Final** (optional)\n\nInformar dados do beneficiário final\n\n**Número Cpf/Cnpj:** (optional) CPF ou CNPJ do Beneficiário Final. Antigo Sacador Avalista. `Tamanho máximo 14`\n\n**Nome:** (optional) Nome do Beneficiário Final. Antigo Sacador Avalista. `Tamanho máximo 50`\n\n### **Mensagens Instrução:** (optional)\n\n**Lista de instruções.** A lista de mensagem permite 5 mensagens com máximo de 40 caracteres.\n\n**Exemplo:** \\[ \"Descrição da Instrução 1\", \"Descrição da Instrução 2\", \"Descrição da Instrução 3\", \"Descrição da Instrução 4\", \"Descrição da Instrução 5\" \\]\n\n### Rateio Crédito (optional)\n\n**Número Banco:** Número do Banco de Destino\n\n**Número Agência:** Número da Agência de Destino\n\n**Número Conta Corrente:** Número da Conta Corrente Destino.\n\n**Conta Principal:** Identificador de conta principal.\n\n**Código Tipo Valor Rateio:** Tipo de valor do Rateio.\n\n- 1 - Percentual\n    \n\n**Valor Rateio:** Valor do rateio.\n\n**Código Tipo Cálculo Rateio:** Tipo de cálculo do Rateio.\n\n- 1 - Valor Cobrado\n    \n\n**Número Cpf/Cnpj Titular:** CPF ou CNPJ do titular da conta. `Tamanho máximo 14`\n\n**Nome Titular:** Nome completo do titular da conta. `Tamanho máximo 50`\n\n**Código Finalidade Ted:** Código da Finalidade TED.\n\n- 1 - Pagamento de Impostos, Tributos e Taxas\n    \n- 2 - Pagamento a Concessionárias de Serviço Público\n    \n- 3 - Pagamentos de Dividendos\n    \n- 4 - Pagamento de Salários\n    \n- 5 - Pagamento de Fornecedores\n    \n- 6 - Pagamento de Honorários\n    \n- 7 - Pagamento de Aluguéis e Taxas de Condomínio\n    \n- 8 - Pagamento de Duplicatas e Títulos\n    \n- 9 - Pagamento de Mensalidade Escolar\n    \n- 10 - Crédito em Conta …\n    \n- 99999 - Outros\n    \n- Para mais informações acesse: [https://www.bcb.gov.br/estabilidadefinanceira/comunicacaodados](https://www.bcb.gov.br/estabilidadefinanceira/comunicacaodados)\n    \n\n**Código Tipo Conta Destino Ted:** Tipo de conta Finalidade TED. `Tamanho máximo 2`\n\n- CC - Conta Corrente\n    \n- CD - Conta de Depósito\n    \n- CG - Conta garantida\n    \n\n**Quantidade Dias Float:** Quantidade de dias float (não informar caso dataFloatCredito for informado)\n\n**Data Float Crédito:** (optional) Data do float (não informar junto caso quantidadeDiasFloat for informado)\n\n**Código Cadastrar PIX:** (optional) Indicar uma das opções\n\n- 0 - Padrão\n    \n- 1 - Com Pix\n    \n- 2 - Sem Pix\n    \n\nA opção “0 – Padrão” irá obedecer ao cadastro do Beneficiário. Se for automático, será registrado no Pix, caso contrário não será.\n\nPara habilitar essa funcionalidade do boleto híbrido é necessário que o cooperado entre em contato com a cooperativa que ele está cadastrado e solicite a habilitação em seu cadastro, na Plataforma Cobrança Bancária 3.0, por meio do seguinte caminho: Sisbr 2.0 → Cobrança Bancária 3.0 (Direcionamento para o Sisbr 3.0) → Beneficiário → Cadastro. Para isso, será necessária e obrigatória a criação prévia de uma chave aleatória Pix para o usuário (cedente).\n\n**numeroContratoCobranca:** (optional)\n\nSomente para cooperados que possuem mais de um contrato com a cooperativa.\n\n**OBS: Se um campo opcional não for utilizado, é necessário removê-lo do corpo da solicitação, pois não é permitido enviar um campo com valor nulo.**"
+					},
+					"response": [
+						{
+							"name": "Incluir boleto",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{client_id}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "[\r\n    {\r\n        \"numeroContrato\": 25546454,\r\n        \"modalidade\": 1,\r\n        \"numeroContaCorrente\": 0,\r\n        \"especieDocumento\": \"DM\",\r\n        \"dataEmissao\": \"2018-09-20T00:00:00-03:00\",\r\n        \"nossoNumero\": 2588658,\r\n        \"seuNumero\": \"1235512\",\r\n        \"identificacaoBoletoEmpresa\": \"4562\",\r\n        \"identificacaoEmissaoBoleto\": 1,\r\n        \"identificacaoDistribuicaoBoleto\": 1,\r\n        \"valor\": 156.23,\r\n        \"dataVencimento\": \"2018-09-20T00:00:00-03:00\",\r\n        \"dataLimitePagamento\": \"2018-09-20T00:00:00-03:00\",\r\n        \"valorAbatimento\": 1,\r\n        \"tipoDesconto\": 1,\r\n        \"dataPrimeiroDesconto\": \"2018-09-20T00:00:00-03:00\",\r\n        \"valorPrimeiroDesconto\": 1,\r\n        \"dataSegundoDesconto\": \"2018-09-20T00:00:00-03:00\",\r\n        \"valorSegundoDesconto\": 0,\r\n        \"dataTerceiroDesconto\": \"2018-09-20T00:00:00-03:00\",\r\n        \"valorTerceiroDesconto\": 0,\r\n        \"tipoMulta\": 0,\r\n        \"dataMulta\": \"2018-09-20T00:00:00-03:00\",\r\n        \"valorMulta\": 5,\r\n        \"tipoJurosMora\": 2,\r\n        \"dataJurosMora\": \"2018-09-20T00:00:00-03:00\",\r\n        \"valorJurosMora\": 4,\r\n        \"numeroParcela\": 1,\r\n        \"aceite\": true,\r\n        \"codigoNegativacao\": 2,\r\n        \"numeroDiasNegativacao\": 60,\r\n        \"codigoProtesto\": 1,\r\n        \"numeroDiasProtesto\": 30,\r\n        \"pagador\": {\r\n            \"numeroCpfCnpj\": \"98765432185\",\r\n            \"nome\": \"Marcelo dos Santos\",\r\n            \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\r\n            \"bairro\": \"Santa Rosa\",\r\n            \"cidade\": \"Luziânia\",\r\n            \"cep\": \"72320000\",\r\n            \"uf\": \"DF\",\r\n            \"email\": [\r\n                \"pagador@dominio.com.br\"\r\n            ]\r\n        },\r\n        \"beneficiarioFinal\": {\r\n            \"numeroCpfCnpj\": \"98784978699\",\r\n            \"nome\": \"Lucas de Lima\"\r\n        },\r\n        \"mensagensInstrucao\": {\r\n            \"tipoInstrucao\": 1,\r\n            \"mensagens\": [\r\n                \"Descrição da Instrução 1\",\r\n                \"Descrição da Instrução 2\",\r\n                \"Descrição da Instrução 3\",\r\n                \"Descrição da Instrução 4\",\r\n                \"Descrição da Instrução 5\"\r\n            ]\r\n        },\r\n        \"gerarPdf\": true,\r\n        \"rateioCreditos\": [\r\n            {\r\n                \"numeroBanco\": 756,\r\n                \"numeroAgencia\": 4027,\r\n                \"numeroContaCorrente\": 0,\r\n                \"contaPrincipal\": true,\r\n                \"codigoTipoValorRateio\": 1,\r\n                \"valorRateio\": 100,\r\n                \"codigoTipoCalculoRateio\": 1,\r\n                \"numeroCpfCnpjTitular\": \"98765432185\",\r\n                \"nomeTitular\": \"Marcelo dos Santos\",\r\n                \"codigoFinalidadeTed\": 10,\r\n                \"codigoTipoContaDestinoTed\": \"CC\",\r\n                \"quantidadeDiasFloat\": 1,\r\n                \"dataFloatCredito\": \"2020-12-30\"\r\n            }\r\n        ],\r\n        \"codigoCadastrarPIX\": 1\r\n    }\r\n]",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.8"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "cf00c521646504115d51ad52"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:42:57 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b45a08b4e465798b15ac53c3e4b3e61e7b48de688c46bb17d5123d13ca98301661ad36c43bd9f9dd06fe9e8f1ba2a5de4; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": {\n    \"numeroCliente\": 25546454,\n    \"codigoModalidade\": 1,\n    \"numeroContaCorrente\": 0,\n    \"codigoEspecieDocumento\": \"DM\",\n    \"dataEmissao\": \"2018-09-20\",\n    \"nossoNumero\": 0,\n    \"seuNumero\": \"1235512\",\n    \"identificacaoBoletoEmpresa\": \"4562\",\n    \"codigoBarras\": \"\",\n    \"linhaDigitavel\": \"\",\n    \"identificacaoEmissaoBoleto\": 1,\n    \"identificacaoDistribuicaoBoleto\": 1,\n    \"valor\": 156.23,\n    \"dataVencimento\": \"2018-09-20\",\n    \"dataLimitePagamento\": \"2018-09-20\",\n    \"valorAbatimento\": 1,\n    \"tipoDesconto\": 1,\n    \"dataPrimeiroDesconto\": \"2018-09-20\",\n    \"valorPrimeiroDesconto\": 1,\n    \"dataSegundoDesconto\": \"2018-09-20\",\n    \"valorSegundoDesconto\": 0,\n    \"dataTerceiroDesconto\": \"2018-09-20\",\n    \"valorTerceiroDesconto\": 0,\n    \"tipoMulta\": 1,\n    \"dataMulta\": \"2018-09-20\",\n    \"valorMulta\": 5,\n    \"tipoJurosMora\": 1,\n    \"dataJurosMora\": \"2018-09-20\",\n    \"valorJurosMora\": 4,\n    \"numeroParcela\": 1,\n    \"aceite\": true,\n    \"codigoNegativacao\": 2,\n    \"numeroDiasNegativacao\": 60,\n    \"codigoProtesto\": 1,\n    \"numeroDiasProtesto\": 30,\n    \"quantidadeDiasFloat\": 2,\n    \"pagador\": {\n      \"numeroCpfCnpj\": \"98765432185\",\n      \"nome\": \"Marcelo dos Santos\",\n      \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\n      \"bairro\": \"Santa Rosa\",\n      \"cidade\": \"Luziânia\",\n      \"cep\": \"72320000\",\n      \"uf\": \"DF\",\n      \"email\": \"pagador@dominio.com.br\"\n    },\n    \"beneficiarioFinal\": {\n      \"numeroCpfCnpj\": \"98784978699\",\n      \"nome\": \"Lucas de Lima\"\n    },\n    \"mensagensInstrucao\": [\n      \"Descrição da Instrução 1\",\n      \"Descrição da Instrução 2\",\n      \"Descrição da Instrução 3\",\n      \"Descrição da Instrução 4\",\n      \"Descrição da Instrução 5\"\n    ],\n    \"rateioCreditos\": [\n      {\n        \"numeroBanco\": 756,\n        \"numeroAgencia\": 4027,\n        \"numeroContaCorrente\": 0,\n        \"contaPrincipal\": true,\n        \"codigoTipoValorRateio\": 1,\n        \"valorRateio\": 100,\n        \"codigoTipoCalculoRateio\": 1,\n        \"numeroCpfCnpjTitular\": \"98765432185\",\n        \"nomeTitular\": \"Marcelo dos Santos\",\n        \"codigoFinalidadeTed\": 10,\n        \"codigoTipoContaDestinoTed\": \"CC\",\n        \"quantidadeDiasFloat\": 1,\n        \"dataFloatCredito\": \"2020-12-30\"\n      }\n    ],\n    \"pdfBoleto\": \"JVBERi0xLjQKJeLjz9MKMyAwIG9iago8PC9UeXBlL1hPYmplY3QvU3VidHlwZS9JbWFnZS9XaWR0aCA1Nzgv+PgolaVRleHQtNS41LjExCnN0YXJ0eHJlZgoyNzAxOQolJUVPRgo=\",\n    \"qrCode\": \"00020101021226950014br.gov.bcb.pix2573pix.sicoob.com.br/qr/payload/v2/cobv/e736df1b-1389-4b96-a070-c8dddac768de5204000053039865802BR5924JULIO PEREIRA DE OLIVEIRA6008Brasilia62070503***630435A3\"\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Consultar boleto",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							}
+						],
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos?numeroCliente={{numCliente}}&codigoModalidade={{codigoModalidade}}&linhaDigitavel=string&codigoBarras=string&nossoNumero=integer&numeroContratoCobranca=integer",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos"
+							],
+							"query": [
+								{
+									"key": "numeroCliente",
+									"value": "{{numCliente}}",
+									"description": "Número que identifica o contrato do beneficiário no Sisbr."
+								},
+								{
+									"key": "codigoModalidade",
+									"value": "{{codigoModalidade}}",
+									"description": "Identifica a modalidade do boleto.\n\n1 - SIMPLES COM REGISTRO\n3 - CAUCIONADA\n4 - VINCULADA\n5 - CARNÊ DE PAGAMENTOS\n6 - INDEXADA\n8 - COBRANÇA CONTA CAPITAL"
+								},
+								{
+									"key": "linhaDigitavel",
+									"value": "string",
+									"description": "Número da linha digitável do boleto com 47 posições. Caso seja informado, não é necessário informar o nosso número ou código de barras."
+								},
+								{
+									"key": "codigoBarras",
+									"value": "string",
+									"description": "Número de código de barras do boleto com 44 posições.Caso seja informado, não é necessário informar o nosso número ou linha digitável."
+								},
+								{
+									"key": "nossoNumero",
+									"value": "integer",
+									"description": "Número identificador do boleto no Sisbr. Caso seja infomado, não é necessário infomar a linha digitável ou código de barras."
+								},
+								{
+									"key": "numeroContratoCobranca",
+									"value": "integer",
+									"description": "Indicar o id do contatro de cobrança"
+								}
+							]
+						},
+						"description": "Serviço para consulta de um boleto bancário. Utiliza as informações do beneficiário logado (número da cooperativa, número identificador do beneficiário e conta corrente), com a informação do identificador do boleto (nosso número), ou da linha digitável ou do código de barras.\n\nIdentificação dos \"tipoHistorico\" do array \"listaHistorico\":\n\n1 - ENTRADA  \n2 - ALTERAÇÃO  \n3 - PRORROGAÇÃO  \n4 - TARIFAS  \n5 - PROTESTO  \n6 - LIQUIDAÇÃO ou BAIXA."
+					},
+					"response": [
+						{
+							"name": "Consultar boleto",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "accept",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									}
+								],
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos?numeroContrato={{numContrato}}&modalidade=1&linhaDigitavel=string&codigoBarras=string",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos"
+									],
+									"query": [
+										{
+											"key": "numeroContrato",
+											"value": "{{numContrato}}",
+											"description": "Número que identifica o contrato do beneficiário na plataforma de atendimento da cooperativa."
+										},
+										{
+											"key": "modalidade",
+											"value": "1",
+											"description": "1 - SIMPLES COM REGISTRO"
+										},
+										{
+											"key": "linhaDigitavel",
+											"value": "string",
+											"description": "Número da linha digitável do boleto com 47 posições. Caso seja informado, não é necessário informar o nosso número ou código de barras."
+										},
+										{
+											"key": "codigoBarras",
+											"value": "string",
+											"description": "Número de código de barras do boleto com 44 posições.Caso seja informado, não é necessário informar o nosso número ou linha digitável."
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "177.235.4.29"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "91715c9462eb01c1011959e4"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 03 Aug 2022 23:16:17 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS0176404c=01cd5c66823ead0318659438f0fed647a0a1b627960f78e7484c0cec0ab82143d57e63b385a16094f08ddd2abc76bd55cc5e017a13; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b78226aaad59143ade104210c9d53427fcef7d12870fd7a3ac7fe569bd046feed84cc4b578943121bfec7b479da7699c5198877be6394df4bde19969a01f3468e; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": {\n    \"numeroCliente\": 25546454,\n    \"codigoModalidade\": 1,\n    \"numeroContaCorrente\": 0,\n    \"codigoEspecieDocumento\": \"DM\",\n    \"dataEmissao\": \"2018-09-20\",\n    \"nossoNumero\": 0,\n    \"seuNumero\": \"1235512\",\n    \"identificacaoBoletoEmpresa\": \"4562\",\n    \"codigoBarras\": \"\",\n    \"linhaDigitavel\": \"\",\n    \"identificacaoEmissaoBoleto\": 1,\n    \"identificacaoDistribuicaoBoleto\": 1,\n    \"valor\": 156.23,\n    \"dataVencimento\": \"2018-09-20\",\n    \"dataLimitePagamento\": \"2018-09-20\",\n    \"valorAbatimento\": 1,\n    \"tipoDesconto\": 1,\n    \"dataPrimeiroDesconto\": \"2018-09-20\",\n    \"valorPrimeiroDesconto\": 1,\n    \"dataSegundoDesconto\": \"2018-09-20\",\n    \"valorSegundoDesconto\": 0,\n    \"dataTerceiroDesconto\": \"2018-09-20\",\n    \"valorTerceiroDesconto\": 0,\n    \"tipoMulta\": 1,\n    \"dataMulta\": \"2018-09-20\",\n    \"valorMulta\": 5,\n    \"tipoJurosMora\": 1,\n    \"dataJurosMora\": \"2018-09-20\",\n    \"valorJurosMora\": 4,\n    \"numeroParcela\": 1,\n    \"aceite\": true,\n    \"codigoNegativacao\": 2,\n    \"numeroDiasNegativacao\": 60,\n    \"codigoProtesto\": 1,\n    \"numeroDiasProtesto\": 30,\n    \"quantidadeDiasFloat\": 2,\n    \"pagador\": {\n      \"numeroCpfCnpj\": \"98765432185\",\n      \"nome\": \"Marcelo dos Santos\",\n      \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\n      \"bairro\": \"Santa Rosa\",\n      \"cidade\": \"Luziânia\",\n      \"cep\": \"72320000\",\n      \"uf\": \"DF\",\n      \"email\": \"pagador@dominio.com.br\"\n    },\n    \"beneficiarioFinal\": {\n      \"numeroCpfCnpj\": \"98784978699\",\n      \"nome\": \"Lucas de Lima\"\n    },\n    \"mensagensInstrucao\": [\n      \"Descrição da Instrução 1\",\n      \"Descrição da Instrução 2\",\n      \"Descrição da Instrução 3\",\n      \"Descrição da Instrução 4\",\n      \"Descrição da Instrução 5\"\n    ],\n    \"listaHistorico\": [\n      {\n        \"dataHistorico\": \"2019-05-31\",\n        \"tipoHistorico\": \"1\",\n        \"descricaoHistorico\": \"TARIFA - TAR. MANUTENÇÃO DE TÍTULO VENCIDO - R$ 0,75\"\n      }\n    ],\n    \"situacaoBoleto\": \"Em Aberto\",\n    \"rateioCreditos\": [\n      {\n        \"numeroBanco\": 756,\n        \"numeroAgencia\": 4027,\n        \"numeroContaCorrente\": 0,\n        \"contaPrincipal\": true,\n        \"codigoTipoValorRateio\": 1,\n        \"valorRateio\": 100,\n        \"codigoTipoCalculoRateio\": 1,\n        \"numeroCpfCnpjTitular\": \"98765432185\",\n        \"nomeTitular\": \"Marcelo dos Santos\",\n        \"codigoFinalidadeTed\": 10,\n        \"codigoTipoContaDestinoTed\": \"CC\",\n        \"quantidadeDiasFloat\": 1,\n        \"dataFloatCredito\": \"2020-12-30\"\n      }\n    ],\n    \"qrCode\": \"00020101021226950014br.gov.bcb.pix2573pix.sicoob.com.br/qr/payload/v2/cobv/e736df1b-1389-4b96-a070-c8dddac768de5204000053039865802BR5924JULIO PEREIRA DE OLIVEIRA6008Brasilia62070503***630435A3\"\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Listar Boletos por Pagador",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							}
+						],
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/pagadores/:numeroCpfCnpj/boletos?numeroCliente=integer&codigoSituação=integer&dataInicio=2022-06-01&dataFim=2022-06-30&numeroCpfCnpj=string",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"pagadores",
+								":numeroCpfCnpj",
+								"boletos"
+							],
+							"query": [
+								{
+									"key": "numeroCliente",
+									"value": "integer",
+									"description": "(required) Número que identifica o contrato do beneficiário no Sisbr."
+								},
+								{
+									"key": "codigoSituação",
+									"value": "integer",
+									"description": "Código da Situação do Boleto.\n\n1 Em Aberto\n2 Baixado\n3 Liquidado"
+								},
+								{
+									"key": "dataInicio",
+									"value": "2022-06-01",
+									"description": "Data de Vencimento Inicial.  yyyy-MM-dd"
+								},
+								{
+									"key": "dataFim",
+									"value": "2022-06-30",
+									"description": "Data de Vencimento Final.  yyyy-MM-dd"
+								},
+								{
+									"key": "numeroCpfCnpj",
+									"value": "string",
+									"description": "(required)CPF ou CNPJ do pagador"
+								}
+							],
+							"variable": [
+								{
+									"key": "numeroCpfCnpj",
+									"value": null,
+									"description": "(required) CPF ou CNPJ do pagador. Tamanho máximo 14."
+								}
+							]
+						},
+						"description": "Serviço para listagem de boletos por Pagador."
+					},
+					"response": [
+						{
+							"name": "Listar Boletos por Pagador",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									}
+								],
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/pagadores/:numeroCpfCnpj?numeroContrato={{numContrato}}&numeroCliente=integer&dataInicio=2022-06-01&dataFim=2022-06-30",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"pagadores",
+										":numeroCpfCnpj"
+									],
+									"query": [
+										{
+											"key": "numeroContrato",
+											"value": "{{numContrato}}",
+											"description": "(required)\nNúmero que identifica o contrato do beneficiário na plataforma de atendimento da cooperativa."
+										},
+										{
+											"key": "numeroCliente",
+											"value": "integer",
+											"description": "Número que identifica o contrato do beneficiário no Sisbr."
+										},
+										{
+											"key": "dataInicio",
+											"value": "2022-06-01",
+											"description": "Data de Vencimento Inicial.  yyyy-MM-dd"
+										},
+										{
+											"key": "dataFim",
+											"value": "2022-06-30",
+											"description": "Data de Vencimento Final.  yyyy-MM-dd"
+										}
+									],
+									"variable": [
+										{
+											"key": "numeroCpfCnpj",
+											"value": null,
+											"description": "(required) CPF ou CNPJ do pagador. Tamanho máximo 14."
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.3"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "91715c9463e144dc09c78144"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 06 Feb 2023 18:20:12 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b19984fd61939445876a396068afcacf47d0172b05382d31149bbc3dd9e2ea951346e011b6156bc8e967295830c740d8b; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": [\n    {\n      \"numeroCliente\": 25546454,\n      \"codigoModalidade\": 1,\n      \"numeroContaCorrente\": 0,\n      \"codigoEspecieDocumento\": \"DM\",\n      \"dataEmissao\": \"2018-09-20\",\n      \"nossoNumero\": 0,\n      \"seuNumero\": \"1235512\",\n      \"identificacaoBoletoEmpresa\": \"4562\",\n      \"codigoBarras\": \"\",\n      \"linhaDigitavel\": \"\",\n      \"valor\": 156.23,\n      \"dataVencimento\": \"2018-09-20\",\n      \"valorAbatimento\": 1,\n      \"tipoDesconto\": 0,\n      \"dataPrimeiroDesconto\": \"2018-09-20\",\n      \"valorPrimeiroDesconto\": 1,\n      \"dataSegundoDesconto\": \"2018-09-20\",\n      \"valorSegundoDesconto\": 0,\n      \"dataTerceiroDesconto\": \"2018-09-20\",\n      \"valorTerceiroDesconto\": 0,\n      \"tipoMulta\": 1,\n      \"dataMulta\": \"2018-09-20\",\n      \"valorMulta\": 5,\n      \"tipoJurosMora\": 1,\n      \"dataJurosMora\": \"2018-09-20\",\n      \"valorJurosMora\": 4,\n      \"numeroParcela\": 1,\n      \"aceite\": true,\n      \"codigoNegativacao\": 2,\n      \"codigoProtesto\": 1,\n      \"quantidadeDiasFloat\": 2,\n      \"pagador\": {\n        \"numeroCpfCnpj\": \"98765432185\",\n        \"nome\": \"Marcelo dos Santos\"\n      },\n      \"beneficiarioFinal\": {\n        \"nome\": \"Lucas de Lima\"\n      },\n      \"mensagensInstrucao\": [\n        \"Descrição da Instrução 1\",\n        \"Descrição da Instrução 2\",\n        \"Descrição da Instrução 3\",\n        \"Descrição da Instrução 4\",\n        \"Descrição da Instrução 5\"\n      ],\n      \"situacaoBoleto\": \"Liquidado\",\n      \"qrCode\": \"00020101021226950014br.gov.bcb.pix2573pix.sicoob.com.br/qr/payload/v2/cobv/e736df1b-1389-4b96-a070-c8dddac768de5204000053039865802BR5924JULIO PEREIRA DE OLIVEIRA6008Brasilia62070503***630435A3\"\n    }\n  ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Emitir Segunda via de um boleto",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/segunda-via?numeroCliente={{numeroCliente}}&codigoModalidade=integer&nossoNumero=integer&linhaDigitavel=string&codigoBarras=string&gerarPdf=boolean&numeroContratoCobranca=integer",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								"segunda-via"
+							],
+							"query": [
+								{
+									"key": "numeroCliente",
+									"value": "{{numeroCliente}}",
+									"description": "(required) Número que identifica o contrato do beneficiário no Sisbr."
+								},
+								{
+									"key": "codigoModalidade",
+									"value": "integer",
+									"description": "(required) Identifica a modalidade do boleto.\n\n1 - SIMPLES COM REGISTRO\n3 - CAUCIONADA\n4 - VINCULADA\n5 - CARNÊ DE PAGAMENTOS\n6 - INDEXADA\n8 - COBRANÇA CONTA CAPITAL"
+								},
+								{
+									"key": "nossoNumero",
+									"value": "integer",
+									"description": "Número identificador do boleto no Sisbr. Caso seja informado, não é necessário informar a linha digitável ou código de barras."
+								},
+								{
+									"key": "linhaDigitavel",
+									"value": "string",
+									"description": "Número da linha digitável do boleto com 47 posições.Caso seja informado, não é necessário informar o nosso número ou código de barras."
+								},
+								{
+									"key": "codigoBarras",
+									"value": "string",
+									"description": "Número de código de barras do boleto com 44 posições.Caso seja informado, não é necessário informar o nosso número ou a linha digitável."
+								},
+								{
+									"key": "gerarPdf",
+									"value": "boolean",
+									"description": "Identificador para o sistema devolver ou não o PDF do Boleto. O PDF será retornado na Base64."
+								},
+								{
+									"key": "numeroContratoCobranca",
+									"value": "integer",
+									"description": "Indicar o id do contatro de cobrança"
+								}
+							]
+						},
+						"description": "Serviço para emissão da segunda via de boleto já registrado.\n\nUtiliza as informações do beneficiário logado (número da cooperativa, número identificador do beneficiário e conta corrente), com a informação do identificador do boleto (nosso número), ou da linha digitável ou do código de barras.\n\nQuando informados código de barras ou linha digitável, a pesquisa é realizada prioritariamente por estes parâmetros."
+					},
+					"response": [
+						{
+							"name": "Emitir Segunda via de um boleto",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/segunda-via?numeroContrato={{numContrato}}&modalidade=1&nossoNumero=integer&linhaDigitavel=string&codigoBarras=string&gerarPdf=boolean",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"segunda-via"
+									],
+									"query": [
+										{
+											"key": "numeroContrato",
+											"value": "{{numContrato}}",
+											"description": "Número que identifica o contrato do beneficiário na plataforma de atendimento da cooperativa."
+										},
+										{
+											"key": "modalidade",
+											"value": "1",
+											"description": "Identifica a modalidade do boleto.\n\n1 SIMPLES COM REGISTRO\n5 CARNÊ DE PAGAMENTOS\n6 INDEXADA\n14 CARTÃO DE CRÉDITO"
+										},
+										{
+											"key": "nossoNumero",
+											"value": "integer",
+											"description": "Número identificador do boleto no Sisbr. Caso seja informado, não é necessário informar a linha digitável ou código de barras."
+										},
+										{
+											"key": "linhaDigitavel",
+											"value": "string",
+											"description": "Número da linha digitável do boleto com 47 posições.Caso seja informado, não é necessário informar o nosso número ou código de barras."
+										},
+										{
+											"key": "codigoBarras",
+											"value": "string",
+											"description": "Número de código de barras do boleto com 44 posições.Caso seja informado, não é necessário informar o nosso número ou a linha digitável."
+										},
+										{
+											"key": "gerarPdf",
+											"value": "boolean",
+											"description": "Identificador para o sistema devolver ou não o PDF do Boleto. O PDF será retornado na Base64."
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.8"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "91715c9463e144fb09c78804"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 06 Feb 2023 18:20:43 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b19984fd61939445876a396068afcacf47d0172b05382d31149bbc3dd9e2ea951346e011b6156bc8e967295830c740d8b; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": {\n    \"numeroCliente\": 25546454,\n    \"codigoModalidade\": 1,\n    \"codigoEspecieDocumento\": \"DM\",\n    \"dataEmissao\": \"2018-09-20\",\n    \"nossoNumero\": 0,\n    \"seuNumero\": \"1235512\",\n    \"codigoBarras\": \"\",\n    \"linhaDigitavel\": \"\",\n    \"valor\": 156.23,\n    \"dataVencimento\": \"2018-09-20\",\n    \"valorAbatimento\": 1,\n    \"numeroParcela\": 1,\n    \"aceite\": true,\n    \"tipoMulta\": 1,\n    \"valorMulta\": 5.01,\n    \"tipoJurosMora\": 1,\n    \"valorJurosMora\": 4,\n    \"pagador\": {\n      \"numeroCpfCnpj\": \"98765432185\",\n      \"nome\": \"Marcelo dos Santos\",\n      \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\n      \"bairro\": \"Santa Rosa\",\n      \"cidade\": \"Luziânia\",\n      \"cep\": \"72320000\",\n      \"uf\": \"DF\",\n      \"email\": \"pagador@dominio.com.br\"\n    },\n    \"beneficiarioFinal\": {\n      \"numeroCpfCnpj\": \"98784978699\",\n      \"nome\": \"Lucas de Lima\"\n    },\n    \"mensagensInstrucao\": [\n      \"Descrição da Instrução 1\",\n      \"Descrição da Instrução 2\",\n      \"Descrição da Instrução 3\",\n      \"Descrição da Instrução 4\",\n      \"Descrição da Instrução 5\"\n    ],\n    \"pdfBoleto\": \"JVBERi0xLjQKJeLjz9MKMyAwIG9iago8PC9UeXBlL1hPYmplY3QvU3VidHlwZS9JbWFnZS9XaWR0aCA1Nzgv+PgolaVRleHQtNS41LjExCnN0YXJ0eHJlZgoyNzAxOQolJUVPRgo=\",\n    \"qrCode\": \"00020101021226950014br.gov.bcb.pix2573pix.sicoob.com.br/qr/payload/v2/cobv/e736df1b-1389-4b96-a070-c8dddac768de5204000053039865802BR5924JULIO PEREIRA DE OLIVEIRA6008Brasilia62070503***630435A3\"\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Consulta de dados de faixas de nosso número disponíveis",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/faixas-nosso-numero-disponiveis?numeroCliente=integer&codigoModalidade=integer&quantidade=integer&numeroContratoCobranca=integer",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								"faixas-nosso-numero-disponiveis"
+							],
+							"query": [
+								{
+									"key": "numeroCliente",
+									"value": "integer",
+									"description": "(required) Número que identifica o contrato do beneficiário no Sisbr. "
+								},
+								{
+									"key": "codigoModalidade",
+									"value": "integer",
+									"description": "(required) Identifica a modalidade do boleto.\n\n1 SIMPLES COM REGISTRO\n3 CAUCIONADA\n4 VINCULADA\n8 COBRANÇA CONTA CAPITAL"
+								},
+								{
+									"key": "quantidade",
+									"value": "integer",
+									"description": "(required) Quantidade mínima de nosso números que devem estar disponíveis na faixa a ser pesquisada."
+								},
+								{
+									"key": "numeroContratoCobranca",
+									"value": "integer",
+									"description": "Indicar o id do contatro de cobrança"
+								}
+							]
+						},
+						"description": "Serviço para consulta de dados de faixas de nosso número disponíveis.\n\nServiço para consulta de dados de faixas de nosso número disponíveis.  \nQuando o campo validaDigitoVerificadorNossoNumero retornar o valor \"0\" a faixa \"numeroInicial\" e \"numeroFinal\" refere-se a numeração final (exemplo: 10 e 15 - utilização: 1-0 1-1 1-2 1-3 1-4 1-5).  \nMas se o campo validaDigitoVerificadorNossoNumero retornar o valor \"1\" a faixa \"numeroInicial\" e \"numeroFinal\" deverá ser calculado o DV (exemplo: 10 e 15 - utilização: 10-4 11-8 12-0 13-1 14-7 15-9)."
+					},
+					"response": [
+						{
+							"name": "Consulta de dados de faixas de nosso número disponíveis",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/faixas-nosso-numero-disponiveis?numeroContrato=integer&modalidade=integer&quantidade=integer",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"faixas-nosso-numero-disponiveis"
+									],
+									"query": [
+										{
+											"key": "numeroContrato",
+											"value": "integer",
+											"description": "Número que identifica o contrato do beneficiário no Sisbr. (required)"
+										},
+										{
+											"key": "modalidade",
+											"value": "integer",
+											"description": "Identifica a modalidade do boleto. (required)\n\n1 SIMPLES COM REGISTRO\n3 CAUCIONADA\n4 VINCULADA\n8 COBRANÇA CONTA CAPITAL"
+										},
+										{
+											"key": "quantidade",
+											"value": "integer",
+											"description": "Quantidade mínima de nosso números que devem estar disponíveis na faixa a ser pesquisada. (required)"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "cf00c52163e137440383c744"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 06 Feb 2023 17:22:12 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b16faf6418019a0c5c5dfdc25419f273b58fd1ac02fb4ccb13b938fc570c7c4733afc4df65bf91cae9232fb6d3cb4409e; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": [\n    {\n      \"numeroCliente\": 5224,\n      \"nome\": \"JOSE PEREIRA\",\n      \"codigoModalidade\": 1,\n      \"numeroInicial\": 1,\n      \"numeroFinal\": 10,\n      \"quantidade\": 10\n    }\n  ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Alterar dados de um boleto",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1,\r\n    \"especieDocumento\": {\r\n        \"codigoEspecieDocumento\": \"DM\"\r\n    },\r\n    \"seuNumero\": {\r\n        \"seuNumero\": \"209\",\r\n        \"identificacaoBoletoEmpresa\": \"209\"\r\n    },\r\n    \"desconto\": {\r\n        \"tipoDesconto\": 1,\r\n        \"dataPrimeiroDesconto\": \"2018-09-20\",\r\n        \"valorPrimeiroDesconto\": 1,\r\n        \"dataSegundoDesconto\": \"2018-09-20\",\r\n        \"valorSegundoDesconto\": 0,\r\n        \"dataTerceiroDesconto\": \"2018-09-20\",\r\n        \"valorTerceiroDesconto\": 0\r\n    },\r\n    \"abatimento\": {\r\n        \"valorAbatimento\": 156.23\r\n    },\r\n    \"multa\": {\r\n        \"tipoMulta\": 1,\r\n        \"dataMulta\": \"2018-09-20\",\r\n        \"valorMulta\": 5\r\n    },\r\n    \"jurosMora\": {\r\n        \"tipoJurosMora\": 1,\r\n        \"dataJurosMora\": \"2018-09-20\",\r\n        \"valorJurosMora\": 4\r\n    },\r\n    \"rateioCredito\": {\r\n        \"tipoOperacao\": 2,\r\n        \"rateioCreditos\": [\r\n            {\r\n                \"numeroBanco\": 756,\r\n                \"numeroAgencia\": 4027,\r\n                \"numeroContaCorrente\": 0,\r\n                \"contaPrincipal\": true,\r\n                \"codigoTipoValorRateio\": 1,\r\n                \"valorRateio\": 100,\r\n                \"codigoTipoCalculoRateio\": 1,\r\n                \"numeroCpfCnpjTitular\": \"98765432185\",\r\n                \"nomeTitular\": \"Marcelo dos Santos\",\r\n                \"codigoFinalidadeTed\": 10,\r\n                \"codigoTipoContaDestinoTed\": \"CC\",\r\n                \"quantidadeDiasFloat\": 1,\r\n                \"dataFloatCredito\": \"2020-12-30\"\r\n            }\r\n        ]\r\n    },\r\n    \"pix\": {\r\n        \"utilizarPix\": false\r\n    },\r\n    \"prorrogacaoVencimento\": {\r\n        \"dataVencimento\": \"2018-09-20\"\r\n    },\r\n    \"prorrogacaoLimitePagamento\": {\r\n        \"dataLimitePagamento\": \"2018-09-20\"\r\n    },\r\n    \"valorNominal\": {\r\n        \"valor\": 156.23\r\n    }\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "integer",
+									"description": "Número que identifica o boleto de cobrança no Sisbr"
+								}
+							]
+						},
+						"description": "Serviço para alteração de dados de boleto já registrado. Deve ser feita a alteração de somente um objeto do boleto por requisição.  \n**Objetos de alteração do boleto:**\n\n- seuNumero\n    \n- desconto\n    \n- abatimento\n    \n- multa\n    \n- jurosMora\n    \n- rateioCredito\n    \n- pix\n    \n- prorrogacaoVencimento\n    \n- prorrogacaoLimitePagamento"
+					},
+					"response": [
+						{
+							"name": "Alterar dados de um boleto",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "file",
+									"file": {},
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										":nossoNumero"
+									],
+									"variable": [
+										{
+											"key": "nossoNumero",
+											"value": ""
+										}
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "Text",
+							"header": [],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Comandar a baixa de boletos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"numeroCliente\": 5224,\r\n  \"codigoModalidade\": 1\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/baixar",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero",
+								"baixar"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "integer",
+									"description": "Número que identifica o boleto de cobrança no Sisbr\n\n"
+								}
+							]
+						},
+						"description": "Serviço para comandar a baixa de boletos informados."
+					},
+					"response": [
+						{
+							"name": "Comandar a baixa de boletos",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"numeroCliente\": 5224,\r\n  \"codigoModalidade\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/pagamentos/v3/boletos/:nossoNumero/baixar",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"pagamentos",
+										"v3",
+										"boletos",
+										":nossoNumero",
+										"baixar"
+									],
+									"variable": [
+										{
+											"key": "nossoNumero",
+											"value": "integer",
+											"description": "Número que identifica o boleto de cobrança no Sisbr\n\n"
+										}
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "Text",
+							"header": [],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Pagador",
+			"item": [
+				{
+					"name": "Alterar informações de pagadores de boletos",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"numeroCpfCnpj\": \"98765432185\",\r\n    \"nome\": \"Marcelo dos Santos\",\r\n    \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\r\n    \"bairro\": \"Santa Rosa\",\r\n    \"cidade\": \"Luziânia\",\r\n    \"cep\": \"72320000\",\r\n    \"uf\": \"DF\",\r\n    \"email\": \"pagador@dominio.com.br\"\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/pagadores",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"pagadores"
+							]
+						},
+						"description": "Serviço para alterar informações do cadastro do pagador."
+					},
+					"response": [
+						{
+							"name": "Alterar informações de pagadores de boletos",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"numeroCpfCnpj\": \"98765432185\",\r\n    \"nome\": \"Marcelo dos Santos\",\r\n    \"endereco\": \"Rua 87 Quadra 1 Lote 1 casa 1\",\r\n    \"bairro\": \"Santa Rosa\",\r\n    \"cidade\": \"Luziânia\",\r\n    \"cep\": \"72320000\",\r\n    \"uf\": \"DF\",\r\n    \"email\": \"pagador@dominio.com.br\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/pagadores",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"pagadores"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.8"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "91715c9463e1452f04f76cc1"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 06 Feb 2023 18:21:35 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b5d33f87718e55711a847f691f45ac154ea5e72fa47b29daf65c696fd7c5fddb7edce371f9800cf0841f357623da3412d; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				}
+			],
+			"description": "Inclusão e Manutenção de Pagador."
+		},
+		{
+			"name": "Negativação",
+			"item": [
+				{
+					"name": "Negativar Pagadores",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/negativacoes",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero",
+								"negativacoes"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "",
+									"description": "Número que identifica o boleto de cobrança no Sisbr\n\n"
+								}
+							]
+						},
+						"description": "Serviço para indicar a negativação de pagadores de boletos informados. A negativação é o registro de pendências ou restrições nos órgãos de proteção ao crédito. No Sicoob, o parceiro para este serviço é o SERASA.\n\n*   É possível a inclusão de até 10 boletos por requisição."
+					},
+					"response": [
+						{
+							"name": "Negativar Pagadores",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "[\r\n  {\r\n    \"numeroCliente\": 25546454,\r\n    \"modalidade\": 1,\r\n    \"nossoNumero\": 2588658\r\n  }\r\n]"
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/negativacoes",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"negativacoes"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.6"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "197368ee646505ff0d4a77f1"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:51:11 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183bbcb7dd986c5bcdfcf7dbc12d1166763e98f2b722e311040df932151c3113686f8775c620675b36802ff0474ef4825816; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Cancelar o Apontamento da Negativação de Pagadores",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/negativacoes",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero",
+								"negativacoes"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "",
+									"description": "Número que identifica o boleto de cobrança no Sisbr"
+								}
+							]
+						},
+						"description": "Serviço para cancelar o apontamento da negativação de pagadores de boletos informados. O boleto não será enviado ao serviço de proteção ao crédito.\n\n*   É possível a inclusão de até 10 boletos por requisição."
+					},
+					"response": [
+						{
+							"name": "Cancelar o Apontamento da Negativação de Pagadores",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/negativacoes",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"negativacoes"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.8"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "cf00c5216465063129e8c885"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:52:01 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183bbcb7dd986c5bcdfcf7dbc12d1166763e98f2b722e311040df932151c3113686f8775c620675b36802ff0474ef4825816; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Baixar a Negativação de Pagadores",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/negativacoes",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero",
+								"negativacoes"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "",
+									"description": "Número que identifica o boleto de cobrança no Sisbr\n\n"
+								}
+							]
+						},
+						"description": "Serviço para comandar uma baixa da negativação de pagadores de boletos informados. Será enviado um pedido de baixa para o serviço de proteção ao crédito.\n\n*   É possível a inclusão de até 10 boletos por requisição."
+					},
+					"response": [
+						{
+							"name": "Baixar a Negativação de Pagadores",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/negativacoes",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"negativacoes"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.3"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "91715c9464650618745cec52"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:51:36 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183bbcb7dd986c5bcdfcf7dbc12d1166763e98f2b722e311040df932151c3113686f8775c620675b36802ff0474ef4825816; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Protesto",
+			"item": [
+				{
+					"name": "Protestar Boletos",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"numeroCliente\": 25546454,\r\n  \"codigoModalidade\": 1\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/protestos",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero",
+								"protestos"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "",
+									"description": "Número que identifica o boleto de cobrança no Sisbr"
+								}
+							]
+						},
+						"description": "Este serviço registra a indicação a protesto de boletos informados. Os boletos vencidos e não pagos podem ser protestados e registrados em cartório.\n\n*   É possível a inclusão de até 10 boletos por requisição."
+					},
+					"response": [
+						{
+							"name": "Protestar Boletos",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/protestos",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"protestos"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.2"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "91715c9464650680462adc44"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:53:20 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183bd1b6d3912deaf83105865a76aefba8f91127c30eeee879200b57bbde5c1c482671a49a5f1a47ad242139ff0a38ddbfa1; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Cancelar o apontamento de protesto de boletos",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}"
+						},
+						"url": {
+							"raw": "{{api.url.cobranca}}/boletos/:nossoNumero/protestos",
+							"host": [
+								"{{api.url.cobranca}}"
+							],
+							"path": [
+								"boletos",
+								":nossoNumero",
+								"protestos"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "",
+									"description": "Número que identifica o boleto de cobrança no Sisbr"
+								}
+							]
+						},
+						"description": "Este serviço realiza a indicação de cancelamento de protesto de boletos informados. Os boletos em atraso e não pagos podem ser indicados a protesto. Caso seja realizado no mesmo dia, pode-se cancelar o apontamento a protesto.\n\n*   É possível a inclusão de até 10 boletos por requisição."
+					},
+					"response": [
+						{
+							"name": "Cancelar o apontamento de protesto de boletos",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/protestos",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										":nossoNumero",
+										"protestos"
+									],
+									"variable": [
+										{
+											"key": "nossoNumero",
+											"value": "",
+											"description": "Número que identifica o boleto de cobrança no Sisbr"
+										}
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.9"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "cf00c5216465065d2a99fb53"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:52:45 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183bbcb7dd986c5bcdfcf7dbc12d1166763e98f2b722e311040df932151c3113686f8775c620675b36802ff0474ef4825816; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Desistir do Protesto de Boletos",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}"
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/:nossoNumero/protestos",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								":nossoNumero",
+								"protestos"
+							],
+							"variable": [
+								{
+									"key": "nossoNumero",
+									"value": "",
+									"description": "Número que identifica o boleto de cobrança no Sisbr"
+								}
+							]
+						},
+						"description": "Este serviço realiza o pedido de desistência do protesto de boletos informados. O pedido de desistência não garante que o protesto será retirado. Deve-se aguardar o retorno do cartório. O pedido de desistência pode ser realizado a qualquer momento, desde que haja um apontamento prévio.\n\n*   É possível a inclusão de até 10 boletos por requisição."
+					},
+					"response": [
+						{
+							"name": "Desistir do Protesto de Boletos",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"numeroCliente\": 25546454,\r\n    \"codigoModalidade\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/protestos",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"protestos"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.2"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "cf00c52164650642304904f6"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 17 May 2023 16:52:18 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183bbcb7dd986c5bcdfcf7dbc12d1166763e98f2b722e311040df932151c3113686f8775c620675b36802ff0474ef4825816; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": ""
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Movimentação",
+			"item": [
+				{
+					"name": "Solicitar a movimentação da carteira de cobrança registrada para beneficiário informado",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"numeroCliente\": 25546454,\r\n  \"tipoMovimento\": 1,\r\n  \"dataInicial\": \"2018-09-20\",\r\n  \"dataFinal\": \"2018-09-20\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/movimentacoes",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								"movimentacoes"
+							]
+						},
+						"description": "Serviço para solicitar a movimentação da carteira de cobrança registrada para beneficiário informado. Os movimentos disponíveis para solicitação são:\n\n1\\. Entrada\n\n2\\. Prorrogação\n\n3\\. A Vencer\n\n4\\. Vencido\n\n5\\. Liquidação\n\n6\\. Baixa\n\n*   As consultas estão limitadas em um período máximo de 2 dias."
+					},
+					"response": [
+						{
+							"name": "Solicitar a movimentação da carteira de cobrança registrada para beneficiário informado",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"numeroCliente\": 25546454,\r\n  \"tipoMovimento\": 1,\r\n  \"dataInicial\": \"2018-09-20\",\r\n  \"dataFinal\": \"2018-09-20\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/movimentacoes",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"movimentacoes"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "10.210.95.2"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "197368ee6413170902473fd1"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 16 Mar 2023 13:18:01 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b3d4dc9a10a091f332ac7b4a220d0ff8d0234d4b34c082a8b0dcb1454626b48c017dc529bb2b78f621849aa0608419795; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": {\n    \"mensagem\": \"Solicitação recebida com sucesso. Utilize o 'Código da Solicitação' para verificar se já foi processada.\",\n    \"codigoSolicitacao\": 132\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Consultar a situação da solicitação da movimentação",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/movimentacoes?numeroCliente=integer&codigoSolicitacao=integer",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								"movimentacoes"
+							],
+							"query": [
+								{
+									"key": "numeroCliente",
+									"value": "integer",
+									"description": "(required) Número que identifica o contrato do beneficiário no Sisbr."
+								},
+								{
+									"key": "codigoSolicitacao",
+									"value": "integer",
+									"description": "(required) Código da solicitação que deseja consultar a quantidade de arquivos que serão gerados"
+								}
+							]
+						},
+						"description": "Serviço para consultar a situação da solicitação da movimentação."
+					},
+					"response": [
+						{
+							"name": "Consultar a situação da solicitação da movimentação",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "client_id",
+										"value": "{{clientid}}"
+									}
+								],
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/movimentacoes?numeroCliente=integer&codigoSolicitacao=integer",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"movimentacoes"
+									],
+									"query": [
+										{
+											"key": "numeroCliente",
+											"value": "integer",
+											"description": "(required) Número que identifica o contrato do beneficiário no Sisbr."
+										},
+										{
+											"key": "codigoSolicitacao",
+											"value": "integer",
+											"description": "(required) Código da solicitação que deseja consultar a quantidade de arquivos que serão gerados"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "177.235.4.29"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "197368ee62eb019501b57432"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 03 Aug 2022 23:15:33 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS0176404c=01cd5c6682d079e8187b728e9d0db8217d88974db33e8867dda30dc9741ae4bda12bffdf4b50e63716a44eab9138811c6cb9942582; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b9359bf260783ca15741a7596922da1e1cef7d12870fd7a3ac7fe569bd046feed84cc4b578943121bfec7b479da7699c5ff84e455971e19cbe210c9b39f734838; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": {\n    \"quantidadeTotalRegistros\": \"1.500.000\",\n    \"quantidadeRegistrosArquivo\": 500000,\n    \"quantidadeArquivo\": 3,\n    \"idArquivos\": [\n      30025254,\n      30025255,\n      30025256\n    ]\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Download do(s) arquivo(s) de movimentação.",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "client_id",
+								"value": "{{clientid}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"resultado\": {\r\n    \"arquivo\": \"UEsDBBQAAAAIAMOUwp3Ci05RwpzCqzLDsQEAAMO5GwAAMAAAAEVOVFJfMzA2Nl8xODkxODlfMjAxOTA0MTAxODE0NDQzMjQ1MTM0XzI2XzAuanNvbsOtw5bDkWvDnCAYAMOwf2XDpDkZwp9GwqPDqcObw5rCu8Kxw4HCtcKUw7UowowxwoZEdwhJLCbDqcOLw5jDvz7Do13DmzBCw6NDS0pRcsOHw4V8w4bDr8OTH8KHP8O+JFrDnsKYWlfCuhfClTDDl8OWVMKqw6tEwqPDmsOeXMKae8OtfyRnwpjCpUk7NMKfDnbCuBPCpz5IwpPDisOIwr3CvsKbBsKiNMOpw7TCoRbCk8KuZHvCtcO/wpbCpMKJFMK9w7jDmsK6wpnDjMO0IQbDhDMoMwx7woAzf2XCkMK7w6/Dk8KIw4/CusKZDcOHw7PDoV/CjBVzw7U8DS8zIBlCw78Pw7fDtV3DlMOaBSpXBi/DnXXDrDNtb8KFG8O9w5jCqcOlwqXCkcKiw5ZSSMOlJsKQwoN/w6jCg8O3wrofanfCl1NUwrjChFRXw53CqMOhamjClB1nw5/CuHvDtzbCk8OtNsK7U8K+wrfCqsKtwo7DhcO5wqFPOcOSDMONwqzDiMK9wqjCjX3CiMOkw7QjwrjDpsK3QR/DjMK5wrBWdMOuBcKMFiVjHBPDsMKNUwDClENRAMKCYwljw6/CmMKhw6s/wqYxbsOXdixTwopJAmx+wonCt8KNditqNsKmGkI3ccKnG8OdwqtrccOwG8OxfMKRwo/Ciy4uwozCtcKnw60gGGN4KF9Yw717CgzDvDLDvE3Co8OlV8KywozDs1Utw5Nlw4s4wo/ClsKjw6UQw4s5wqxqOV/CtsKcQ8K0HC3Ch1gmfFXDi2jDmTLDocORcsK0HGLCmcOSwrduwpnDkmg5Wg7CsVzDoFUtw7Nlw4sFwo7ClsKjw6UQw4tsw53Ds3LDgMO/MsKLw6fDpWg5w4gyZ8KrWibDi8KWOcKLwpbCo8OlEMOLJVnDlTJewrZcwpJoOVoOwrBcw7DCmTPDhsOtw67DvMOXZsO7w73Dg8OYXsOAMn7DrsKMw4EJdsKGw53Ch8KScsOOwrLDi8Owwp3CnTF+w74DUEsBAj8AFAAAAAgAw5TCncKLTlHCnMKrMsOxAQAAw7kbAAAwACQAAAAAAAAAIAAAAAAAAABFTlRSXzMwNjZfMTg5MTg5XzIwMTkwNDEwMTgxNDQ0MzI0NTEzNF8yNl8wLmpzb24KACAAAAAAAAEAGADCsMKtw6pswrjDsMOUAQDDr8OJwofDrsOvw5QBAMOvw4nCh8Ouw6/DlAFQSwUGAAAAAAEAAQDCggAAAD8CAAAAAA==\",\r\n    \"nomeArquivo\": \"ENTR_3066_189189_201904260922011189887_47_0.zip\"\r\n  }\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/movimentacoes/download?numeroCliente=integer&codigoSolicitacao=integer&idArquivo=integer",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sicoob",
+								"com",
+								"br"
+							],
+							"path": [
+								"cobranca-bancaria",
+								"v3",
+								"boletos",
+								"movimentacoes",
+								"download"
+							],
+							"query": [
+								{
+									"key": "numeroCliente",
+									"value": "integer",
+									"description": "(required) Número que identifica o contrato do beneficiário no Sisbr."
+								},
+								{
+									"key": "codigoSolicitacao",
+									"value": "integer",
+									"description": "(required) Código da solicitação que deseja consultar a quantidade de arquivos que serão gerados"
+								},
+								{
+									"key": "idArquivo",
+									"value": "integer",
+									"description": "(required) ID do arquivo para download"
+								}
+							]
+						},
+						"description": "Serviço para obter um arquivo de movimentação.\n\nO arquivo será retornado na extensão ZIP e na Base64.\n\nO campo “arquivo” contém os dados do arquivo em base 64, é necessário salvar esse conteúdo em um arquivo com o nome informado na resposta no campo “nomeArquivo”, após decodificar este conteúdo você terá um arquivo .zip contendo internamente um arquivo JSON com os dados do movimento solicitado, bastando agora apenas descompactar o arquivo zip e acessar os dados do movimento."
+					},
+					"response": [
+						{
+							"name": "Download do(s) arquivo(s) de movimentação.",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "client_id",
+										"value": "{{clientid}}",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{Token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "https://api.sicoob.com.br/cobranca-bancaria/v3/boletos/movimentacao-download?numeroContrato=integer&codigoSolicitacao=integer&idArquivo=integer",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sicoob",
+										"com",
+										"br"
+									],
+									"path": [
+										"cobranca-bancaria",
+										"v3",
+										"boletos",
+										"movimentacao-download"
+									],
+									"query": [
+										{
+											"key": "numeroContrato",
+											"value": "integer",
+											"description": "Número que identifica o beneficiário na plataforma de atendimento da cooperativa."
+										},
+										{
+											"key": "codigoSolicitacao",
+											"value": "integer",
+											"description": "Código da solicitação que deseja consultar a quantidade de arquivos que serão gerados"
+										},
+										{
+											"key": "idArquivo",
+											"value": "integer",
+											"description": "ID do arquivo para download"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "X-Client-IP",
+									"value": "177.235.4.29"
+								},
+								{
+									"key": "X-Global-Transaction-ID",
+									"value": "197368ee62eb015a01b55e72"
+								},
+								{
+									"key": "Strict-Transport-Security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "WWW-Authenticate",
+									"value": "Bearer error='invalid_token'"
+								},
+								{
+									"key": "Date",
+									"value": "Wed, 03 Aug 2022 23:14:34 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS0176404c=01cd5c66821622e6b48a9fd5f0fe8a5da6f933301ceee96f4e40567c925f267af762445c5c4fff10a23afdec45fe10196b6df3db95; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "TS013eb68f=017a3a183b0732287d1319636be034a1aba1ed4e04cef7d12870fd7a3ac7fe569bd046feed84cc4b578943121bfec7b479da7699c5039959a5798376c2e5cd1bcf6990ef85; Path=/; Domain=.api.sicoob.com.br"
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "f5avraaaaaaaaaaaaaaaa_session_=FLLAAFNNNGACAHNBPHODAOJHHJMKOJLPLKMCICILGKIAFCPPBKOFIFMDNLLHHJDCBMHDNCAKPBHKBLCBGMCAMCDEAAAPAKGMEFFMINHOHPPMBOJBFHPNMLBJHMAOGELJ; HttpOnly; secure"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"resultado\": {\n    \"arquivo\": \"UEsDBBQAAAAIAMOUwp3Ci05RwpzCqzLDsQEAAMO5GwAAMAAAAEVOVFJfMzA2Nl8xODkxODlfMjAxOTA0MTAxODE0NDQzMjQ1MTM0XzI2XzAuanNvbsOtw5bDkWvDnCAYAMOwf2XDpDkZwp9GwqPDqcObw5rCu8Kxw4HCtcKUw7UowowxwoZEdwhJLCbDqcOLw5jDvz7Do13DmzBCw6NDS0pRcsOHw4V8w4bDr8OTH8KHP8O+JFrDnsKYWlfCuhfClTDDl8OWVMKqw6tEwqPDmsOeXMKae8OtfyRnwpjCpUk7NMKfDnbCuBPCpz5IwpPDisOIwr3CvsKbBsKiNMOpw7TCoRbCk8KuZHvCtcO/wpbCpMKJFMK9w7jDmsK6wpnDjMO0IQbDhDMoMwx7woAzf2XCkMK7w6/Dk8KIw4/CusKZDcOHw7PDoV/CjBVzw7U8DS8zIBlCw78Pw7fDtV3DlMOaBSpXBi/DnXXDrDNtb8KFG8O9w5jCqcOlwqXCkcKiw5ZSSMOlJsKQwoN/w6jCg8O3wrofanfCl1NUwrjChFRXw53CqMOhamjClB1nw5/CuHvDtzbCk8OtNsK7U8K+wrfCqsKtwo7DhcO5wqFPOcOSDMONwqzDiMK9wqjCjX3CiMOkw7QjwrjDpsK3QR/DjMK5wrBWdMOuBcKMFiVjHBPDsMKNUwDClENRAMKCYwljw6/CmMKhw6s/wqYxbsOXdixTwopJAmx+wonCt8KNditqNsKmGkI3ccKnG8OdwqtrccOwG8OxfMKRwo/Ciy4uwozCtcKnw60gGGN4KF9Yw717CgzDvDLDvE3Co8OlV8KywozDs1Utw5Nlw4s4wo/ClsKjw6UQw4s5wqxqOV/CtsKcQ8K0HC3Ch1gmfFXDi2jDmTLDocORcsK0HGLCmcOSwrduwpnDkmg5Wg7CsVzDoFUtw7Nlw4sFwo7ClsKjw6UQw4tsw53Ds3LDgMO/MsKLw6fDpWg5w4gyZ8KrWibDi8KWOcKLwpbCo8OlEMOLJVnDlTJewrZcwpJoOVoOwrBcw7DCmTPDhsOtw67DvMOXZsO7w73Dg8OYXsOAMn7DrsKMw4EJdsKGw53Ch8KScsOOwrLDi8Owwp3CnTF+w74DUEsBAj8AFAAAAAgAw5TCncKLTlHCnMKrMsOxAQAAw7kbAAAwACQAAAAAAAAAIAAAAAAAAABFTlRSXzMwNjZfMTg5MTg5XzIwMTkwNDEwMTgxNDQ0MzI0NTEzNF8yNl8wLmpzb24KACAAAAAAAAEAGADCsMKtw6pswrjDsMOUAQDDr8OJwofDrsOvw5QBAMOvw4nCh8Ouw6/DlAFQSwUGAAAAAAEAAQDCggAAAD8CAAAAAA==\",\n    \"nomeArquivo\": \"ENTR_3066_189189_201904260922011189887_47_0.zip\"\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Arquivos de Movimentação",
+			"item": [],
+			"description": "O arquivo será retornado na extensão ZIP e na Base64. UTF8\n\n- Exemplos decodificados (atributos serão retornados conforme tipo de movimento)\n    \n\n## Entrada\n\n``` json\n[\n    {\n\"siglaMovimento\": \"ENTR\", // Sigla do tipo de movimento solicitado\n\"dataInicioMovimento\": \"2020-10-13T00:00:00-03:00\", // Data de início do movimento\n\"dataFimMovimento\": \"2020-10-13T00:00:00-03:00\", // Data final do movimento\n\"numeroCliente\": 76139, // Identificador do cliente\n\"numeroContrato\": 76139, // Identificador do contrato\n\"modalidade\": 1, // Tipo de modalidade\n\"numeroTitulo\": 22830, // Número do título\n\"seuNumero\": \"13_10_TESTE\", // Descrição do seu número\n\"dataVencimentoTitulo\": \"2021-05-12T00:00:00-03:00\", // Data de vencimento do título\n\"valorTitulo\": 100.0, // Valor do título\n\"codigoBarras\": \"75697861800000100001306601007613900022830001\", // Código de barras\n\"dataMovimentoEntrada\": \"2020-10-13T00:00:00-03:00\", // Data de movimento da entrada do título\n\"dataEmissaoDocumento\": \"2019-12-31T00:00:00-03:00\", // Data de emissão do título\n\"dataLimitePagamento\": \"2021-11-08T00:00:00-03:00\", // Data limite para pagamento\n\"numeroContaCorrente\": 45551, // Número da conta corrente\n\"valorTarifaMovimento\": 0.0, // Valor da tarifa\n\"qrCode\": \"00020101021226950014br.gov.bcb.pix2573pix.sicoob.com.br/qr/payload/v2/cobv/e736df1b-1389-4b96-a070-c8dddac768de5204000053039865802BR5924JULIO PEREIRA DE OLIVEIRA6008Brasilia62070503***630435A3\"\n    }\n]\n\n ```\n\n## Prorrogações\n\n``` json\n[\n    {\n\"siglaMovimento\": \"PROR\", // Sigla do tipo de movimento solicitado\n\"dataInicioMovimento\": \"2020-10-13T00:00:00-03:00\", // Data de início do movimento\n\"dataFimMovimento\": \"2020-10-13T00:00:00-03:00\", // Data final do movimento\n\"numeroCliente\": 76139, // Identificador do cliente\n\"numeroContrato\": 76139, // Identificador do contrato\n\"modalidade\": 1, // Tipo de modalidade\n\"numeroTitulo\": 22830, // Número do título\n\"seuNumero\": \"13_10_TESTE\", // Descrição do seu número\n\"dataVencimentoTitulo\": \"2021-05-12T00:00:00-03:00\", // Data de vencimento do título\n\"valorTitulo\": 100.0, // Valor do título\n\"codigoBarras\": \"75697861800000100001306601007613900022830001\", // Código de barras\n\"dataLimitePagamento\": \"2021-11-08T00:00:00-03:00\",\n\"valorTarifaMovimento\": 0.0, // Valor da tarifa\n\"dataMovimentoProrrogacao\": \"2020-10-13T00:00:00-03:00\", // Data de movimento do processamento da prorrogação\n\"dataVencimentoAnterior\": \"2019-12-31T00:00:00-03:00\" // Data de vencimento anterior\n    }\n]\n\n ```\n\n## A Vencer\n\n``` json\n[\n    {\n\"siglaMovimento\": \"AVENC\", // Sigla do tipo de movimento solicitado\n\"dataInicioMovimento\": \"2020-10-13T00:00:00-03:00\", // Data de início do movimento\n\"dataFimMovimento\": \"2020-10-13T00:00:00-03:00\", // Data final do movimento\n\"numeroCliente\": 76139, // Identificador do cliente\n\"numeroContrato\": 76139, // Identificador do contrato\n\"modalidade\": 1, // Tipo de modalidade\n\"numeroTitulo\": 22830, // Número do título\n\"seuNumero\": \"13_10_TESTE\", // Descrição do seu número\n\"dataVencimentoTitulo\": \"2021-05-12T00:00:00-03:00\", // Data de vencimento do título\n\"valorTitulo\": 100.0, // Valor do título\n\"codigoBarras\": \"75697861800000100001306601007613900022830001\", // Código de barras\n\"dataMovimentoEntrada\": \"2020-10-13T00:00:00-03:00\", // Data de movimento da entrada do título\n\"dataEmissaoDocumento\": \"2019-12-31T00:00:00-03:00\", // Data de emissão do título\n\"dataLimitePagamento\": \"2021-11-08T00:00:00-03:00\" // Data limite para pagamento\n    }\n]\n\n ```\n\n## Vencido\n\n``` json\n[\n    {\n\"siglaMovimento\": \"VENC\", // Sigla do tipo de movimento solicitado\n\"dataInicioMovimento\": \"2020-10-13T00:00:00-03:00\", // Data de início do movimento\n\"dataFimMovimento\": \"2020-10-13T00:00:00-03:00\", // Data final do movimento\n\"numeroCliente\": 76139, // Identificador do cliente\n\"numeroContrato\": 76139, // Identificador do contrato\n\"modalidade\": 1, // Tipo de modalidade\n\"numeroTitulo\": 22830, // Número do título\n\"seuNumero\": \"13_10_TESTE\", // Descrição do seu número\n\"dataVencimentoTitulo\": \"2021-05-12T00:00:00-03:00\", // Data de vencimento do título\n\"valorTitulo\": 100.0, // Valor do título\n\"codigoBarras\": \"75697861800000100001306601007613900022830001\", // Código de barras\n\"dataLimitePagamento\": \"2021-11-08T00:00:00-03:00\", // Data limite para pagamento\n\"qtdDiasVencido\" : 2 , // Quantidade de dias vencido\n\"valorAbatimento\": 0 , // Valor do abatimento\n\"valorMultaAtual\" : 2, // Valor da multa\n\"valorMoraAtual\" : 3, // Valor da mora\n\"valorTituloAtualizado\" : 102.0 // Valor atualizado do título\n    }\n]\n\n ```\n\n## Liquidações\n\n#### idTipoOpFinanceira: 2, 51, 74, 75, 57, 58, 68, 212, 213\n\n#### tipoOpFinanceira:\n\n- 01 - Via Caixa (idTipoOpFinanceira: 2 e 51);\n    \n- 02 - Via Correspondente Bancário (idTipoOpFinanceira: 74 e 75);\n    \n- 03 - Via Cartório (idTipoOpFinanceira: 57);\n    \n- 04 - Via Compensação (idTipoOpFinanceira: 58);\n    \n- 05 - Via Agendamento (idTipoOpFinanceira: 68);\n    \n- 07 - Via Pix (idTipoOpFinanceira: 212);\n    \n- 08 - Via Poupança (idTipoOpFinanceira: 212);\n    \n- 06 - Via Retaguarda.\n    \n\n``` json\n[\n    {\n\"siglaMovimento\": \"LIQUI\", // Sigla do tipo de movimento solicitado\n\"dataInicioMovimento\": \"2020-09-30T00:00:00-03:00\", // Data de início do movimento\n\"dataFimMovimento\": \"2020-09-30T00:00:00-03:00\", // Data final do movimento\n\"numeroCliente\": 76139, // Identificador do cliente\n\"numeroContrato\": 76139, // Identificador do contrato\n\"modalidade\": 1, // Tipo de modalidade\n\"numeroTitulo\": 20352, // Número do título\n\"seuNumero\": \"30_09_261742_dias0\", // Descrição do seu número\n\"dataVencimentoTitulo\": \"2021-05-30T00:00:00-03:00\", // Data de vencimento do título\n\"valorTitulo\": 100.0, // Valor do título\n\"codigoBarras\": \"75691863600000100001306601007613900020352001\", // Código de barras\n\"dataMovimentoLiquidacao\": \"2021-05-30T00:00:00-03:00\", // Data de movimento do processamento da liquidação\n\"dataLiquidacao\": \"2021-05-30T00:00:00-03:00\", // Data de liquidação do título\n\"dataPrevisaoCredito\": \"2021-05-30T00:00:00-03:00\", // Data de previsão para o crédito\n\"numeroBancoRecebedor\": 756, // Número do banco recebedor do pagamento\n\"numeroAgenciaRecebedora\": 45551, // Número da agência recebedora do pagamento\n\"numeroContaCorrente\": 234129, // Número da conta corrente\n\"idTipoOpFinanceira\": 2, // Identificador do tipo de operação\n\"tipoOpFinanceira\" 01, // Descrição do tipo de operação financeira\n\"valorAbatimento\": 0.0, // Valor do abatimento\n\"valorDesconto\": 0.0, // Valor de desconto\n\"valorMora\": 0.0, // Valor de mora\n\"valorLiquido\": 100.0, // Valor recebido\n\"valorTarifaMovimento\" 0 // Valor da tarifa\n    }\n]\n\n ```\n\n## Baixas\n\n#### idTipoOpFinanceira: 11, 80, 82, 196\n\n#### tipoOpFinanceira:\n\n- 01 - Por Decurso de Prazo (idTipoOpFinanceira: 11);\n    \n- 02 - A Pedido do Cedente (idTipoOpFinanceira: 82);\n    \n- 03 - Para Acerto (idTipoOpFinanceira: 80);\n    \n- 04 - Por Protesto (idTipoOpFinanceira: 196);\n    \n- 06 - Via Retaguarda.\n    \n\n``` json\n[\n    {\n\"siglaMovimento\": \"BAIX\", // Sigla do tipo de movimento solicitado\n\"dataInicioMovimento\": \"2020-09-30T00:00:00-03:00\", // Data de início do movimento\n\"dataFimMovimento\": \"2020-09-30T00:00:00-03:00\", // Data final do movimento\n\"numeroCliente\": 76139, // Identificador do cliente\n\"numeroContrato\": 76139, // Identificador do contrato\n\"modalidade\": 1, // Tipo de modalidade\n\"numeroTitulo\": 20352, // Número do título\n\"seuNumero\": \"30_09_261742_dias0\", // Descrição do seu número\n\"dataVencimentoTitulo\": \"2021-05-30T00:00:00-03:00\", // Data de vencimento do título\n\"valorTitulo\": 100.0, // Valor do título\n\"codigoBarras\": \"75691863600000100001306601007613900020352001\", // Código de barras\n\"dataMovimentoLiquidacao\": \"2021-05-30T00:00:00-03:00\", // Data de movimento do processamento da liquidação\n\"dataLiquidacao\": \"2021-05-30T00:00:00-03:00\", // Data de liquidação do título\n\"idTipoOpFinanceira\": 2, // Identificador do tipo de operação\n\"tipoOpFinanceira\" 01, // Descrição do tipo de operação financeira\n\"valorTarifaMovimento\" 0 // Valor da tarifa\n    }\n]\n\n ```"
+		}
+	],
+	"variable": [
+		{
+			"key": "variable_key",
+			"value": ""
+		}
+	]
+}

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sicoob · Extrato de Movimentações</title>
+<style>
+:root {
+  --bg:      #0f1117;
+  --surface: #1a1d27;
+  --border:  #2a2d3a;
+  --text:    #e2e8f0;
+  --muted:   #64748b;
+  --accent:  #3b82f6;
+  --ok:      #22c55e;
+  --warn:    #f59e0b;
+  --erro:    #ef4444;
+  --info:    #06b6d4;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.sidebar-logo { font-size: 17px; font-weight: 700; color: var(--accent); padding: 0 8px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: none; transition: all 0.15s; }
+.sidebar-item.active { background: rgba(59,130,246,0.15); color: var(--accent); }
+.sidebar-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--text); }
+.sidebar-icon { font-size: 15px; width: 20px; text-align: center; }
+.sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+.sidebar-footer { margin-top: auto; }
+.main { flex: 1; padding: 28px; overflow-x: hidden; }
+
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 12px; color: var(--muted); }
+input[type=date], select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 13px; width: 100%; }
+input[type=date]:focus, select:focus { outline: none; border-color: var(--accent); }
+
+.tipos-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.tipo-chip { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; }
+.tipo-chip input { display: none; }
+.tipo-chip.checked { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.1); }
+
+.btn-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.btn { padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; display: flex; align-items: center; gap: 7px; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.progress { display: none; margin-top: 14px; }
+.progress.show { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-top: 14px; display: none; }
+.alert.show { display: block; }
+.alert-ok   { background: rgba(34,197,94,0.1);  border: 1px solid rgba(34,197,94,0.3);  color: var(--ok); }
+.alert-erro { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.3);  color: var(--erro); }
+.alert-info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); color: var(--accent); }
+
+.stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; min-width: 160px; }
+.stat-box .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.stat-box .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.stat-box.ok .value { color: var(--ok); }
+.stat-box.erro .value { color: var(--erro); }
+.stat-box.info .value { color: var(--info); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+td { padding: 10px 12px; vertical-align: middle; }
+
+.badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.badge-entrada    { background: rgba(34,197,94,0.15);  color: var(--ok); }
+.badge-liquidacao { background: rgba(34,197,94,0.15);  color: var(--ok); }
+.badge-baixa      { background: rgba(239,68,68,0.15);  color: var(--erro); }
+.badge-prorrog    { background: rgba(245,158,11,0.15); color: var(--warn); }
+.badge-vencido    { background: rgba(239,68,68,0.15);  color: var(--erro); }
+.badge-avencer    { background: rgba(6,182,212,0.15);  color: var(--info); }
+.badge-default    { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+.valor-pos { color: var(--ok); font-weight: 600; }
+.valor-neg { color: var(--erro); font-weight: 600; }
+.valor-neu { color: var(--muted); }
+
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+
+/* ---- Print ---- */
+@media print {
+  body { background: #fff; color: #111; }
+  .sidebar, .btn-row, .card:first-child { display: none !important; }
+  .main { padding: 0; }
+  .card { border: 1px solid #ddd; border-radius: 0; }
+  .badge { border: 1px solid currentColor; }
+  table { font-size: 11px; }
+  .stat-box { border: 1px solid #ddd; }
+  thead th { background: #f5f5f5; color: #333; border-bottom: 2px solid #ccc; }
+}
+</style>
+</head>
+<body>
+{% if not modo_impressao %}
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo">🏦 SICOOB</div>
+    <a class="sidebar-item" href="/admin">📋 Boletos</a>
+    <hr class="sidebar-divider">
+    <a class="sidebar-item active" href="/admin/relatorios/extrato">📊 Extrato</a>
+    <a class="sidebar-item" href="/admin/relatorios/boletos">📁 Rel. 120 dias</a>
+    <div class="sidebar-footer">
+      <a class="sidebar-item" href="/docs" target="_blank">📖 Docs API</a>
+    </div>
+  </nav>
+  <div class="main">
+{% endif %}
+
+{% if not modo_impressao %}
+    <h1>Extrato de Movimentações</h1>
+
+    <div class="card">
+      <div class="card-title">Filtros</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Data inicial</label>
+          <input type="date" id="data_inicio" value="{{ data_inicio or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Data final</label>
+          <input type="date" id="data_fim" value="{{ data_fim or '' }}">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:12px;">
+        <label>Tipos de movimento</label>
+        <div class="tipos-row">
+          <label class="tipo-chip checked" id="chip-1"><input type="checkbox" value="1" checked> Entrada</label>
+          <label class="tipo-chip" id="chip-2"><input type="checkbox" value="2"> Prorrogação</label>
+          <label class="tipo-chip" id="chip-3"><input type="checkbox" value="3"> A Vencer</label>
+          <label class="tipo-chip" id="chip-4"><input type="checkbox" value="4"> Vencido</label>
+          <label class="tipo-chip checked" id="chip-5"><input type="checkbox" value="5" checked> Liquidação</label>
+          <label class="tipo-chip checked" id="chip-6"><input type="checkbox" value="6" checked> Baixa</label>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-gerar" onclick="gerarExtrato()">
+          ↓ Buscar no SICOOB e Gerar
+        </button>
+        <button class="btn btn-outline" id="btn-csv-db" onclick="baixarCSV()">
+          ⬇ CSV (dados atuais)
+        </button>
+        <button class="btn btn-outline" onclick="window.print()">
+          🖨 Imprimir / PDF
+        </button>
+      </div>
+
+      <div class="progress" id="progress">
+        <div class="spinner"></div>
+        <span id="progress-text">Buscando movimentações no SICOOB… pode levar alguns minutos.</span>
+      </div>
+      <div class="alert" id="alert"></div>
+    </div>
+{% endif %}
+
+    {% if registros is defined and registros %}
+    <div class="stats-row">
+      <div class="stat-box ok">
+        <div class="label">Total Entradas (Liquidações)</div>
+        <div class="value">R$ {{ "%.2f"|format(total_entrada or 0) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box erro">
+        <div class="label">Total Baixas (Cancelamentos)</div>
+        <div class="value">R$ {{ "%.2f"|format(total_saida or 0) | replace('.', ',') }}</div>
+      </div>
+      <div class="stat-box info">
+        <div class="label">Total de Registros</div>
+        <div class="value">{{ registros | length }}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        Movimentações
+        {% if data_inicio and data_fim %} · {{ data_inicio }} → {{ data_fim }}{% endif %}
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Nosso Nº</th>
+            <th>Cliente</th>
+            <th>CPF/CNPJ</th>
+            <th style="text-align:right">Valor (R$)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in registros %}
+          <tr>
+            <td>{{ r.data_evento[:10] if r.data_evento else '—' }}</td>
+            <td>
+              {% set t = r.tipo_movimento %}
+              {% if t == 1 %}
+                <span class="badge badge-entrada">Entrada</span>
+              {% elif t == 2 %}
+                <span class="badge badge-prorrog">Prorrogação</span>
+              {% elif t == 3 %}
+                <span class="badge badge-avencer">A Vencer</span>
+              {% elif t == 4 %}
+                <span class="badge badge-vencido">Vencido</span>
+              {% elif t == 5 %}
+                <span class="badge badge-liquidacao">Liquidação</span>
+              {% elif t == 6 %}
+                <span class="badge badge-baixa">Baixa</span>
+              {% else %}
+                <span class="badge badge-default">{{ r.descricao or t }}</span>
+              {% endif %}
+            </td>
+            <td>{{ r.nosso_numero or '—' }}</td>
+            <td>{{ r.cliente_nome or '—' }}</td>
+            <td>{{ r.cliente_doc or '—' }}</td>
+            <td style="text-align:right">
+              {% if r.valor %}
+                {% if r.tipo_movimento == 5 %}
+                  <span class="valor-pos">{{ "%.2f"|format(r.valor) | replace('.', ',') }}</span>
+                {% elif r.tipo_movimento == 6 %}
+                  <span class="valor-neg">{{ "%.2f"|format(r.valor) | replace('.', ',') }}</span>
+                {% else %}
+                  <span class="valor-neu">{{ "%.2f"|format(r.valor) | replace('.', ',') }}</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif modo_impressao is not defined or not modo_impressao %}
+    <div class="card">
+      <div class="empty">Defina o período e clique em "Buscar no SICOOB e Gerar" para carregar os dados.</div>
+    </div>
+    {% endif %}
+
+{% if not modo_impressao %}
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tipo-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const cb = chip.querySelector('input');
+    cb.checked = !cb.checked;
+    chip.classList.toggle('checked', cb.checked);
+  });
+});
+
+function tiposSelecionados() {
+  return [...document.querySelectorAll('.tipo-chip input:checked')].map(el => el.value);
+}
+
+function buildParams() {
+  const inicio = document.getElementById('data_inicio').value;
+  const fim    = document.getElementById('data_fim').value;
+  const tipos  = tiposSelecionados();
+  if (!inicio || !fim) { alert('Informe data inicial e final.'); return null; }
+  if (!tipos.length)   { alert('Selecione ao menos um tipo de movimento.'); return null; }
+  const p = new URLSearchParams();
+  p.set('data_inicio', inicio);
+  p.set('data_fim', fim);
+  tipos.forEach(t => p.append('tipos', t));
+  return p;
+}
+
+async function gerarExtrato() {
+  const params = buildParams();
+  if (!params) return;
+
+  const btn = document.getElementById('btn-gerar');
+  const prog = document.getElementById('progress');
+  const alert = document.getElementById('alert');
+  btn.disabled = true;
+  prog.className = 'progress show';
+  alert.className = 'alert';
+
+  try {
+    const resp = await fetch('/admin/api/relatorios/extrato/gerar?' + params, { method: 'POST' });
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      alert.className = 'alert alert-ok show';
+      alert.innerHTML = `✓ ${data.registros} registros gerados.<br>
+        CSV salvo em: <strong>${data.arquivo_csv}</strong><br>
+        HTML salvo em: <strong>${data.arquivo_html}</strong>`;
+      setTimeout(() => location.href = '/admin/relatorios/extrato?' + params, 1200);
+    } else {
+      throw new Error(data.detail || JSON.stringify(data));
+    }
+  } catch(e) {
+    alert.className = 'alert alert-erro show';
+    alert.textContent = 'Erro: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    prog.className = 'progress';
+  }
+}
+
+function baixarCSV() {
+  const params = buildParams();
+  if (!params) return;
+  location.href = '/admin/api/relatorios/extrato/csv?' + params;
+}
+</script>
+{% endif %}
+</body>
+</html>

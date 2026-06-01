@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any
 import config
 from services.sicoob_client import get_client
@@ -8,6 +9,18 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.sicoob.com.br"
 _BOLETOS_PATH = "/cobranca-bancaria/v3/boletos"
+
+
+def _request_with_retry(session, method: str, url: str, *, max_retries: int = 3, **kwargs):
+    """Executa uma requisição HTTP com retry automático em caso de 429."""
+    for attempt in range(max_retries):
+        resp = getattr(session, method)(url, **kwargs)
+        if resp.status_code != 429:
+            return resp
+        retry_after = int(resp.headers.get("Retry-After", 2 ** (attempt + 1)))
+        logger.warning("429 Too Many Requests — aguardando %ss (tentativa %d/%d)", retry_after, attempt + 1, max_retries)
+        time.sleep(retry_after)
+    return resp
 
 
 def _boleto_api():
@@ -48,7 +61,7 @@ def consultar(nosso_numero: int | str, codigo_modalidade: int = 1) -> dict:
         "codigoModalidade": codigo_modalidade,
     }
     try:
-        resp = session.get(url, params=params, headers=headers, timeout=config.TIMEOUT)
+        resp = _request_with_retry(session, "get", url, params=params, headers=headers, timeout=config.TIMEOUT)
         if resp.status_code == 404:
             raise BoletoNaoEncontrado(f"Boleto {nosso_numero} não encontrado")
         data = resp.json()
@@ -74,7 +87,7 @@ def alterar(nosso_numero: str, dados: dict[str, Any]) -> dict:
     url = f"{_BASE_URL}{_BOLETOS_PATH}/{config.NUMERO_CLIENTE}/{nosso_numero}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     try:
-        resp = session.patch(url, json=dados, headers=headers, timeout=config.TIMEOUT)
+        resp = _request_with_retry(session, "patch", url, json=dados, headers=headers, timeout=config.TIMEOUT)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -89,7 +102,7 @@ def baixar(nosso_numero: str, motivo: str = "BAIXA_MANUAL") -> dict:
     url = f"{_BASE_URL}{_BOLETOS_PATH}/{config.NUMERO_CLIENTE}/{nosso_numero}/baixar"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     try:
-        resp = session.post(url, json={"motivo": motivo}, headers=headers, timeout=config.TIMEOUT)
+        resp = _request_with_retry(session, "post", url, json={"motivo": motivo}, headers=headers, timeout=config.TIMEOUT)
         resp.raise_for_status()
         logger.info("Boleto %s baixado com sucesso.", nosso_numero)
         return resp.json() if resp.content else {}
@@ -129,7 +142,7 @@ def listar(dias: int = 60) -> list[dict]:
         "dataFim": data_fim,
     }
     try:
-        resp = session.get(url, params=params, headers=headers, timeout=config.TIMEOUT)
+        resp = _request_with_retry(session, "get", url, params=params, headers=headers, timeout=config.TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         resultado = data.get("resultado", data)
@@ -159,7 +172,7 @@ def segunda_via_pdf(nosso_numero: str) -> bytes:
         "modeloImpressao": 2,  # 1=A4 1via, 2=A4 3vias, 3=A4 com envelopamento
     }
     try:
-        resp = session.get(url, params=params, headers=headers, timeout=config.TIMEOUT)
+        resp = _request_with_retry(session, "get", url, params=params, headers=headers, timeout=config.TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         inner = data.get("resultado", data)

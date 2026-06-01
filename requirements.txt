@@ -9,3 +9,5 @@ zeep
 python-multipart
 geopy
 python-tsp
+aiofiles
+fpdf2

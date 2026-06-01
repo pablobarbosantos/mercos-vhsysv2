@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Boletos · Sicoob</title>
+<title>Sicoob · Boletos</title>
 <style>
 :root {
   --bg:      #0f1117;
@@ -23,94 +23,96 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ---- Layout ---- */
 .layout { display: flex; min-height: 100vh; }
-.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-.sidebar-logo { font-size: 18px; font-weight: 700; color: var(--accent); padding: 0 8px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 14px; text-decoration: none; transition: all 0.15s; }
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.sidebar-logo { font-size: 17px; font-weight: 700; color: var(--accent); padding: 0 8px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: none; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
 .sidebar-item.active { background: rgba(59,130,246,0.15); color: var(--accent); }
 .sidebar-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--text); }
-.sidebar-icon { font-size: 16px; width: 20px; text-align: center; }
-.main { flex: 1; overflow-x: hidden; }
+.sidebar-icon { font-size: 15px; width: 20px; text-align: center; }
+.sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+.sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+.main { flex: 1; overflow-x: hidden; min-width: 0; }
+.section { display: none; }
+.section.active { display: block; }
 
 /* ---- Header ---- */
-.header { padding: 24px 32px 0; display: flex; align-items: center; justify-content: space-between; }
-.header h1 { font-size: 22px; font-weight: 600; }
-.header-actions { display: flex; gap: 10px; align-items: center; }
+.page-header { padding: 24px 28px 0; display: flex; align-items: center; justify-content: space-between; }
+.page-header h1 { font-size: 20px; font-weight: 600; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
 
 /* ---- Stats bar ---- */
-.stats-bar { display: flex; gap: 16px; padding: 20px 32px; flex-wrap: wrap; }
-.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; min-width: 140px; }
+.stats-bar { display: flex; gap: 12px; padding: 16px 28px; flex-wrap: wrap; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; min-width: 130px; }
 .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
-.stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stat-card .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .stat-card.ok .value { color: var(--ok); }
 .stat-card.warn .value { color: var(--warn); }
 .stat-card.erro .value { color: var(--erro); }
 .stat-card.info .value { color: var(--info); }
 
-/* ---- Filters ---- */
-.filters-section { margin: 0 32px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.filters-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; cursor: pointer; user-select: none; }
-.filters-header span { font-size: 13px; font-weight: 500; color: var(--muted); }
-.filters-header .badge { background: var(--accent); color: #fff; font-size: 10px; border-radius: 10px; padding: 2px 7px; margin-left: 6px; }
-.filters-body { padding: 0 20px 16px; display: none; flex-direction: column; gap: 14px; }
-.filters-body.open { display: flex; }
-.filter-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.filter-group { display: flex; flex-direction: column; gap: 5px; min-width: 140px; flex: 1; }
-.filter-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.filter-group input, .filter-group select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; outline: none; }
-.filter-group input:focus, .filter-group select:focus { border-color: var(--accent); }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); color: var(--muted); background: transparent; transition: all 0.15s; user-select: none; }
-.chip.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.1); }
-.chip.ok.active { border-color: var(--ok); color: var(--ok); background: rgba(34,197,94,0.1); }
-.chip.warn.active { border-color: var(--warn); color: var(--warn); background: rgba(245,158,11,0.1); }
-.chip.erro.active { border-color: var(--erro); color: var(--erro); background: rgba(239,68,68,0.1); }
-.period-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+/* ---- Filter bar ---- */
+.filter-bar { margin: 0 28px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.filter-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip { padding: 4px 11px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); color: var(--muted); background: transparent; transition: all 0.15s; user-select: none; white-space: nowrap; }
+.chip.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.12); }
+.chip.ok.active  { border-color: var(--ok);   color: var(--ok);   background: rgba(34,197,94,0.1); }
+.chip.warn.active{ border-color: var(--warn);  color: var(--warn); background: rgba(245,158,11,0.1); }
+.chip.erro.active{ border-color: var(--erro);  color: var(--erro); background: rgba(239,68,68,0.1); }
+.chip.info.active{ border-color: var(--info);  color: var(--info); background: rgba(6,182,212,0.1); }
+.chip.purple.active{ border-color: var(--purple); color: var(--purple); background: rgba(168,85,247,0.1); }
+.filter-sep { width: 1px; background: var(--border); height: 20px; flex-shrink: 0; }
+.fi { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 9px; font-size: 12px; outline: none; }
+.fi:focus { border-color: var(--accent); }
+.fi-wide { flex: 1; min-width: 140px; }
 
 /* ---- Table ---- */
-.table-section { margin: 0 32px 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
-.table-toolbar .count { font-size: 13px; color: var(--muted); }
+.table-section { margin: 0 28px 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.table-toolbar .count { font-size: 12px; color: var(--muted); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-thead th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); white-space: nowrap; }
-thead th.sortable { cursor: pointer; }
-thead th.sortable:hover { color: var(--text); }
+thead th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); white-space: nowrap; }
 tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: rgba(255,255,255,0.025); }
-td { padding: 11px 14px; vertical-align: middle; }
+td { padding: 10px 12px; vertical-align: middle; }
 td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
 .empty-state { text-align: center; padding: 48px; color: var(--muted); font-size: 14px; }
 .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
 
 /* ---- Status badge ---- */
-.badge-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.badge-status { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap; }
 .badge-status.EMITIDO    { background: rgba(6,182,212,0.15);  color: var(--info); }
 .badge-status.LIQUIDADO  { background: rgba(34,197,94,0.15);  color: var(--ok); }
 .badge-status.PAGO_EXTERNO { background: rgba(168,85,247,0.15); color: var(--purple); }
 .badge-status.BAIXADO    { background: rgba(100,116,139,0.15); color: var(--muted); }
-.badge-status.VENCIDO    { background: rgba(239,68,68,0.15);  color: var(--erro); }
+.badge-status.VENCIDO        { background: rgba(239,68,68,0.15);  color: var(--erro); }
+.badge-status.NAO_ENCONTRADO { background: rgba(239,68,68,0.1);   color: var(--erro); }
+.badge-status.ERRO           { background: rgba(239,68,68,0.1);   color: var(--erro); }
 
 /* ---- Actions ---- */
-.actions { display: flex; align-items: center; gap: 4px; }
-.btn-icon { background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 5px 7px; border-radius: 6px; font-size: 15px; line-height: 1; transition: all 0.15s; }
+.actions { display: flex; align-items: center; gap: 3px; }
+.btn-icon { background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 14px; line-height: 1; transition: all 0.15s; }
 .btn-icon:hover { background: rgba(255,255,255,0.08); color: var(--text); }
 .btn-icon.danger:hover { background: rgba(239,68,68,0.1); color: var(--erro); }
 .dropdown-wrapper { position: relative; }
 .dropdown-menu { position: absolute; right: 0; top: 100%; z-index: 100; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 180px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: none; }
 .dropdown-menu.open { display: block; }
-.dropdown-item { padding: 8px 12px; font-size: 13px; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px; color: var(--text); transition: background 0.1s; }
+.dropdown-item { padding: 7px 11px; font-size: 13px; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px; color: var(--text); transition: background 0.1s; }
 .dropdown-item:hover { background: rgba(255,255,255,0.07); }
 .dropdown-item.danger { color: var(--erro); }
 .dropdown-item.danger:hover { background: rgba(239,68,68,0.1); }
 
 /* ---- Buttons ---- */
-.btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+.btn { padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: #2563eb; }
 .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
 .btn-secondary:hover { background: rgba(255,255,255,0.07); }
 .btn-success { background: rgba(34,197,94,0.15); color: var(--ok); border: 1px solid rgba(34,197,94,0.3); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .spin { animation: spin 1s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -120,54 +122,64 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
 .modal-overlay.open { opacity: 1; pointer-events: all; }
 .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 640px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.6); transform: translateY(12px); transition: transform 0.2s; }
 .modal-overlay.open .modal { transform: translateY(0); }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
-.modal-header h2 { font-size: 16px; font-weight: 600; }
-.modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.modal-header h2 { font-size: 15px; font-weight: 600; }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px; }
 .modal-close:hover { color: var(--text); background: rgba(255,255,255,0.07); }
-.modal-body { padding: 20px 24px; }
-.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
-
-/* ---- Tabs ---- */
-.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
-.tab { padding: 10px 18px; font-size: 13px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.modal-body { padding: 18px 22px; }
+.modal-footer { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---- Form ---- */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-full { grid-column: 1 / -1; }
-.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
 .form-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.form-group input, .form-group select, .form-group textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 12px; font-size: 13px; outline: none; }
-.form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+.form-group input, .form-group select, .form-group textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; outline: none; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+.form-group input[readonly] { opacity: 0.6; cursor: default; }
 .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.form-section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+.form-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+
+/* ---- Prazo chips ---- */
+.prazo-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.prazo-chip { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); color: var(--muted); background: transparent; transition: all 0.15s; }
+.prazo-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.12); }
+.prazo-chip:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+/* ---- Client search ---- */
+.client-search-wrap { position: relative; }
+.client-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 50; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: none; margin-top: 2px; }
+.client-dropdown.open { display: block; }
+.client-item { padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 13px; transition: background 0.1s; }
+.client-item:last-child { border-bottom: none; }
+.client-item:hover { background: rgba(255,255,255,0.05); }
+.client-item .ci-nome { font-weight: 500; }
+.client-item .ci-doc  { font-size: 11px; color: var(--muted); }
 
 /* ---- Detail panel ---- */
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .detail-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
 .detail-item .val { font-size: 14px; }
 .detail-item.full { grid-column: 1 / -1; }
-.timeline { margin-top: 20px; }
-.timeline h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
-.timeline-item { display: flex; gap: 12px; margin-bottom: 12px; }
+.timeline { margin-top: 18px; }
+.timeline h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+.timeline-item { display: flex; gap: 10px; margin-bottom: 10px; }
 .timeline-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; background: var(--muted); }
-.timeline-dot.EMITIDO,  .timeline-dot.REEMITIDO   { background: var(--info); }
-.timeline-dot.PAGO_SICOOB, .timeline-dot.LIQUIDADO  { background: var(--ok); }
+.timeline-dot.EMITIDO,.timeline-dot.REEMITIDO { background: var(--info); }
+.timeline-dot.PAGO_SICOOB,.timeline-dot.LIQUIDADO { background: var(--ok); }
 .timeline-dot.PAGO_EXTERNO { background: var(--purple); }
-.timeline-dot.BAIXADO    { background: var(--muted); }
-.timeline-dot.VENCIDO    { background: var(--erro); }
+.timeline-dot.BAIXADO { background: var(--muted); }
+.timeline-dot.VENCIDO { background: var(--erro); }
 .timeline-dot.SINCRONIZADO { background: var(--accent); }
 .timeline-content .tipo { font-size: 12px; font-weight: 600; }
 .timeline-content .meta { font-size: 11px; color: var(--muted); }
-
-/* ---- Linha digitável ---- */
-.linha-dig { font-family: 'Courier New', monospace; font-size: 13px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; word-break: break-all; cursor: pointer; transition: border-color 0.15s; }
+.linha-dig { font-family: 'Courier New', monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; word-break: break-all; cursor: pointer; transition: border-color 0.15s; }
 .linha-dig:hover { border-color: var(--accent); }
 
 /* ---- Toast ---- */
 .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
-.toast { padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; animation: slideIn 0.2s ease; max-width: 320px; }
+.toast { padding: 11px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; animation: slideIn 0.2s ease; max-width: 320px; }
 .toast.ok   { background: rgba(34,197,94,0.9);  color: #fff; }
 .toast.erro { background: rgba(239,68,68,0.9);  color: #fff; }
 .toast.info { background: rgba(59,130,246,0.9); color: #fff; }
@@ -178,18 +190,23 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
 .venc-urgente { color: var(--warn); font-weight: 500; }
 .atraso-num   { color: var(--erro); font-weight: 700; }
 
+/* ---- Config section ---- */
+.config-card { margin: 24px 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 620px; }
+.config-card h2 { font-size: 15px; font-weight: 600; margin-bottom: 20px; }
+.config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.config-row.full { grid-template-columns: 1fr; }
+.config-inline { display: flex; gap: 8px; align-items: center; }
+.config-inline input, .config-inline select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; outline: none; }
+.config-inline input:focus, .config-inline select:focus { border-color: var(--accent); }
+.config-inline .unit { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ---- VHSys section ---- */
+.vhsys-toolbar { margin: 24px 28px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-/* ---- VHSys search ---- */
-.search-result { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; margin-top: 4px; max-height: 200px; overflow-y: auto; }
-.search-result-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 13px; }
-.search-result-item:last-child { border-bottom: none; }
-.search-result-item:hover { background: rgba(255,255,255,0.05); }
-.search-result-item .nome { font-weight: 500; }
-.search-result-item .doc  { font-size: 11px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -198,31 +215,57 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
   <!-- Sidebar -->
   <nav class="sidebar">
     <div class="sidebar-logo">🏦 Sicoob</div>
-    <a class="sidebar-item active" href="/admin">
+
+    <button class="sidebar-item active" id="nav-boletos" onclick="showSection('boletos')">
       <span class="sidebar-icon">📄</span> Boletos
+    </button>
+    <button class="sidebar-item" id="nav-vhsys" onclick="showSection('vhsys')">
+      <span class="sidebar-icon">🏢</span> VHSys
+    </button>
+    <button class="sidebar-item" id="nav-consulta" onclick="showSection('consulta')">
+      <span class="sidebar-icon">🔍</span> Consulta Lista
+    </button>
+    <button class="sidebar-item" id="nav-config" onclick="showSection('config')">
+      <span class="sidebar-icon">⚙️</span> Configuração
+    </button>
+
+    <hr class="sidebar-divider">
+
+    <a class="sidebar-item" href="/admin/relatorios/extrato">
+      <span class="sidebar-icon">📊</span> Extrato
     </a>
-    <a class="sidebar-item" href="/docs" target="_blank">
-      <span class="sidebar-icon">📖</span> API Docs
+    <a class="sidebar-item" href="/admin/relatorios/boletos">
+      <span class="sidebar-icon">📁</span> Rel. 120 dias
     </a>
-    <a class="sidebar-item" href="/health" target="_blank">
-      <span class="sidebar-icon">💚</span> Health
-    </a>
+
+    <hr class="sidebar-divider">
+
+    <div class="sidebar-footer">
+      <button class="sidebar-item" id="btnSyncSidebar" onclick="sincronizar()">
+        <span class="sidebar-icon">↺</span> Atualizar
+      </button>
+      <button class="sidebar-item" onclick="importarTodos()">
+        <span class="sidebar-icon">📥</span> Importar todos
+      </button>
+      <a class="sidebar-item" href="/docs" target="_blank">
+        <span class="sidebar-icon">📖</span> API Docs
+      </a>
+    </div>
   </nav>
 
-  <!-- Main -->
-  <div class="main">
-    <!-- Header -->
-    <div class="header">
+  <!-- ===== SEÇÃO: BOLETOS ===== -->
+  <div class="main section active" id="section-boletos">
+    <div class="page-header">
       <h1>Boletos</h1>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="exportarCSV()">⬇ Exportar CSV</button>
-        <button class="btn btn-secondary" id="btnSync" onclick="sincronizar()">↺ Atualizar</button>
-        <button class="btn btn-primary" onclick="abrirModalEmitir()">+ Emitir Boleto</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportarCSV()">⬇ CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="imprimirLista()">🖨 Imprimir</button>
+        <button class="btn btn-primary" onclick="abrirModalAvulso()">+ Emitir Boleto</button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div class="stats-bar" id="statsBar">
+    <div class="stats-bar">
       <div class="stat-card info">
         <div class="label">Em Aberto</div>
         <div class="value" id="stat-emitido">—</div>
@@ -238,7 +281,7 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
         <div class="value" id="stat-liquidado">—</div>
         <div class="sub" id="stat-liquidado-val"></div>
       </div>
-      <div class="stat-card ok" style="--ok: var(--purple)">
+      <div class="stat-card ok" style="--ok:var(--purple)">
         <div class="label">Pago Externo</div>
         <div class="value" id="stat-pagoext">—</div>
       </div>
@@ -249,82 +292,43 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filters-section">
-      <div class="filters-header" onclick="toggleFiltros()">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span>FILTROS</span>
-          <span class="badge" id="filtrosBadge" style="display:none">0</span>
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <div class="filter-row">
+        <span class="filter-label">Status</span>
+        <div class="chips" id="statusChips">
+          <div class="chip info"   data-status="EMITIDO"      onclick="toggleStatus(this)">Em aberto</div>
+          <div class="chip ok"     data-status="LIQUIDADO"    onclick="toggleStatus(this)">Pago Sicoob</div>
+          <div class="chip purple" data-status="PAGO_EXTERNO" onclick="toggleStatus(this)">Pago Externo</div>
+          <div class="chip erro"   data-status="VENCIDO"      onclick="toggleStatus(this)">Vencido</div>
+          <div class="chip"        data-status="BAIXADO"      onclick="toggleStatus(this)">Baixado</div>
         </div>
-        <span id="filtrosChevron" style="font-size:11px;color:var(--muted)">▼ expandir</span>
+        <span class="filter-sep"></span>
+        <span class="filter-label">Período</span>
+        <div class="chips" id="periodChips">
+          <div class="chip" data-period="today" onclick="setPeriod(this,'today')">Hoje</div>
+          <div class="chip" data-period="week"  onclick="setPeriod(this,'week')">Semana</div>
+          <div class="chip active" data-period="month" onclick="setPeriod(this,'month')">Mês</div>
+          <div class="chip" data-period="30d"   onclick="setPeriod(this,'30d')">30d</div>
+          <div class="chip" data-period="60d"   onclick="setPeriod(this,'60d')">60d</div>
+          <div class="chip" data-period="all"   onclick="setPeriod(this,'all')">Tudo</div>
+          <div class="chip" data-period="custom" onclick="setPeriod(this,'custom')">📅</div>
+        </div>
       </div>
-      <div class="filters-body" id="filtrosBody">
-        <!-- Status chips -->
-        <div class="filter-row">
-          <div class="filter-group" style="flex:none;min-width:100%">
-            <label>Status</label>
-            <div class="chips" id="statusChips">
-              <div class="chip info" data-status="EMITIDO" onclick="toggleStatus(this)">Em aberto</div>
-              <div class="chip ok"   data-status="LIQUIDADO" onclick="toggleStatus(this)">Pago Sicoob</div>
-              <div class="chip" style="--active-color:var(--purple)" data-status="PAGO_EXTERNO" onclick="toggleStatus(this)">Pago Externo</div>
-              <div class="chip erro" data-status="VENCIDO" onclick="toggleStatus(this)">Vencido</div>
-              <div class="chip"     data-status="BAIXADO" onclick="toggleStatus(this)">Baixado</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Período -->
-        <div class="filter-row">
-          <div class="filter-group" style="flex:none;min-width:100%">
-            <label>Período</label>
-            <div class="period-chips" id="periodChips">
-              <div class="chip" data-period="today" onclick="setPeriod(this,'today')">Hoje</div>
-              <div class="chip" data-period="week" onclick="setPeriod(this,'week')">Esta semana</div>
-              <div class="chip active" data-period="month" onclick="setPeriod(this,'month')">Este mês</div>
-              <div class="chip" data-period="30d" onclick="setPeriod(this,'30d')">30 dias</div>
-              <div class="chip" data-period="custom" onclick="setPeriod(this,'custom')">Personalizado</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Datas personalizadas + tipo + cliente + valor -->
-        <div class="filter-row" id="customDates" style="display:none">
-          <div class="filter-group">
-            <label>Data Inicial</label>
-            <input type="date" id="fDataInicio">
-          </div>
-          <div class="filter-group">
-            <label>Data Final</label>
-            <input type="date" id="fDataFim">
-          </div>
-          <div class="filter-group">
-            <label>Tipo de Data</label>
-            <select id="fTipoData">
-              <option value="vencimento">Vencimento</option>
-              <option value="criado_em">Emissão</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="filter-row">
-          <div class="filter-group" style="flex:2">
-            <label>Cliente / CPF / CNPJ</label>
-            <input type="text" id="fCliente" placeholder="Nome ou documento..." oninput="debounce(aplicarFiltros, 400)">
-          </div>
-          <div class="filter-group">
-            <label>Valor Mínimo (R$)</label>
-            <input type="number" id="fValorMin" step="0.01" placeholder="0,00" oninput="debounce(aplicarFiltros, 400)">
-          </div>
-          <div class="filter-group">
-            <label>Valor Máximo (R$)</label>
-            <input type="number" id="fValorMax" step="0.01" placeholder="Sem limite" oninput="debounce(aplicarFiltros, 400)">
-          </div>
-        </div>
-
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-secondary" onclick="limparFiltros()">Limpar filtros</button>
-          <button class="btn btn-primary" onclick="aplicarFiltros()">Buscar</button>
-        </div>
+      <div class="filter-row" id="customDateRow" style="display:none">
+        <input type="date" class="fi" id="fDataInicio" onchange="aplicarFiltros()">
+        <span style="color:var(--muted);font-size:12px">até</span>
+        <input type="date" class="fi" id="fDataFim" onchange="aplicarFiltros()">
+        <select class="fi" id="fTipoData" onchange="aplicarFiltros()">
+          <option value="vencimento">Por vencimento</option>
+          <option value="criado_em">Por emissão</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <input type="text"   class="fi fi-wide" id="fCliente"  placeholder="🔍 Cliente ou CNPJ..." oninput="debounceFilter()">
+        <input type="number" class="fi" id="fValorMin" style="width:100px" step="0.01" placeholder="R$ mín">
+        <input type="number" class="fi" id="fValorMax" style="width:100px" step="0.01" placeholder="R$ máx">
+        <button class="btn btn-secondary btn-sm" onclick="limparFiltros()">✕ Limpar</button>
       </div>
     </div>
 
@@ -332,10 +336,132 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
     <div class="table-section">
       <div class="table-toolbar">
         <span class="count" id="tableCount">Carregando...</span>
-        <span id="syncStatus" style="font-size:12px;color:var(--muted)"></span>
+        <span id="syncStatus" style="font-size:11px;color:var(--muted)"></span>
       </div>
       <div id="tableWrapper">
         <div class="empty-state"><div class="icon">⏳</div>Carregando boletos...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SEÇÃO: VHSYS ===== -->
+  <div class="main section" id="section-vhsys">
+    <div class="page-header">
+      <h1>Pedidos VHSys</h1>
+    </div>
+    <div class="vhsys-toolbar">
+      <input type="text" class="fi fi-wide" id="vhBusca" placeholder="🔍 Pedido, cliente ou CNPJ..." oninput="filtrarPedidos()" style="max-width:280px">
+      <select class="fi" id="vhSituacao" onchange="carregarPedidosVhsys()">
+        <option value="">Todas as situações</option>
+        <option value="aberto">Em aberto</option>
+        <option value="faturado">Faturado</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+      <input type="date" class="fi" id="vhDataInicio" onchange="carregarPedidosVhsys()">
+      <button class="btn btn-secondary btn-sm" onclick="carregarPedidosVhsys()">↺ Atualizar</button>
+    </div>
+    <div class="table-section" style="margin: 0 28px 28px">
+      <div class="table-toolbar">
+        <span class="count" id="vhCount">Carregando...</span>
+      </div>
+      <div id="vhTableWrapper">
+        <div class="empty-state"><div class="icon">⏳</div>Carregando pedidos...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SEÇÃO: CONSULTA POR LISTA ===== -->
+  <div class="main section" id="section-consulta">
+    <div class="page-header">
+      <h1>Consulta por Lista</h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" id="btnExportarConsulta" style="display:none" onclick="exportarConsultaCSV()">⬇ CSV</button>
+      </div>
+    </div>
+
+    <div style="margin: 16px 28px 0;">
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 480px;">
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label>Nossos Números (um por linha)</label>
+          <textarea class="fi" id="consultaLista" rows="7"
+            placeholder="000001234&#10;000001235&#10;000001236"
+            style="resize:vertical;font-family:'Courier New',monospace;font-size:13px;width:100%;margin-top:6px"></textarea>
+        </div>
+        <button class="btn btn-primary" id="btnConsultar" onclick="consultarLista()">🔍 Consultar</button>
+      </div>
+    </div>
+
+    <div id="consultaResumo" style="display:none; flex-wrap:wrap; gap:12px; padding: 14px 28px 0;"></div>
+
+    <div class="table-section" id="consultaTableSection" style="display:none; margin-top: 14px;">
+      <div class="table-toolbar">
+        <span class="count" id="consultaCount"></span>
+      </div>
+      <div id="consultaTableWrapper"></div>
+    </div>
+  </div>
+
+  <!-- ===== SEÇÃO: CONFIGURAÇÃO ===== -->
+  <div class="main section" id="section-config">
+    <div class="page-header">
+      <h1>Configuração de Boletos</h1>
+    </div>
+    <div class="config-card">
+      <h2>Padrões de emissão</h2>
+
+      <div class="config-row">
+        <div class="form-group">
+          <label>Multa após vencimento</label>
+          <div class="config-inline">
+            <select class="fi" id="cfgTipoMulta" style="width:130px">
+              <option value="2">Percentual (%)</option>
+              <option value="1">Valor fixo (R$)</option>
+            </select>
+            <input type="number" class="fi" id="cfgValorMulta" step="0.01" style="width:80px" placeholder="2.0">
+            <span class="unit" id="cfgMultaUnit">%</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Juros ao dia após vencimento</label>
+          <div class="config-inline">
+            <select class="fi" id="cfgTipoJuros" style="width:130px">
+              <option value="2">Percentual (%/dia)</option>
+              <option value="1">Valor fixo (R$/dia)</option>
+            </select>
+            <input type="number" class="fi" id="cfgValorJuros" step="0.01" style="width:80px" placeholder="0.2">
+            <span class="unit" id="cfgJurosUnit">%/dia</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-row">
+        <div class="form-group">
+          <label>Vencimento padrão (dias a partir de hoje)</label>
+          <div class="config-inline">
+            <input type="number" class="fi" id="cfgVencDias" min="1" max="365" style="width:80px" placeholder="7">
+            <span class="unit">dias</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Protesto (0 = sem protesto)</label>
+          <div class="config-inline">
+            <input type="number" class="fi" id="cfgDiasProtesto" min="0" max="60" style="width:80px" placeholder="0">
+            <span class="unit">dias após vencimento</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-row full" style="margin-bottom:0">
+        <div class="form-group">
+          <label>Mensagens ao pagador (uma por linha, máx 3)</label>
+          <textarea class="fi" id="cfgMensagens" rows="4" style="resize:vertical;font-size:12px"></textarea>
+          <span class="hint">Aparecem impressas no boleto.</span>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="salvarConfig()">💾 Salvar Configuração</button>
+        <button class="btn btn-secondary" onclick="carregarConfig()">↺ Restaurar</button>
       </div>
     </div>
   </div>
@@ -344,123 +470,193 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
 <!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- Modal: Emitir -->
-<div class="modal-overlay" id="modalEmitir">
+<!-- ===== MODAL: Emitir Avulso ===== -->
+<div class="modal-overlay" id="modalAvulso">
   <div class="modal">
     <div class="modal-header">
       <h2>Emitir Boleto</h2>
-      <button class="modal-close" onclick="fecharModal('modalEmitir')">✕</button>
+      <button class="modal-close" onclick="fecharModal('modalAvulso')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab('tabAvulso')">Avulso</div>
-        <div class="tab" onclick="switchTab('tabVhsys')">Via Pedido VHSys</div>
+      <!-- Busca de cliente -->
+      <div class="form-group form-full" style="margin-bottom:16px">
+        <label>Buscar Cliente</label>
+        <div class="client-search-wrap">
+          <input type="text" class="fi" id="avBuscaCliente" placeholder="🔍 Digite nome ou CNPJ para buscar no VHSys..." oninput="buscarCliente('av')" style="width:100%">
+          <div class="client-dropdown" id="avClienteDrop"></div>
+        </div>
       </div>
 
-      <!-- Tab Avulso -->
-      <div class="tab-content active" id="tabAvulso">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label>Nome / Razão Social *</label>
+          <input type="text" class="fi" id="avNome" placeholder="Nome completo ou razão social" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>CPF / CNPJ *</label>
+          <input type="text" class="fi" id="avDoc" placeholder="Somente números" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>Seu Número (referência)</label>
+          <input type="text" class="fi" id="avSeuNumero" placeholder="Ex: PED-001" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>Endereço</label>
+          <input type="text" class="fi" id="avEndereco" placeholder="Rua, número" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>Cidade</label>
+          <input type="text" class="fi" id="avCidade" placeholder="Uberlândia" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>UF</label>
+          <input type="text" class="fi" id="avUf" placeholder="MG" maxlength="2" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>CEP</label>
+          <input type="text" class="fi" id="avCep" placeholder="38400000" maxlength="8" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>Bairro</label>
+          <input type="text" class="fi" id="avBairro" placeholder="Centro" style="width:100%">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Valor e prazo</div>
         <div class="form-grid">
-          <div class="form-group form-full">
-            <label>Nome do Pagador *</label>
-            <input type="text" id="emNome" placeholder="Razão Social ou Nome completo">
-          </div>
-          <div class="form-group">
-            <label>CPF / CNPJ *</label>
-            <input type="text" id="emDoc" placeholder="Somente números">
-          </div>
-          <div class="form-group">
-            <label>Seu Número (Referência)</label>
-            <input type="text" id="emSeuNumero" placeholder="PED-001">
-          </div>
           <div class="form-group">
             <label>Valor (R$) *</label>
-            <input type="number" id="emValor" step="0.01" min="0.01" placeholder="0,00">
+            <input type="number" class="fi" id="avValor" step="0.01" min="0.01" placeholder="0,00" style="width:100%">
           </div>
           <div class="form-group">
             <label>Vencimento *</label>
-            <input type="date" id="emVencimento">
+            <input type="date" class="fi" id="avVencimento" style="width:100%">
           </div>
-          <div class="form-group">
-            <label>Endereço</label>
-            <input type="text" id="emEndereco" placeholder="Rua, número">
-          </div>
-          <div class="form-group">
-            <label>Cidade</label>
-            <input type="text" id="emCidade" placeholder="Uberlândia">
-          </div>
-          <div class="form-group">
-            <label>UF</label>
-            <input type="text" id="emUf" placeholder="MG" maxlength="2">
-          </div>
-          <div class="form-group">
-            <label>CEP</label>
-            <input type="text" id="emCep" placeholder="38400000" maxlength="8">
-          </div>
-          <div class="form-group">
-            <label>E-mail (opcional)</label>
-            <input type="email" id="emEmail" placeholder="pagador@email.com">
+          <div class="form-group form-full">
+            <label>Prazo rápido</label>
+            <div class="prazo-chips" id="avPrazos">
+              <div class="prazo-chip" onclick="setPrazo('av',7)">7 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('av',14)">14 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('av',21)">21 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('av',28)">28 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('av',30)">30 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('av',45)">45 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('av',60)">60 dias</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Tab VHSys -->
-      <div class="tab-content" id="tabVhsys">
-        <div class="form-group form-full" style="margin-bottom:16px">
-          <label>Buscar Pedido VHSys</label>
-          <input type="text" id="vhsysBusca" placeholder="Digite número do pedido ou nome do cliente..." oninput="buscarPedidosVhsys()">
-          <div class="search-result" id="vhsysResultados" style="display:none"></div>
-          <div class="hint">Os dados do pedido serão usados para pré-preencher o formulário abaixo.</div>
-        </div>
-        <div class="form-grid" id="vhsysForm">
-          <div class="form-group form-full">
-            <label>Nome do Pagador *</label>
-            <input type="text" id="vhNome" placeholder="Será preenchido ao selecionar pedido">
+      <div class="form-section">
+        <div class="form-section-title">Encargos</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Multa após vencimento (%)</label>
+            <input type="number" class="fi" id="avMulta" step="0.01" min="0" placeholder="2.0" style="width:100%">
           </div>
           <div class="form-group">
-            <label>CPF / CNPJ *</label>
-            <input type="text" id="vhDoc">
-          </div>
-          <div class="form-group">
-            <label>Pedido VHSys (ID)</label>
-            <input type="number" id="vhPedidoId" readonly style="opacity:0.6">
-          </div>
-          <div class="form-group">
-            <label>Valor (R$) *</label>
-            <input type="number" id="vhValor" step="0.01" min="0.01">
-          </div>
-          <div class="form-group">
-            <label>Vencimento *</label>
-            <input type="date" id="vhVencimento">
-          </div>
-          <div class="form-group">
-            <label>Seu Número</label>
-            <input type="text" id="vhSeuNumero" placeholder="PED-XXX">
+            <label>Juros ao dia (%)</label>
+            <input type="number" class="fi" id="avJuros" step="0.01" min="0" placeholder="0.2" style="width:100%">
           </div>
         </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="fecharModal('modalEmitir')">Cancelar</button>
-      <button class="btn btn-primary" id="btnEmitirConfirm" onclick="confirmarEmissao()">Emitir Boleto</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modalAvulso')">Cancelar</button>
+      <button class="btn btn-primary" id="btnAvulsoConfirm" onclick="emitirAvulso()">Emitir Boleto</button>
     </div>
   </div>
 </div>
 
-<!-- Modal: Detalhe -->
+<!-- ===== MODAL: Emitir VHSys ===== -->
+<div class="modal-overlay" id="modalVhEmitir">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="vhEmitirTitulo">Emitir Boleto</h2>
+      <button class="modal-close" onclick="fecharModal('modalVhEmitir')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label>Cliente</label>
+          <input type="text" class="fi" id="vhEmNome" readonly style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>CPF / CNPJ</label>
+          <input type="text" class="fi" id="vhEmDoc" readonly style="width:100%">
+        </div>
+        <div class="form-group">
+          <label>Pedido VHSys</label>
+          <input type="text" class="fi" id="vhEmPedidoDisplay" readonly style="width:100%">
+        </div>
+        <input type="hidden" id="vhEmPedidoId">
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Valor e prazo</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Valor (R$) *</label>
+            <input type="number" class="fi" id="vhEmValor" step="0.01" min="0.01" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label>Vencimento *</label>
+            <input type="date" class="fi" id="vhEmVencimento" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label>Seu Número</label>
+            <input type="text" class="fi" id="vhEmSeuNumero" style="width:100%">
+          </div>
+          <div class="form-group form-full">
+            <label>Prazo rápido</label>
+            <div class="prazo-chips" id="vhEmPrazos">
+              <div class="prazo-chip" onclick="setPrazo('vhEm',7)">7 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('vhEm',14)">14 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('vhEm',21)">21 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('vhEm',28)">28 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('vhEm',30)">30 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('vhEm',45)">45 dias</div>
+              <div class="prazo-chip" onclick="setPrazo('vhEm',60)">60 dias</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Encargos</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Multa após vencimento (%)</label>
+            <input type="number" class="fi" id="vhEmMulta" step="0.01" min="0" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label>Juros ao dia (%)</label>
+            <input type="number" class="fi" id="vhEmJuros" step="0.01" min="0" style="width:100%">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modalVhEmitir')">Cancelar</button>
+      <button class="btn btn-primary" id="btnVhEmitirConfirm" onclick="emitirVhsys()">Emitir Boleto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Detalhe ===== -->
 <div class="modal-overlay" id="modalDetalhe">
   <div class="modal">
     <div class="modal-header">
       <h2>Detalhes do Boleto</h2>
       <button class="modal-close" onclick="fecharModal('modalDetalhe')">✕</button>
     </div>
-    <div class="modal-body" id="modalDetalheBody">
-      Carregando...
-    </div>
+    <div class="modal-body" id="modalDetalheBody">Carregando...</div>
     <div class="modal-footer" id="modalDetalheFooter"></div>
   </div>
 </div>
 
-<!-- Modal: Confirmar ação -->
+<!-- ===== MODAL: Confirmar ===== -->
 <div class="modal-overlay" id="modalConfirm">
   <div class="modal" style="width:420px">
     <div class="modal-header">
@@ -472,32 +668,54 @@ td.mono { font-family: 'Courier New', monospace; font-size: 12px; }
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal('modalConfirm')">Cancelar</button>
-      <button class="btn btn-primary" id="confirmBtn" onclick="">Confirmar</button>
+      <button class="btn btn-primary" id="confirmBtn">Confirmar</button>
     </div>
   </div>
 </div>
 
 <script>
-// ---- Estado ----
-let _boletos = [];
-let _filtros = { status: [], period: 'month', dataInicio: null, dataFim: null, tipoData: 'vencimento', cliente: '', valorMin: null, valorMax: null };
-let _tabAtiva = 'tabAvulso';
-let _debounceTimer = null;
-let _pedidosVhsys = [];
+// ========== Estado global ==========
+let _boletos   = [];
+let _pedidosVh = [];
+let _config    = {};
+let _filtros   = { status: [], period: 'month', dataInicio: null, dataFim: null, tipoData: 'vencimento', cliente: '', valorMin: null, valorMax: null };
+let _debTimer  = null;
+let _sortBoletos = { col: null, dir: 1 };
+let _sortVh      = { col: null, dir: 1 };
 
-// ---- Init ----
-document.addEventListener('DOMContentLoaded', () => {
+// ========== Init ==========
+document.addEventListener('DOMContentLoaded', async () => {
+  _config = await fetch('/admin/api/config').then(r => r.json()).catch(() => ({}));
   setPeriodDates('month');
   carregarBoletos();
+
+  // data início padrão para VHSys: 30 dias atrás
+  const d30 = new Date(); d30.setDate(d30.getDate() - 30);
+  document.getElementById('vhDataInicio').value = d30.toISOString().slice(0,10);
+
+  // Atualiza unidade da multa/juros ao mudar tipo
+  document.getElementById('cfgTipoMulta').addEventListener('change', () => {
+    document.getElementById('cfgMultaUnit').textContent =
+      document.getElementById('cfgTipoMulta').value === '2' ? '%' : 'R$';
+  });
+  document.getElementById('cfgTipoJuros').addEventListener('change', () => {
+    document.getElementById('cfgJurosUnit').textContent =
+      document.getElementById('cfgTipoJuros').value === '2' ? '%/dia' : 'R$/dia';
+  });
 });
 
-// ---- Debounce ----
-function debounce(fn, delay) {
-  clearTimeout(_debounceTimer);
-  _debounceTimer = setTimeout(fn, delay);
+// ========== Navegação ==========
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+
+  if (name === 'vhsys') carregarPedidosVhsys();
+  if (name === 'config') carregarConfig();
 }
 
-// ---- Toast ----
+// ========== Helpers ==========
 function toast(msg, tipo = 'info') {
   const el = document.createElement('div');
   el.className = `toast ${tipo}`;
@@ -505,80 +723,78 @@ function toast(msg, tipo = 'info') {
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
-
-// ---- Moeda ----
 function moeda(v) {
   if (v == null) return '—';
-  return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 }
-
-// ---- Data ----
 function diasAtraso(venc) {
   const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const d = new Date(venc + 'T00:00:00');
-  return Math.floor((hoje - d) / 86400000);
+  return Math.floor((hoje - new Date(venc + 'T00:00:00')) / 86400000);
 }
-
-function formatarData(s) {
+function fmtData(s) {
   if (!s) return '—';
-  const d = s.slice(0, 10);
-  return d.split('-').reverse().join('/');
+  return s.slice(0,10).split('-').reverse().join('/');
+}
+function fmtDoc(d) {
+  if (!d) return '';
+  d = d.replace(/\D/g,'');
+  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  return d;
+}
+function esc(s) { return (s||'').replace(/'/g,"\\'"); }
+function addDias(n) {
+  const d = new Date(); d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+function amanhaDe(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0,10);
 }
 
-// ---- Filtros ----
-function toggleFiltros() {
-  const body = document.getElementById('filtrosBody');
-  const chev = document.getElementById('filtrosChevron');
-  body.classList.toggle('open');
-  chev.textContent = body.classList.contains('open') ? '▲ recolher' : '▼ expandir';
+// ========== Filtros — Boletos ==========
+function debounceFilter() {
+  clearTimeout(_debTimer);
+  _debTimer = setTimeout(aplicarFiltros, 380);
 }
-
 function toggleStatus(el) {
   el.classList.toggle('active');
   const s = el.dataset.status;
-  if (_filtros.status.includes(s)) _filtros.status = _filtros.status.filter(x => x !== s);
-  else _filtros.status.push(s);
-  atualizarBadge();
+  _filtros.status = _filtros.status.includes(s)
+    ? _filtros.status.filter(x => x !== s)
+    : [..._filtros.status, s];
   aplicarFiltros();
 }
-
 function setPeriod(el, period) {
   document.querySelectorAll('#periodChips .chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   _filtros.period = period;
-  const customEl = document.getElementById('customDates');
-  customEl.style.display = period === 'custom' ? 'flex' : 'none';
+  document.getElementById('customDateRow').style.display = period === 'custom' ? 'flex' : 'none';
   if (period !== 'custom') { setPeriodDates(period); aplicarFiltros(); }
 }
-
 function setPeriodDates(period) {
   const hoje = new Date();
   let ini = new Date(hoje), fim = new Date(hoje);
-  if (period === 'today') { }
-  else if (period === 'week') { ini.setDate(hoje.getDate() - hoje.getDay()); }
-  else if (period === 'month') { ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); }
-  else if (period === '30d') { ini.setDate(hoje.getDate() - 30); }
-  _filtros.dataInicio = ini.toISOString().slice(0, 10);
-  _filtros.dataFim = fim.toISOString().slice(0, 10);
+  if (period === 'today') { /* ini=fim=hoje */ }
+  else if (period === 'week')  { ini.setDate(hoje.getDate() - hoje.getDay()); }
+  else if (period === 'month') { ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); fim = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0); }
+  else if (period === '30d')   { ini.setDate(hoje.getDate() - 30); }
+  else if (period === '60d')   { ini.setDate(hoje.getDate() - 60); }
+  else if (period === 'all')   { ini = new Date('2020-01-01'); }
+  _filtros.dataInicio = ini.toISOString().slice(0,10);
+  _filtros.dataFim    = fim.toISOString().slice(0,10);
 }
-
-function atualizarBadge() {
-  const count = _filtros.status.length + (document.getElementById('fCliente').value ? 1 : 0) + (document.getElementById('fValorMin').value ? 1 : 0);
-  const badge = document.getElementById('filtrosBadge');
-  badge.textContent = count;
-  badge.style.display = count > 0 ? '' : 'none';
-}
-
 function limparFiltros() {
-  _filtros.status = [];
+  _filtros = { status: [], period: 'month', dataInicio: null, dataFim: null, tipoData: 'vencimento', cliente: '', valorMin: null, valorMax: null };
   document.querySelectorAll('#statusChips .chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('#periodChips .chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('#periodChips [data-period="month"]').classList.add('active');
   document.getElementById('fCliente').value = '';
   document.getElementById('fValorMin').value = '';
   document.getElementById('fValorMax').value = '';
-  atualizarBadge();
+  setPeriodDates('month');
   aplicarFiltros();
 }
-
 function aplicarFiltros() {
   if (_filtros.period === 'custom') {
     _filtros.dataInicio = document.getElementById('fDataInicio').value || null;
@@ -588,417 +804,735 @@ function aplicarFiltros() {
   _filtros.cliente  = document.getElementById('fCliente').value.trim();
   _filtros.valorMin = document.getElementById('fValorMin').value || null;
   _filtros.valorMax = document.getElementById('fValorMax').value || null;
-  atualizarBadge();
   carregarBoletos();
 }
 
-// ---- Carregar boletos ----
+// ========== Boletos — Carregar ==========
 async function carregarBoletos() {
-  const params = new URLSearchParams();
-  _filtros.status.forEach(s => params.append('status', s));
-  if (_filtros.dataInicio) params.set('data_inicio', _filtros.dataInicio);
-  if (_filtros.dataFim)    params.set('data_fim',    _filtros.dataFim);
-  params.set('tipo_data', _filtros.tipoData || 'vencimento');
-  if (_filtros.cliente)  params.set('cliente',   _filtros.cliente);
-  if (_filtros.valorMin) params.set('valor_min', _filtros.valorMin);
-  if (_filtros.valorMax) params.set('valor_max', _filtros.valorMax);
-
+  const p = new URLSearchParams();
+  _filtros.status.forEach(s => p.append('status', s));
+  if (_filtros.dataInicio) p.set('data_inicio', _filtros.dataInicio);
+  if (_filtros.dataFim)    p.set('data_fim',    _filtros.dataFim);
+  p.set('tipo_data', _filtros.tipoData || 'vencimento');
+  if (_filtros.cliente)  p.set('cliente',   _filtros.cliente);
+  if (_filtros.valorMin) p.set('valor_min', _filtros.valorMin);
+  if (_filtros.valorMax) p.set('valor_max', _filtros.valorMax);
   try {
-    const r = await fetch('/admin/api/boletos?' + params);
+    const r = await fetch('/admin/api/boletos?' + p);
     const d = await r.json();
     _boletos = d.boletos || [];
-    renderTabela(_boletos);
+    renderTabela(sortedBoletos());
     renderStats(d.stats || {});
-    document.getElementById('tableCount').textContent = `${_boletos.length} boleto${_boletos.length !== 1 ? 's' : ''}${d.stats?.total_valor ? ' • ' + moeda(d.stats.total_valor) : ''}`;
+    const totalFiltrado = _boletos.reduce((s, b) => s + (b.valor||0), 0);
+    document.getElementById('tableCount').textContent =
+      `${_boletos.length} boleto${_boletos.length !== 1 ? 's' : ''} · ${moeda(totalFiltrado)}`;
   } catch(e) {
-    document.getElementById('tableWrapper').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Erro ao carregar: ${e.message}</div>`;
+    document.getElementById('tableWrapper').innerHTML =
+      `<div class="empty-state"><div class="icon">⚠️</div>Erro: ${e.message}</div>`;
   }
 }
 
-// ---- Stats ----
+// ========== Stats ==========
 function renderStats(s) {
-  const fmt = (key) => { const x = s[key]; return x ? x.qtd : 0; };
-  const fmtV = (key) => { const x = s[key]; return x ? moeda(x.valor) : ''; };
-  document.getElementById('stat-emitido').textContent    = fmt('emitido');
-  document.getElementById('stat-emitido-val').textContent = fmtV('emitido');
-  document.getElementById('stat-vencido').textContent    = fmt('vencido');
-  document.getElementById('stat-vencido-val').textContent = fmtV('vencido');
-  document.getElementById('stat-liquidado').textContent  = fmt('liquidado');
-  document.getElementById('stat-liquidado-val').textContent = fmtV('liquidado');
-  document.getElementById('stat-pagoext').textContent    = fmt('pago_externo');
-  document.getElementById('stat-total').textContent      = s.total || 0;
-  document.getElementById('stat-total-val').textContent  = moeda(s.total_valor);
+  const q = k => s[k] ? s[k].qtd : 0;
+  const v = k => s[k] ? moeda(s[k].valor) : '';
+  document.getElementById('stat-emitido').textContent     = q('emitido');
+  document.getElementById('stat-emitido-val').textContent  = v('emitido');
+  document.getElementById('stat-vencido').textContent     = q('vencido');
+  document.getElementById('stat-vencido-val').textContent  = v('vencido');
+  document.getElementById('stat-liquidado').textContent   = q('liquidado');
+  document.getElementById('stat-liquidado-val').textContent= v('liquidado');
+  document.getElementById('stat-pagoext').textContent     = q('pago_externo');
+  document.getElementById('stat-total').textContent       = s.total || 0;
+  document.getElementById('stat-total-val').textContent   = moeda(s.total_valor);
 }
 
-// ---- Tabela ----
+// ========== Ordenação ==========
+function sortBoletos(col) {
+  if (_sortBoletos.col === col) _sortBoletos.dir *= -1;
+  else { _sortBoletos.col = col; _sortBoletos.dir = 1; }
+  renderTabela(sortedBoletos());
+}
+function sortedBoletos() {
+  if (!_sortBoletos.col) return _boletos;
+  const col = _sortBoletos.col, dir = _sortBoletos.dir;
+  return [..._boletos].sort((a, b) => {
+    let va = a[col] ?? '', vb = b[col] ?? '';
+    if (col === 'atraso') { va = diasAtraso(a.vencimento); vb = diasAtraso(b.vencimento); }
+    if (typeof va === 'number' || !isNaN(Number(va))) { va = Number(va); vb = Number(vb); }
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+}
+function sortVh(col) {
+  if (_sortVh.col === col) _sortVh.dir *= -1;
+  else { _sortVh.col = col; _sortVh.dir = 1; }
+  filtrarPedidos();
+}
+function sortedVhPedidos(lista) {
+  if (!_sortVh.col) return lista;
+  const col = _sortVh.col, dir = _sortVh.dir;
+  return [...lista].sort((a, b) => {
+    let va = a[col] ?? '', vb = b[col] ?? '';
+    if (typeof va === 'number' || !isNaN(Number(va))) { va = Number(va); vb = Number(vb); }
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+}
+function arrowB(col) {
+  if (_sortBoletos.col !== col) return '<span style="color:var(--muted);font-size:10px">↕</span>';
+  return _sortBoletos.dir === 1 ? '↑' : '↓';
+}
+function arrowV(col) {
+  if (_sortVh.col !== col) return '<span style="color:var(--muted);font-size:10px">↕</span>';
+  return _sortVh.dir === 1 ? '↑' : '↓';
+}
+
+// ========== Tabela Boletos ==========
 function renderTabela(boletos) {
   if (!boletos.length) {
-    document.getElementById('tableWrapper').innerHTML = '<div class="empty-state"><div class="icon">📭</div>Nenhum boleto encontrado com os filtros aplicados.</div>';
+    document.getElementById('tableWrapper').innerHTML =
+      '<div class="empty-state"><div class="icon">📭</div>Nenhum boleto encontrado.</div>';
     return;
   }
   const linhas = boletos.map(b => {
     const atraso = diasAtraso(b.vencimento);
-    const vencClass = b.status_atual === 'EMITIDO' && atraso > 0 ? 'venc-vencido' : (b.status_atual === 'EMITIDO' && atraso >= -3 ? 'venc-urgente' : '');
-    const atrasoStr = (b.status_atual === 'EMITIDO' || b.status_atual === 'VENCIDO') && atraso > 0
+    const vc = b.status_atual === 'EMITIDO' && atraso > 0 ? 'venc-vencido' :
+               b.status_atual === 'EMITIDO' && atraso >= -3 ? 'venc-urgente' : '';
+    const atrasoStr = (['EMITIDO','VENCIDO'].includes(b.status_atual) && atraso > 0)
       ? `<span class="atraso-num">${atraso}</span>` : '<span style="color:var(--muted)">—</span>';
-
     return `<tr>
       <td class="mono">${b.nosso_numero}</td>
-      <td class="mono" style="color:var(--muted)">${b.seu_numero || '—'}</td>
+      <td class="mono" style="color:var(--muted)">${b.seu_numero||'—'}</td>
       <td>
-        <div style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.cliente_nome || '—'}</div>
-        <div style="font-size:11px;color:var(--muted)">${formatDoc(b.cliente_doc)}</div>
+        <div style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.cliente_nome||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtDoc(b.cliente_doc)}</div>
       </td>
-      <td class="${vencClass}">${formatarData(b.vencimento)}</td>
+      <td class="${vc}">${fmtData(b.vencimento)}</td>
       <td style="font-weight:600">${moeda(b.valor)}</td>
-      <td><span class="badge-status ${b.status_atual}">${labelStatus(b.status_atual)}</span></td>
+      <td><span class="badge-status ${b.status_atual}">${lblStatus(b.status_atual)}</span></td>
       <td>${atrasoStr}</td>
       <td>
         <div class="actions">
           <button class="btn-icon" title="Ver detalhes" onclick="verDetalhe('${b.nosso_numero}')">👁</button>
-          <button class="btn-icon" title="Download PDF" onclick="downloadPdf('${b.nosso_numero}')">⬇</button>
+          <button class="btn-icon" title="PDF" onclick="downloadPdf('${b.nosso_numero}')">⬇</button>
           <div class="dropdown-wrapper">
-            <button class="btn-icon" title="Mais ações" onclick="toggleDropdown(this)">⋯</button>
+            <button class="btn-icon" onclick="toggleDropdown(this)">⋯</button>
             <div class="dropdown-menu">
-              <div class="dropdown-item" onclick="copiarLinha('${b.nosso_numero}', '${b.linha_digitavel || ''}')">📋 Copiar linha digitável</div>
+              <div class="dropdown-item" onclick="copiarLinha('${b.nosso_numero}','${b.linha_digitavel||''}')">📋 Copiar linha digitável</div>
               <div class="dropdown-item" onclick="verDetalhe('${b.nosso_numero}')">👁 Ver detalhes</div>
-              ${['EMITIDO','VENCIDO'].includes(b.status_atual) ? `<div class="dropdown-item" onclick="confirmarPagoExterno('${b.nosso_numero}', '${esc(b.cliente_nome)}')">💰 Pago externamente</div>` : ''}
-              ${['EMITIDO','VENCIDO'].includes(b.status_atual) ? `<div class="dropdown-item danger" onclick="confirmarBaixa('${b.nosso_numero}', '${esc(b.cliente_nome)}')">✕ Dar baixa</div>` : ''}
+              ${['EMITIDO','VENCIDO'].includes(b.status_atual) ? `<div class="dropdown-item" onclick="confirmarPagoExterno('${b.nosso_numero}','${esc(b.cliente_nome)}')">💰 Pago externamente</div>` : ''}
+              ${['EMITIDO','VENCIDO'].includes(b.status_atual) ? `<div class="dropdown-item danger" onclick="confirmarBaixa('${b.nosso_numero}','${esc(b.cliente_nome)}')">✕ Dar baixa</div>` : ''}
             </div>
           </div>
         </div>
       </td>
     </tr>`;
   }).join('');
-
+  const th = (label, col) =>
+    `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortBoletos('${col}')">${label} ${arrowB(col)}</th>`;
   document.getElementById('tableWrapper').innerHTML = `
     <table>
       <thead><tr>
-        <th>Nosso Nº</th>
-        <th>Seu Nº</th>
-        <th>Pagador / Beneficiário</th>
-        <th class="sortable">Vencimento</th>
-        <th>Valor (R$)</th>
-        <th>Status</th>
-        <th>Dias atraso</th>
+        ${th('Nosso Nº','nosso_numero')}${th('Seu Nº','seu_numero')}${th('Pagador / Beneficiário','cliente_nome')}
+        ${th('Vencimento','vencimento')}${th('Valor (R$)','valor')}${th('Status','status_atual')}${th('Dias atraso','atraso')}
         <th>Ações</th>
       </tr></thead>
       <tbody>${linhas}</tbody>
     </table>`;
 }
-
-function labelStatus(s) {
-  const m = { EMITIDO: 'Em aberto', LIQUIDADO: 'Pago', PAGO_EXTERNO: 'Pago Externo', BAIXADO: 'Baixado', VENCIDO: 'Vencido' };
-  return m[s] || s;
+function lblStatus(s) {
+  return { EMITIDO:'Em aberto', LIQUIDADO:'Pago', PAGO_EXTERNO:'Pago Externo', BAIXADO:'Baixado', VENCIDO:'Vencido' }[s] || s;
 }
-function formatDoc(d) {
-  if (!d) return '';
-  d = d.replace(/\D/g, '');
-  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, 'CPF: $1.$2.$3-$4');
-  if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, 'CNPJ: $1.$2.$3/$4-$5');
-  return d;
-}
-function esc(s) { return (s || '').replace(/'/g, "\\'"); }
 
-// ---- Dropdown ----
+// ========== Dropdown ==========
 function toggleDropdown(btn) {
   const menu = btn.nextElementSibling;
   document.querySelectorAll('.dropdown-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
   menu.classList.toggle('open');
-  const close = (e) => { if (!menu.contains(e.target)) { menu.classList.remove('open'); document.removeEventListener('click', close); } };
+  const close = e => { if (!menu.contains(e.target)) { menu.classList.remove('open'); document.removeEventListener('click', close); } };
   setTimeout(() => document.addEventListener('click', close), 0);
 }
 
-// ---- Sync ----
+// ========== Sync ==========
 async function sincronizar() {
-  const btn = document.getElementById('btnSync');
+  const btn = document.getElementById('btnSyncSidebar');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin">↺</span> Sincronizando...';
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="sidebar-icon spin">↺</span> Sincronizando...';
   document.getElementById('syncStatus').textContent = '';
   try {
     const r = await fetch('/admin/api/sync', { method: 'POST' });
     const d = await r.json();
-    document.getElementById('syncStatus').textContent = `Sync: +${d.novos} novos, ${d.atualizados} atualizados, ${d.erros} erros`;
-    toast(`Sincronização: ${d.novos} novos · ${d.atualizados} atualizados`, d.erros ? 'warn' : 'ok');
+    document.getElementById('syncStatus').textContent =
+      `verificados: ${d.verificados} · atualizados: ${d.atualizados} · erros: ${d.erros}`;
+    toast(`Sync: ${d.verificados} verificados, ${d.atualizados} atualizados`, d.erros ? 'warn' : 'ok');
     carregarBoletos();
   } catch(e) {
     toast('Erro ao sincronizar: ' + e.message, 'erro');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '↺ Atualizar';
+    btn.innerHTML = orig;
   }
 }
 
-// ---- Detalhe ----
+async function importarTodos() {
+  toast('Importando todos os clientes VHSys… pode demorar alguns minutos.', 'info');
+  try {
+    const r = await fetch('/admin/api/sync/todos?dias=60', { method: 'POST' });
+    const d = await r.json();
+    toast(`Importação: ${d.clientes} clientes, ${d.importados} boletos`, 'ok');
+    carregarBoletos();
+  } catch(e) {
+    toast('Erro: ' + e.message, 'erro');
+  }
+}
+
+// ========== Detalhe ==========
 async function verDetalhe(nn) {
-  document.getElementById('modalDetalheBody').innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">⏳ Carregando...</div>';
+  document.getElementById('modalDetalheBody').innerHTML =
+    '<div style="text-align:center;padding:32px;color:var(--muted)">⏳ Carregando...</div>';
   document.getElementById('modalDetalheFooter').innerHTML = '';
   abrirModal('modalDetalhe');
   try {
     const r = await fetch(`/admin/api/boletos/${nn}`);
     if (!r.ok) throw new Error((await r.json()).erro || r.statusText);
-    const b = await r.json();
-    renderDetalhe(b);
+    renderDetalhe(await r.json());
   } catch(e) {
     document.getElementById('modalDetalheBody').innerHTML = `<div style="color:var(--erro)">Erro: ${e.message}</div>`;
   }
 }
-
 function renderDetalhe(b) {
   const linhaHtml = b.linha_digitavel
-    ? `<div class="linha-dig" title="Clique para copiar" onclick="copiarTexto('${b.linha_digitavel}')">${b.linha_digitavel}</div>`
+    ? `<div class="linha-dig" onclick="copiarTexto('${b.linha_digitavel}')" title="Clique para copiar">${b.linha_digitavel}</div>`
     : '<span style="color:var(--muted)">Não disponível</span>';
-
   document.getElementById('modalDetalheBody').innerHTML = `
     <div class="detail-grid">
       <div class="detail-item"><div class="label">Nosso Número</div><div class="val mono">${b.nosso_numero}</div></div>
-      <div class="detail-item"><div class="label">Seu Número</div><div class="val mono">${b.seu_numero || '—'}</div></div>
-      <div class="detail-item"><div class="label">Pagador</div><div class="val">${b.cliente_nome || '—'}</div></div>
-      <div class="detail-item"><div class="label">CPF / CNPJ</div><div class="val">${formatDoc(b.cliente_doc)}</div></div>
+      <div class="detail-item"><div class="label">Seu Número</div><div class="val mono">${b.seu_numero||'—'}</div></div>
+      <div class="detail-item"><div class="label">Pagador</div><div class="val">${b.cliente_nome||'—'}</div></div>
+      <div class="detail-item"><div class="label">CPF / CNPJ</div><div class="val">${fmtDoc(b.cliente_doc)}</div></div>
       <div class="detail-item"><div class="label">Valor</div><div class="val" style="font-size:18px;font-weight:700">${moeda(b.valor)}</div></div>
-      <div class="detail-item"><div class="label">Vencimento</div><div class="val">${formatarData(b.vencimento)}</div></div>
-      <div class="detail-item"><div class="label">Status</div><div class="val"><span class="badge-status ${b.status_atual}">${labelStatus(b.status_atual)}</span></div></div>
-      <div class="detail-item"><div class="label">Origem Pagamento</div><div class="val">${b.origem_pagamento || '—'}</div></div>
+      <div class="detail-item"><div class="label">Vencimento</div><div class="val">${fmtData(b.vencimento)}</div></div>
+      <div class="detail-item"><div class="label">Status</div><div class="val"><span class="badge-status ${b.status_atual}">${lblStatus(b.status_atual)}</span></div></div>
+      <div class="detail-item"><div class="label">Origem Pagamento</div><div class="val">${b.origem_pagamento||'—'}</div></div>
       <div class="detail-item full"><div class="label">Linha Digitável</div>${linhaHtml}</div>
     </div>
     <div class="timeline">
-      <h3>Histórico de Eventos</h3>
-      ${(b.eventos || []).reverse().map(e => `
+      <h3>Histórico</h3>
+      ${(b.eventos||[]).reverse().map(e => `
         <div class="timeline-item">
           <div class="timeline-dot ${e.tipo}"></div>
           <div class="timeline-content">
             <div class="tipo">${e.tipo}</div>
-            <div class="meta">${e.origem} · ${formatarData(e.criado_em)} ${e.criado_em ? e.criado_em.slice(11,16) : ''} ${e.usuario ? '· ' + e.usuario : ''}</div>
+            <div class="meta">${e.origem} · ${fmtData(e.criado_em)} ${e.criado_em ? e.criado_em.slice(11,16) : ''}</div>
           </div>
         </div>`).join('')}
     </div>`;
-
-  const footer = document.getElementById('modalDetalheFooter');
+  const f = document.getElementById('modalDetalheFooter');
   let btns = `<button class="btn btn-secondary" onclick="downloadPdf('${b.nosso_numero}')">⬇ PDF</button>`;
-  if (b.linha_digitavel) btns += `<button class="btn btn-secondary" onclick="copiarTexto('${b.linha_digitavel}')">📋 Copiar Linha</button>`;
+  if (b.linha_digitavel) btns += `<button class="btn btn-secondary" onclick="copiarTexto('${b.linha_digitavel}')">📋 Linha</button>`;
   if (['EMITIDO','VENCIDO'].includes(b.status_atual)) {
     btns += `<button class="btn btn-success" onclick="fecharModal('modalDetalhe');confirmarPagoExterno('${b.nosso_numero}','${esc(b.cliente_nome)}')">💰 Pago Externo</button>`;
     btns += `<button class="btn btn-secondary" style="color:var(--erro)" onclick="fecharModal('modalDetalhe');confirmarBaixa('${b.nosso_numero}','${esc(b.cliente_nome)}')">✕ Dar Baixa</button>`;
   }
-  footer.innerHTML = btns;
+  f.innerHTML = btns;
 }
 
-// ---- PDF ----
-function downloadPdf(nn) {
-  window.open(`/admin/api/boletos/${nn}/pdf`, '_blank');
-}
-
-// ---- Copiar ----
+// ========== PDF / Copiar ==========
+function downloadPdf(nn) { window.open(`/admin/api/boletos/${nn}/pdf`, '_blank'); }
 function copiarTexto(txt) {
   navigator.clipboard.writeText(txt).then(() => toast('Copiado!', 'ok')).catch(() => toast('Erro ao copiar', 'erro'));
 }
 async function copiarLinha(nn, linha) {
   if (linha) { copiarTexto(linha); return; }
-  try {
-    const r = await fetch(`/admin/api/boletos/${nn}`);
-    const b = await r.json();
-    if (b.linha_digitavel) copiarTexto(b.linha_digitavel);
-    else toast('Linha digitável não disponível', 'warn');
-  } catch { toast('Erro ao buscar linha digitável', 'erro'); }
+  const r = await fetch(`/admin/api/boletos/${nn}`);
+  const b = await r.json();
+  b.linha_digitavel ? copiarTexto(b.linha_digitavel) : toast('Linha não disponível', 'warn');
 }
 
-// ---- Pago externo / baixa ----
+// ========== Pago externo / Baixa ==========
 function confirmarPagoExterno(nn, nome) {
   document.getElementById('confirmTitulo').textContent = 'Pago Externamente';
-  document.getElementById('confirmMsg').innerHTML = `Confirmar pagamento externo (Pix, dinheiro, transferência) para o boleto de <strong>${nome || nn}</strong>?<br><br>O boleto será baixado automaticamente no Sicoob.`;
+  document.getElementById('confirmMsg').innerHTML =
+    `Confirmar pagamento externo para <strong>${nome||nn}</strong>?<br><small>O boleto será baixado no Sicoob.</small>`;
   const btn = document.getElementById('confirmBtn');
-  btn.textContent = 'Confirmar Pagamento';
-  btn.className = 'btn btn-success';
+  btn.textContent = 'Confirmar'; btn.className = 'btn btn-success';
   btn.onclick = () => executarPagoExterno(nn);
   abrirModal('modalConfirm');
 }
-
 async function executarPagoExterno(nn) {
   fecharModal('modalConfirm');
   try {
     const r = await fetch(`/admin/api/boletos/${nn}/pago-externo`, { method: 'POST' });
     const d = await r.json();
     if (!r.ok) throw new Error(d.erro || r.statusText);
-    toast('Pagamento externo registrado e boleto baixado no Sicoob.', 'ok');
+    toast('Pagamento externo registrado.', 'ok');
     carregarBoletos();
   } catch(e) { toast('Erro: ' + e.message, 'erro'); }
 }
-
 function confirmarBaixa(nn, nome) {
-  document.getElementById('confirmTitulo').textContent = 'Dar Baixa no Boleto';
-  document.getElementById('confirmMsg').innerHTML = `Tem certeza que deseja dar baixa no boleto de <strong>${nome || nn}</strong>?<br><br>Esta ação cancelará o boleto no Sicoob e não pode ser desfeita.`;
+  document.getElementById('confirmTitulo').textContent = 'Dar Baixa';
+  document.getElementById('confirmMsg').innerHTML =
+    `Baixar boleto de <strong>${nome||nn}</strong>?<br><small>Esta ação não pode ser desfeita.</small>`;
   const btn = document.getElementById('confirmBtn');
-  btn.textContent = 'Dar Baixa';
-  btn.className = 'btn btn-primary';
-  btn.style.background = 'var(--erro)';
+  btn.textContent = 'Dar Baixa'; btn.className = 'btn btn-primary'; btn.style.background = 'var(--erro)';
   btn.onclick = () => executarBaixa(nn);
   abrirModal('modalConfirm');
 }
-
 async function executarBaixa(nn) {
   fecharModal('modalConfirm');
   try {
     const r = await fetch(`/admin/api/boletos/${nn}/baixar`, { method: 'POST' });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.erro || r.statusText);
-    toast('Boleto baixado com sucesso.', 'ok');
+    if (!r.ok) throw new Error((await r.json()).erro || r.statusText);
+    toast('Boleto baixado.', 'ok');
     carregarBoletos();
   } catch(e) { toast('Erro: ' + e.message, 'erro'); }
 }
 
-// ---- Emissão ----
-function abrirModalEmitir() {
-  const hoje = new Date();
-  const defaultVenc = new Date(hoje);
-  defaultVenc.setDate(hoje.getDate() + 7);
-  document.getElementById('emVencimento').value = defaultVenc.toISOString().slice(0,10);
-  document.getElementById('vhVencimento').value = defaultVenc.toISOString().slice(0,10);
-  abrirModal('modalEmitir');
-  if (_tabAtiva === 'tabVhsys' && document.getElementById('vhsysResultados').innerHTML === '') {
-    buscarPedidosVhsys();
+// ========== CSV ==========
+function exportarCSV() {
+  const p = new URLSearchParams();
+  _filtros.status.forEach(s => p.append('status', s));
+  if (_filtros.dataInicio) p.set('data_inicio', _filtros.dataInicio);
+  if (_filtros.dataFim)    p.set('data_fim',    _filtros.dataFim);
+  p.set('tipo_data', _filtros.tipoData || 'vencimento');
+  if (_filtros.cliente) p.set('cliente', _filtros.cliente);
+  window.location = '/admin/api/boletos/exportar?' + p;
+}
+
+function imprimirLista() {
+  const p = new URLSearchParams();
+  _filtros.status.forEach(s => p.append('status', s));
+  if (_filtros.dataInicio) p.set('data_inicio', _filtros.dataInicio);
+  if (_filtros.dataFim)    p.set('data_fim',    _filtros.dataFim);
+  p.set('tipo_data', _filtros.tipoData || 'vencimento');
+  if (_filtros.cliente) p.set('cliente', _filtros.cliente);
+  if (_filtros.valorMin) p.set('valor_min', _filtros.valorMin);
+  if (_filtros.valorMax) p.set('valor_max', _filtros.valorMax);
+  window.open('/admin/imprimir?' + p, '_blank');
+}
+
+// ========== Prazo rápido ==========
+function setPrazo(prefix, dias) {
+  const vencId = prefix === 'av' ? 'avVencimento' : 'vhEmVencimento';
+  const chipsId = prefix === 'av' ? 'avPrazos' : 'vhEmPrazos';
+  document.getElementById(vencId).value = addDias(dias);
+  document.querySelectorAll(`#${chipsId} .prazo-chip`).forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// ========== Busca de cliente (Avulso) ==========
+let _clienteTimer = null;
+async function buscarCliente(prefix) {
+  clearTimeout(_clienteTimer);
+  const inputId = prefix === 'av' ? 'avBuscaCliente' : null;
+  const dropId  = prefix === 'av' ? 'avClienteDrop' : null;
+  if (!inputId) return;
+  const q = document.getElementById(inputId).value.trim();
+  const drop = document.getElementById(dropId);
+  if (q.length < 2) { drop.classList.remove('open'); return; }
+  _clienteTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`/admin/api/clientes?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      const clientes = d.clientes || [];
+      if (!clientes.length) { drop.classList.remove('open'); return; }
+      drop.innerHTML = clientes.map((c, i) =>
+        `<div class="client-item" onclick="selecionarCliente('${prefix}',${i})">
+          <div class="ci-nome">${c.nome}</div>
+          <div class="ci-doc">${fmtDoc(c.doc)} ${c.cidade ? '· ' + c.cidade + '/' + c.uf : ''}</div>
+        </div>`).join('');
+      drop._data = clientes;
+      drop.classList.add('open');
+    } catch { drop.classList.remove('open'); }
+  }, 350);
+}
+function selecionarCliente(prefix, idx) {
+  const dropId = prefix === 'av' ? 'avClienteDrop' : null;
+  const drop = document.getElementById(dropId);
+  const c = (drop._data || [])[idx];
+  if (!c) return;
+  drop.classList.remove('open');
+  if (prefix === 'av') {
+    document.getElementById('avNome').value    = c.nome;
+    document.getElementById('avDoc').value     = c.doc.replace(/\D/g,'');
+    document.getElementById('avCidade').value  = c.cidade;
+    document.getElementById('avUf').value      = c.uf;
+    document.getElementById('avEndereco').value= c.endereco;
+    document.getElementById('avBairro').value  = c.bairro;
+    document.getElementById('avCep').value     = c.cep;
+    document.getElementById('avBuscaCliente').value = c.nome + ' · ' + fmtDoc(c.doc);
   }
 }
-
-function switchTab(tabId) {
-  _tabAtiva = tabId;
-  document.querySelectorAll('.tabs .tab').forEach((t,i) => {
-    const ids = ['tabAvulso','tabVhsys'];
-    t.classList.toggle('active', ids[i] === tabId);
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', e => {
+  document.querySelectorAll('.client-dropdown.open').forEach(d => {
+    if (!d.contains(e.target) && !d.previousElementSibling.contains(e.target))
+      d.classList.remove('open');
   });
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === tabId));
+});
+
+// ========== Modal Avulso ==========
+function abrirModalAvulso() {
+  // Limpa
+  ['avBuscaCliente','avNome','avDoc','avSeuNumero','avEndereco','avCidade','avBairro','avCep','avValor'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('avUf').value = 'MG';
+  document.getElementById('avVencimento').value = addDias(_config.vencimentoPadraoADias || 7);
+  document.getElementById('avMulta').value = _config.valorMulta ?? 2.0;
+  document.getElementById('avJuros').value = _config.valorJurosMora ?? 0.2;
+  document.querySelectorAll('#avPrazos .prazo-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('avClienteDrop').classList.remove('open');
+  abrirModal('modalAvulso');
 }
 
-async function confirmarEmissao() {
-  const btn = document.getElementById('btnEmitirConfirm');
+async function emitirAvulso() {
+  const v = id => document.getElementById(id).value.trim();
+  if (!v('avNome') || !v('avDoc') || !v('avValor') || !v('avVencimento'))
+    return toast('Preencha os campos obrigatórios (*)', 'warn');
+  const btn = document.getElementById('btnAvulsoConfirm');
   btn.disabled = true; btn.textContent = 'Emitindo...';
   try {
-    const payload = _tabAtiva === 'tabAvulso' ? montarPayloadAvulso() : montarPayloadVhsys();
+    const venc = v('avVencimento');
+    const dCharges = amanhaDe(venc);
+    const mensagens = (_config.mensagens || []).slice(0,3);
+    const payload = {
+      codigoEspecieDocumento: 'DM',
+      identificacaoEmissaoBoleto: 1,
+      identificacaoDistribuicaoBoleto: 1,
+      valor: parseFloat(v('avValor')),
+      dataVencimento: venc,
+      seuNumero: v('avSeuNumero') || undefined,
+      valorMulta: parseFloat(v('avMulta')) || 0,
+      tipoMulta: _config.tipoMulta || 2,
+      dataMulta: dCharges,
+      valorJurosMora: parseFloat(v('avJuros')) || 0,
+      tipoJurosMora: _config.tipoJurosMora || 2,
+      dataJurosMora: dCharges,
+      codigoProtesto: _config.codigoProtesto || 3,
+      codigoNegativacao: _config.codigoNegativacao || 3,
+      mensagensInstrucao: mensagens.length ? mensagens : undefined,
+      pagador: {
+        nome: v('avNome'),
+        numeroCpfCnpj: v('avDoc').replace(/\D/g,''),
+        endereco: v('avEndereco') || 'Não informado',
+        cidade:   v('avCidade')  || 'Não informado',
+        uf:       v('avUf')      || 'MG',
+        cep:      v('avCep')     || '00000000',
+        bairro:   v('avBairro')  || '',
+        email:    undefined,
+      },
+    };
     const r = await fetch('/admin/api/boletos', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.erro || r.statusText);
     toast('Boleto emitido com sucesso!', 'ok');
-    fecharModal('modalEmitir');
+    fecharModal('modalAvulso');
     carregarBoletos();
   } catch(e) {
-    toast('Erro ao emitir: ' + e.message, 'erro');
+    toast('Erro: ' + e.message, 'erro');
   } finally {
     btn.disabled = false; btn.textContent = 'Emitir Boleto';
   }
 }
 
-function montarPayloadAvulso() {
+// ========== VHSys — Pedidos ==========
+async function carregarPedidosVhsys() {
+  document.getElementById('vhTableWrapper').innerHTML =
+    '<div class="empty-state"><div class="icon">⏳</div>Carregando pedidos...</div>';
+  const sit = document.getElementById('vhSituacao').value;
+  const di  = document.getElementById('vhDataInicio').value;
+  const p   = new URLSearchParams({ limite: 200 });
+  if (sit) p.set('situacao', sit);
+  if (di)  p.set('data_inicio', di);
+  try {
+    const r = await fetch('/admin/api/vhsys/pedidos?' + p);
+    const d = await r.json();
+    if (d.aviso) {
+      document.getElementById('vhTableWrapper').innerHTML =
+        '<div class="empty-state"><div class="icon">⚠️</div>VHSys não configurado.</div>';
+      return;
+    }
+    _pedidosVh = d.pedidos || [];
+    filtrarPedidos();
+  } catch(e) {
+    document.getElementById('vhTableWrapper').innerHTML =
+      `<div class="empty-state"><div class="icon">⚠️</div>Erro: ${e.message}</div>`;
+  }
+}
+
+function filtrarPedidos() {
+  const q = (document.getElementById('vhBusca').value || '').toLowerCase();
+  const lista = q
+    ? _pedidosVh.filter(p =>
+        (p.cliente_nome||'').toLowerCase().includes(q) ||
+        String(p.numero||'').includes(q) ||
+        (p.cliente_doc||'').includes(q)
+      )
+    : _pedidosVh;
+  document.getElementById('vhCount').textContent = `${lista.length} pedido${lista.length !== 1 ? 's' : ''}`;
+  if (!lista.length) {
+    document.getElementById('vhTableWrapper').innerHTML =
+      '<div class="empty-state"><div class="icon">📭</div>Nenhum pedido encontrado.</div>';
+    return;
+  }
+  const sorted = sortedVhPedidos(lista);
+  const linhas = sorted.map(p => {
+    const valor = p.valor_total ? moeda(p.valor_total) : '—';
+    const sit = p.situacao || '—';
+    const sitColor = sit === 'aberto' ? 'var(--ok)' : sit === 'cancelado' ? 'var(--erro)' : 'var(--muted)';
+    return `<tr>
+      <td class="mono" style="font-weight:600">#${p.numero||p.id}</td>
+      <td>${fmtData(p.data)}</td>
+      <td>
+        <div style="font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.cliente_nome||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtDoc(p.cliente_doc)}</div>
+      </td>
+      <td style="font-weight:600">${valor}</td>
+      <td><span style="font-size:11px;color:${sitColor}">${sit}</span></td>
+      <td>
+        <button class="btn btn-primary btn-sm" onclick="abrirEmitirVhsys(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+          + Boleto
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+  const thv = (label, col) =>
+    `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortVh('${col}')">${label} ${arrowV(col)}</th>`;
+  document.getElementById('vhTableWrapper').innerHTML = `
+    <table>
+      <thead><tr>
+        ${thv('Pedido','numero')}${thv('Data','data')}${thv('Cliente / CNPJ','cliente_nome')}
+        ${thv('Valor','valor_total')}${thv('Situação','situacao')}<th>Ação</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>`;
+}
+
+// ========== Modal Emitir VHSys ==========
+function abrirEmitirVhsys(pedido) {
+  document.getElementById('vhEmitirTitulo').textContent = `Emitir Boleto · Pedido #${pedido.numero||pedido.id}`;
+  document.getElementById('vhEmNome').value    = pedido.cliente_nome || '';
+  document.getElementById('vhEmDoc').value     = (pedido.cliente_doc||'').replace(/\D/g,'');
+  document.getElementById('vhEmPedidoId').value= pedido.id;
+  document.getElementById('vhEmPedidoDisplay').value = `#${pedido.numero||pedido.id}`;
+  document.getElementById('vhEmValor').value   = pedido.valor_total || '';
+  document.getElementById('vhEmSeuNumero').value = 'PED-' + (pedido.numero||pedido.id);
+  document.getElementById('vhEmVencimento').value = addDias(_config.vencimentoPadraoADias || 7);
+  document.getElementById('vhEmMulta').value  = _config.valorMulta ?? 2.0;
+  document.getElementById('vhEmJuros').value  = _config.valorJurosMora ?? 0.2;
+  document.querySelectorAll('#vhEmPrazos .prazo-chip').forEach(c => c.classList.remove('active'));
+  abrirModal('modalVhEmitir');
+}
+
+async function emitirVhsys() {
   const v = id => document.getElementById(id).value.trim();
-  if (!v('emNome') || !v('emDoc') || !v('emValor') || !v('emVencimento')) throw new Error('Preencha os campos obrigatórios (*)');
-  return {
-    codigoEspecieDocumento:       'DM',
-    identificacaoEmissaoBoleto:   1,
-    identificacaoDistribuicaoBoleto: 1,
-    valor:          parseFloat(v('emValor')),
-    dataVencimento: v('emVencimento'),
-    seuNumero:      v('emSeuNumero') || undefined,
-    pagador: {
-      nome:           v('emNome'),
-      numeroCpfCnpj: v('emDoc').replace(/\D/g,''),
-      endereco:       v('emEndereco') || 'Não informado',
-      cidade:         v('emCidade') || 'Não informado',
-      uf:             v('emUf') || 'MG',
-      cep:            v('emCep') || '00000000',
-      email:          v('emEmail') || undefined,
-      bairro:         '',
-    },
+  if (!v('vhEmValor') || !v('vhEmVencimento'))
+    return toast('Preencha valor e vencimento.', 'warn');
+  const btn = document.getElementById('btnVhEmitirConfirm');
+  btn.disabled = true; btn.textContent = 'Emitindo...';
+  try {
+    const venc = v('vhEmVencimento');
+    const dCharges = amanhaDe(venc);
+    const mensagens = (_config.mensagens || []).slice(0,3);
+    const payload = {
+      codigoEspecieDocumento: 'DM',
+      identificacaoEmissaoBoleto: 1,
+      identificacaoDistribuicaoBoleto: 1,
+      valor: parseFloat(v('vhEmValor')),
+      dataVencimento: venc,
+      seuNumero: v('vhEmSeuNumero') || undefined,
+      vhsys_pedido_id: v('vhEmPedidoId') ? parseInt(v('vhEmPedidoId')) : undefined,
+      valorMulta: parseFloat(v('vhEmMulta')) || 0,
+      tipoMulta: _config.tipoMulta || 2,
+      dataMulta: dCharges,
+      valorJurosMora: parseFloat(v('vhEmJuros')) || 0,
+      tipoJurosMora: _config.tipoJurosMora || 2,
+      dataJurosMora: dCharges,
+      codigoProtesto: _config.codigoProtesto || 3,
+      codigoNegativacao: _config.codigoNegativacao || 3,
+      mensagensInstrucao: mensagens.length ? mensagens : undefined,
+      pagador: {
+        nome: v('vhEmNome'),
+        numeroCpfCnpj: v('vhEmDoc').replace(/\D/g,''),
+        endereco: 'Não informado',
+        cidade:   'Não informado',
+        uf:       'MG',
+        cep:      '00000000',
+        bairro:   '',
+      },
+    };
+    const r = await fetch('/admin/api/boletos', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.erro || r.statusText);
+    toast('Boleto emitido!', 'ok');
+    fecharModal('modalVhEmitir');
+    showSection('boletos');
+    carregarBoletos();
+  } catch(e) {
+    toast('Erro: ' + e.message, 'erro');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Emitir Boleto';
+  }
+}
+
+// ========== Configuração ==========
+async function carregarConfig() {
+  const cfg = await fetch('/admin/api/config').then(r => r.json()).catch(() => ({}));
+  _config = cfg;
+  document.getElementById('cfgTipoMulta').value   = cfg.tipoMulta ?? 2;
+  document.getElementById('cfgValorMulta').value  = cfg.valorMulta ?? 2.0;
+  document.getElementById('cfgTipoJuros').value   = cfg.tipoJurosMora ?? 2;
+  document.getElementById('cfgValorJuros').value  = cfg.valorJurosMora ?? 0.2;
+  document.getElementById('cfgVencDias').value    = cfg.vencimentoPadraoADias ?? 7;
+  document.getElementById('cfgDiasProtesto').value= cfg.diasProtesto ?? 0;
+  document.getElementById('cfgMensagens').value   = (cfg.mensagens || []).join('\n');
+  document.getElementById('cfgMultaUnit').textContent = cfg.tipoMulta === 1 ? 'R$' : '%';
+  document.getElementById('cfgJurosUnit').textContent = cfg.tipoJurosMora === 1 ? 'R$/dia' : '%/dia';
+}
+
+async function salvarConfig() {
+  const mensagens = document.getElementById('cfgMensagens').value
+    .split('\n').map(s => s.trim()).filter(Boolean).slice(0,3);
+  const cfg = {
+    tipoMulta:            parseInt(document.getElementById('cfgTipoMulta').value),
+    valorMulta:           parseFloat(document.getElementById('cfgValorMulta').value) || 0,
+    tipoJurosMora:        parseInt(document.getElementById('cfgTipoJuros').value),
+    valorJurosMora:       parseFloat(document.getElementById('cfgValorJuros').value) || 0,
+    vencimentoPadraoADias:parseInt(document.getElementById('cfgVencDias').value) || 7,
+    diasProtesto:         parseInt(document.getElementById('cfgDiasProtesto').value) || 0,
+    codigoProtesto:       parseInt(document.getElementById('cfgDiasProtesto').value) > 0 ? 1 : 3,
+    codigoNegativacao:    3,
+    diasNegativacao:      0,
+    mensagens,
   };
+  try {
+    await fetch('/admin/api/config', {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg),
+    });
+    _config = cfg;
+    toast('Configuração salva!', 'ok');
+  } catch(e) {
+    toast('Erro ao salvar: ' + e.message, 'erro');
+  }
 }
 
-function montarPayloadVhsys() {
-  const v = id => document.getElementById(id).value.trim();
-  if (!v('vhNome') || !v('vhDoc') || !v('vhValor') || !v('vhVencimento')) throw new Error('Preencha os campos obrigatórios (*)');
-  return {
-    codigoEspecieDocumento:       'DM',
-    identificacaoEmissaoBoleto:   1,
-    identificacaoDistribuicaoBoleto: 1,
-    valor:             parseFloat(v('vhValor')),
-    dataVencimento:    v('vhVencimento'),
-    seuNumero:         v('vhSeuNumero') || undefined,
-    vhsys_pedido_id:   v('vhPedidoId') ? parseInt(v('vhPedidoId')) : undefined,
-    pagador: {
-      nome:           v('vhNome'),
-      numeroCpfCnpj: v('vhDoc').replace(/\D/g,''),
-      endereco:       'Não informado',
-      cidade:         'Não informado',
-      uf:             'MG',
-      cep:            '00000000',
-      bairro:         '',
-    },
-  };
+// ========== Consulta por Lista ==========
+let _consultaResultados = [];
+
+async function consultarLista() {
+  const texto = document.getElementById('consultaLista').value;
+  const nums = texto.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!nums.length) return toast('Cole pelo menos um nosso número.', 'warn');
+  const btn = document.getElementById('btnConsultar');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Consultando...';
+  try {
+    const r = await fetch('/admin/api/boletos/consultar-lista', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ nossos_numeros: nums }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    _consultaResultados = d.resultados || [];
+    renderConsulta(_consultaResultados);
+  } catch(e) {
+    toast('Erro: ' + e.message, 'erro');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '🔍 Consultar';
+  }
 }
 
-// ---- VHSys ----
-let _vhsysTimer = null;
-async function buscarPedidosVhsys() {
-  clearTimeout(_vhsysTimer);
-  _vhsysTimer = setTimeout(async () => {
-    const termo = document.getElementById('vhsysBusca').value.trim();
-    const res = document.getElementById('vhsysResultados');
-    try {
-      const params = new URLSearchParams({ limite: 30 });
-      if (termo) params.set('cliente', termo); // servidor filtra por situacao
-      const r = await fetch('/admin/api/vhsys/pedidos?' + params);
-      const d = await r.json();
-      if (d.aviso) { res.style.display = 'none'; return; }
-      _pedidosVhsys = d.pedidos || [];
-      const filtrados = termo
-        ? _pedidosVhsys.filter(p => (p.cliente_nome||'').toLowerCase().includes(termo.toLowerCase()) || String(p.numero).includes(termo))
-        : _pedidosVhsys;
-      if (!filtrados.length) { res.style.display = 'none'; return; }
-      res.innerHTML = filtrados.slice(0, 10).map(p =>
-        `<div class="search-result-item" onclick="selecionarPedido(${p.id})">
-          <div class="nome">#${p.numero || p.id} · ${p.cliente_nome || '—'}</div>
-          <div class="doc">${formatDoc(p.cliente_doc)} · ${moeda(p.valor_total)}</div>
-        </div>`).join('');
-      res.style.display = 'block';
-    } catch { res.style.display = 'none'; }
-  }, 350);
+function renderConsulta(resultados) {
+  const ctEmAberto  = resultados.filter(r => r.status === 'EMITIDO').length;
+  const totEmAberto = resultados.filter(r => r.status === 'EMITIDO').reduce((s, r) => s + (r.valor||0), 0);
+  const ctLiquidado = resultados.filter(r => r.status === 'LIQUIDADO').length;
+  const ctVencido   = resultados.filter(r => r.status === 'VENCIDO').length;
+  const ctNaoAchado = resultados.filter(r => r.status === 'NAO_ENCONTRADO' || r.status === 'ERRO').length;
+
+  const resumo = document.getElementById('consultaResumo');
+  resumo.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;padding:14px 28px 0';
+  resumo.innerHTML = `
+    <div class="stat-card"><div class="label">Consultados</div><div class="value">${resultados.length}</div></div>
+    <div class="stat-card info"><div class="label">Em Aberto</div><div class="value">${ctEmAberto}</div><div class="sub">${moeda(totEmAberto)}</div></div>
+    <div class="stat-card ok"><div class="label">Liquidados</div><div class="value">${ctLiquidado}</div></div>
+    <div class="stat-card warn"><div class="label">Vencidos</div><div class="value" style="color:var(--warn)">${ctVencido}</div></div>
+    ${ctNaoAchado ? `<div class="stat-card erro"><div class="label">Não encontrados</div><div class="value">${ctNaoAchado}</div></div>` : ''}
+  `;
+
+  document.getElementById('consultaCount').textContent =
+    `${resultados.length} boleto${resultados.length !== 1 ? 's' : ''} consultado${resultados.length !== 1 ? 's' : ''}`;
+  document.getElementById('btnExportarConsulta').style.display = resultados.length ? '' : 'none';
+
+  if (!resultados.length) {
+    document.getElementById('consultaTableSection').style.display = 'none';
+    return;
+  }
+  const linhas = resultados.map(b => {
+    const isErr  = b.status === 'NAO_ENCONTRADO' || b.status === 'ERRO';
+    const atraso = (['EMITIDO','VENCIDO'].includes(b.status) && b.vencimento) ? diasAtraso(b.vencimento) : null;
+    const atrasoStr = (atraso != null && atraso > 0)
+      ? `<span class="atraso-num">${atraso}</span>` : '<span style="color:var(--muted)">—</span>';
+    const linhaCopy = b.linha_digitavel
+      ? `<button class="btn-icon" title="Copiar linha" onclick="copiarTexto('${b.linha_digitavel}')">📋</button>` : '';
+    const pdfBtn = !isErr
+      ? `<button class="btn-icon" title="PDF" onclick="downloadPdf('${b.nosso_numero}')">⬇</button>` : '';
+    const valorCell = b.valor != null ? moeda(b.valor)
+      : (b.erro ? `<span style="color:var(--erro);font-size:11px">${b.erro}</span>` : '—');
+    return `<tr style="${isErr ? 'opacity:0.55' : ''}">
+      <td class="mono">${b.nosso_numero}</td>
+      <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.cliente_nome||'—'}</div></td>
+      <td style="font-weight:600">${valorCell}</td>
+      <td>${b.vencimento ? fmtData(b.vencimento) : '—'}</td>
+      <td><span class="badge-status ${b.status}">${lblStatusConsulta(b.status)}</span></td>
+      <td>${atrasoStr}</td>
+      <td><div class="actions">${linhaCopy}${pdfBtn}</div></td>
+    </tr>`;
+  }).join('');
+  const section = document.getElementById('consultaTableSection');
+  section.style.display = '';
+  document.getElementById('consultaTableWrapper').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Nosso Nº</th><th>Cliente</th><th>Valor</th>
+        <th>Vencimento</th><th>Status</th><th>Dias Atraso</th><th>Ações</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>`;
 }
 
-function selecionarPedido(id) {
-  const p = _pedidosVhsys.find(x => x.id == id);
-  if (!p) return;
-  document.getElementById('vhNome').value     = p.cliente_nome || '';
-  document.getElementById('vhDoc').value      = p.cliente_doc  || '';
-  document.getElementById('vhValor').value    = p.valor_total  || '';
-  document.getElementById('vhPedidoId').value = p.id;
-  document.getElementById('vhSeuNumero').value = 'PED-' + (p.numero || p.id);
-  document.getElementById('vhsysBusca').value = `#${p.numero || p.id} · ${p.cliente_nome}`;
-  document.getElementById('vhsysResultados').style.display = 'none';
+function lblStatusConsulta(s) {
+  return ({
+    EMITIDO:'Em aberto', LIQUIDADO:'Pago Sicoob', PAGO_EXTERNO:'Pago Externo',
+    BAIXADO:'Baixado', VENCIDO:'Vencido', NAO_ENCONTRADO:'Não encontrado', ERRO:'Erro API'
+  })[s] || s;
 }
 
-// ---- CSV ----
-function exportarCSV() {
-  const params = new URLSearchParams();
-  _filtros.status.forEach(s => params.append('status', s));
-  if (_filtros.dataInicio) params.set('data_inicio', _filtros.dataInicio);
-  if (_filtros.dataFim)    params.set('data_fim',    _filtros.dataFim);
-  params.set('tipo_data', _filtros.tipoData || 'vencimento');
-  if (_filtros.cliente) params.set('cliente', _filtros.cliente);
-  window.location = '/admin/api/boletos/exportar?' + params;
+function exportarConsultaCSV() {
+  if (!_consultaResultados.length) return;
+  const campos = ['nosso_numero','cliente_nome','valor','vencimento','status','linha_digitavel','origem'];
+  const rows = _consultaResultados.map(r =>
+    campos.map(c => {
+      const v = r[c] != null ? String(r[c]) : '';
+      return v.includes(';') ? `"${v}"` : v;
+    }).join(';')
+  );
+  const csv = '﻿' + [campos.join(';'), ...rows].join('\n');
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'consulta_boletos.csv'; a.click();
+  URL.revokeObjectURL(url);
 }
 
-// ---- Modal helpers ----
-function abrirModal(id) {
-  document.getElementById(id).classList.add('open');
-}
-function fecharModal(id) {
-  document.getElementById(id).classList.remove('open');
-}
+// ========== Modal helpers ==========
+function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) fecharModal(m.id); });
 });
-
-// ---- Fecha dropdowns com ESC ----
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-overlay.open').forEach(m => fecharModal(m.id));

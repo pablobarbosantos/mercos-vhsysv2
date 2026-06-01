@@ -66,6 +66,25 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_boletos_status       ON boletos(status_atual);
             CREATE INDEX IF NOT EXISTS idx_boletos_vhsys        ON boletos(vhsys_pedido_id);
             CREATE INDEX IF NOT EXISTS idx_eventos_boleto_id    ON eventos_boleto(boleto_id);
+
+            CREATE TABLE IF NOT EXISTS movimentacao_registros (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                data_evento     TEXT NOT NULL,
+                tipo_movimento  INTEGER NOT NULL,
+                descricao       TEXT,
+                nosso_numero    TEXT,
+                cliente_nome    TEXT,
+                cliente_doc     TEXT,
+                valor           REAL,
+                dados_raw       TEXT,
+                periodo_inicio  TEXT NOT NULL,
+                periodo_fim     TEXT NOT NULL,
+                criado_em       TEXT NOT NULL,
+                UNIQUE(nosso_numero, tipo_movimento, data_evento)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_movimt_data ON movimentacao_registros(data_evento);
+            CREATE INDEX IF NOT EXISTS idx_movimt_tipo ON movimentacao_registros(tipo_movimento);
         """)
     logger.info("DB boletos inicializado em %s", DB_PATH)
 
@@ -200,6 +219,94 @@ def listar_boletos(
     sql += " ORDER BY vencimento DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def stats_periodo(data_inicio: str, data_fim: str, tipo_data: str = "criado_em") -> dict:
+    """Totalizadores de boletos para um período: por_status, por_mes, ticket_medio, inadimplencia."""
+    col_data = tipo_data if tipo_data in ("vencimento", "criado_em") else "criado_em"
+    data_fim_q = data_fim + "T23:59:59Z" if "T" not in data_fim else data_fim
+    with get_conn() as conn:
+        rows_status = conn.execute(
+            f"""SELECT status_atual, COUNT(*) as qtd, SUM(valor) as total
+                FROM boletos WHERE {col_data} >= ? AND {col_data} <= ?
+                GROUP BY status_atual""",
+            (data_inicio, data_fim_q),
+        ).fetchall()
+        rows_mes = conn.execute(
+            f"""SELECT substr({col_data}, 1, 7) as mes, COUNT(*) as qtd, SUM(valor) as total
+                FROM boletos WHERE {col_data} >= ? AND {col_data} <= ?
+                GROUP BY mes ORDER BY mes""",
+            (data_inicio, data_fim_q),
+        ).fetchall()
+        total_row = conn.execute(
+            f"""SELECT COUNT(*) as qtd, SUM(valor) as total, AVG(valor) as ticket
+                FROM boletos WHERE {col_data} >= ? AND {col_data} <= ?""",
+            (data_inicio, data_fim_q),
+        ).fetchone()
+
+    por_status = {r["status_atual"]: {"qtd": r["qtd"], "valor": r["total"] or 0.0} for r in rows_status}
+    qtd_total = total_row["qtd"] or 0
+    qtd_inadimplentes = por_status.get("VENCIDO", {}).get("qtd", 0)
+    taxa_inadimplencia = round(qtd_inadimplentes / qtd_total * 100, 1) if qtd_total else 0.0
+
+    return {
+        "por_status": por_status,
+        "por_mes": [{"mes": r["mes"], "qtd": r["qtd"], "valor": r["total"] or 0.0} for r in rows_mes],
+        "total_qtd": qtd_total,
+        "total_valor": total_row["total"] or 0.0,
+        "ticket_medio": total_row["ticket"] or 0.0,
+        "taxa_inadimplencia": taxa_inadimplencia,
+    }
+
+
+def salvar_movimentacao(registros: list[dict]) -> int:
+    """Insere registros de movimentação. Ignora duplicatas por (data_evento, tipo_movimento, nosso_numero, periodo_inicio)."""
+    agora = _now()
+    inseridos = 0
+    with get_conn() as conn:
+        for r in registros:
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO movimentacao_registros
+                       (data_evento, tipo_movimento, descricao, nosso_numero, cliente_nome, cliente_doc,
+                        valor, dados_raw, periodo_inicio, periodo_fim, criado_em)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        r.get("data_evento", ""),
+                        r.get("tipo_movimento", 0),
+                        r.get("descricao", ""),
+                        r.get("nosso_numero", ""),
+                        r.get("cliente_nome", ""),
+                        r.get("cliente_doc", ""),
+                        r.get("valor"),
+                        r.get("dados_raw"),
+                        r.get("periodo_inicio", ""),
+                        r.get("periodo_fim", ""),
+                        agora,
+                    ),
+                )
+                if conn.execute("SELECT changes()").fetchone()[0]:
+                    inseridos += 1
+            except Exception:
+                pass
+    return inseridos
+
+
+def listar_movimentacoes(
+    data_inicio: str,
+    data_fim: str,
+    tipos: list[int] | None = None,
+) -> list[dict]:
+    where = ["data_evento >= ?", "data_evento <= ?"]
+    params: list = [data_inicio, data_fim + "T23:59:59Z" if "T" not in data_fim else data_fim]
+    if tipos:
+        placeholders = ",".join("?" * len(tipos))
+        where.append(f"tipo_movimento IN ({placeholders})")
+        params.extend(tipos)
+    sql = "SELECT * FROM movimentacao_registros WHERE " + " AND ".join(where) + " ORDER BY data_evento ASC"
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]

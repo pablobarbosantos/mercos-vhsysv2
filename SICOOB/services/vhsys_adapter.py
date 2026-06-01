@@ -116,6 +116,44 @@ def buscar_cliente(cnpj_cpf: str) -> dict | None:
         return None
 
 
+def listar_clientes_docs() -> list[str]:
+    """Retorna todos os CPF/CNPJs de clientes cadastrados no VHSys (somente dígitos)."""
+    if not _disponivel():
+        return []
+
+    docs = set()
+    params = {"limit": 100, "offset": 0}
+    try:
+        while True:
+            resp = requests.get(
+                f"{config.VHSYS_BASE_URL}/clientes",
+                headers=_headers(),
+                params=params,
+                timeout=_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            clientes = data.get("data", [])
+            for c in clientes:
+                doc = (
+                    c.get("cnpj_cliente")
+                    or c.get("cpf_cliente")
+                    or c.get("cpf_cnpj_cliente")
+                    or ""
+                )
+                doc = "".join(d for d in doc if d.isdigit())
+                if len(doc) in (11, 14):
+                    docs.add(doc)
+            if len(clientes) < params["limit"]:
+                break
+            params["offset"] += params["limit"]
+    except Exception as e:
+        logger.error("VHSys listar_clientes_docs falhou: %s", e)
+
+    logger.info("VHSys: %d CPF/CNPJs de clientes carregados.", len(docs))
+    return list(docs)
+
+
 def _normalizar_pedido(p: dict) -> dict:
     return {
         "id":           p.get("id_pedido") or p.get("id"),

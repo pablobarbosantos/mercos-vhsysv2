@@ -17,7 +17,7 @@ from compras import database as db
 from compras.service import reprocessar_nota, processar_nota_agora
 from compras.nfe_parser import parse_nfe
 from compras.nfe_collector import cert_info, coletar_nfes
-from consulta_vhsys.services.vhsys_adapter import requisitar as _vhsys_req
+from compras.erp_adapter import buscar_produtos_erp, auto_match_produto, criar_produto_erp
 
 logger = logging.getLogger(__name__)
 
@@ -169,8 +169,8 @@ async def api_historico_custo(vhsys_id: int):
 
 @router.post("/api/notas/{chave}/lancar-estoque")
 async def api_lancar_estoque_nota(chave: str):
-    """Lança entrada de estoque no VHSys para todos os itens mapeados da nota."""
-    from compras.vhsys_adapter import lancar_entrada_compra
+    """Lança entrada de estoque no ERP para todos os itens mapeados da nota."""
+    from compras.erp_adapter import lancar_entrada_compra
     itens = db.item_listar_por_nota(chave)
     lancados = []
     erros = []
@@ -201,160 +201,47 @@ async def api_fila_compras():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Busca de produtos VHSys (usa consulta_vhsys.db)
+# Busca de produtos ERP
 # ──────────────────────────────────────────────────────────────────────────────
-
-def _conn_vhsys():
-    import sqlite3 as _sq
-    p = os.path.join(os.path.dirname(__file__), "..", "data", "consulta_vhsys.db")
-    if not os.path.exists(p):
-        return None
-    c = _sq.connect(p, timeout=5)
-    c.row_factory = _sq.Row
-    return c
-
-
-def _buscar_produtos_vhsys(q: str) -> list[dict]:
-    conn = _conn_vhsys()
-    if not conn:
-        return []
-    like = f"%{q.lower()}%"
-    rows = conn.execute(
-        """SELECT vhsys_id, nome, ean, preco FROM produtos
-           WHERE ativo=1 AND (lower(nome) LIKE ? OR ean LIKE ? OR CAST(vhsys_id AS TEXT) LIKE ?)
-           ORDER BY nome LIMIT 20""",
-        (like, like, like)
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def _auto_match(codigo_fornecedor: str, descricao: str) -> dict | None:
-    """Tenta encontrar um produto VHSys automaticamente.
-    Ordem: EAN exato → SKU/vhsys_id exato → nome exato (case-insensitive).
-    Retorna o produto com campo 'via' indicando como foi encontrado, ou None.
-    """
-    conn = _conn_vhsys()
-    if not conn:
-        return None
-
-    cod = (codigo_fornecedor or "").strip()
-    desc = (descricao or "").strip().lower()
-
-    # 1. EAN exato
-    if cod:
-        row = conn.execute(
-            "SELECT vhsys_id, nome, ean, preco FROM produtos WHERE ativo=1 AND ean=? LIMIT 1",
-            (cod,)
-        ).fetchone()
-        if row:
-            conn.close()
-            return {**dict(row), "via": "EAN"}
-
-    # 2. vhsys_id exato (fornecedor usa o ID VHSys como código)
-    if cod.isdigit():
-        row = conn.execute(
-            "SELECT vhsys_id, nome, ean, preco FROM produtos WHERE ativo=1 AND vhsys_id=? LIMIT 1",
-            (int(cod),)
-        ).fetchone()
-        if row:
-            conn.close()
-            return {**dict(row), "via": "SKU"}
-
-    # 3. Nome exato
-    row = conn.execute(
-        "SELECT vhsys_id, nome, ean, preco FROM produtos WHERE ativo=1 AND lower(nome)=? LIMIT 1",
-        (desc,)
-    ).fetchone()
-    if row:
-        conn.close()
-        return {**dict(row), "via": "nome"}
-
-    # 4. Nome similar (fuzzy) — pré-filtra por primeira palavra antes de calcular score
-    primeiro_termo = desc.split()[0] if desc.split() else desc
-    candidates = conn.execute(
-        "SELECT vhsys_id, nome, ean, preco FROM produtos WHERE ativo=1 AND lower(nome) LIKE ?",
-        (f"%{primeiro_termo}%",)
-    ).fetchall()
-    conn.close()
-
-    if candidates:
-        scored = [
-            (difflib.SequenceMatcher(None, desc, r["nome"].lower()).ratio(), r)
-            for r in candidates
-        ]
-        scored.sort(key=lambda x: -x[0])
-        # Candidatos com ≥60% de similaridade
-        bons = [(s, r) for s, r in scored if s >= 0.60]
-        if bons:
-            best_score, best_row = bons[0]
-            alternativas = [
-                {**dict(r), "similaridade": round(s, 2)}
-                for s, r in bons[1:3]
-            ]
-            if best_score >= 0.70:
-                return {
-                    **dict(best_row),
-                    "via": "nome_similar",
-                    "similaridade": round(best_score, 2),
-                    "alternativas": alternativas,
-                }
-
-    return None
-
 
 @router.get("/api/produtos/buscar")
 async def api_buscar_produto(q: str = ""):
     if len(q.strip()) < 2:
         return {"produtos": []}
-    return {"produtos": _buscar_produtos_vhsys(q.strip())}
+    return {"produtos": buscar_produtos_erp(q.strip())}
 
-
-_categorias_cache: list[dict] = []
 
 @router.get("/api/categorias")
 async def api_categorias():
-    global _categorias_cache
-    if not _categorias_cache:
-        from consulta_vhsys.services.vhsys_adapter import listar_categorias
-        _categorias_cache = listar_categorias()
-    return {"categorias": _categorias_cache}
-
-
-@router.post("/api/categorias/nova")
-async def api_criar_categoria(request: Request):
-    global _categorias_cache
-    body = await request.json()
-    nome = (body.get("nome_categoria") or "").strip()
-    if not nome:
-        raise HTTPException(status_code=400, detail="nome_categoria obrigatório")
-    data = _vhsys_req("POST", "categorias", body={"nome_categoria": nome, "status_categoria": "Ativo"})
-    if data is None or data.get("code") not in (200, 201):
-        raise HTTPException(status_code=502, detail=f"Falha ao criar categoria: {data}")
-    cat = data["data"]
-    _categorias_cache.append(cat)
-    return {"id_categoria": cat["id_categoria"], "nome_categoria": cat["nome_categoria"]}
+    # ERP não tem categorias — retorna lista vazia para compatibilidade
+    return {"categorias": []}
 
 
 @router.post("/api/produtos/novo")
 async def api_criar_produto(request: Request):
-    from consulta_vhsys.services.vhsys_adapter import criar_produto
-    from consulta_vhsys.database.database import upsert_produto
     body = await request.json()
-    if not body.get("desc_produto"):
+    nome = (body.get("desc_produto") or body.get("nome", "")).strip()
+    if not nome:
         raise HTTPException(status_code=400, detail="desc_produto obrigatório")
 
-    criado = criar_produto(body)
+    payload = {
+        "nome":       nome,
+        "codigo":     body.get("cod_produto") or body.get("codigo") or nome[:20].replace(" ", "_").upper(),
+        "unidade":    body.get("unidade_produto", "UN"),
+        "preco_venda": float(body.get("valor_produto") or 0),
+        "preco_custo": float(body.get("valor_custo_produto") or 0),
+        "ean":        body.get("codigo_barra_produto") or None,
+        "situacao":   "Ativo",
+    }
+    criado = criar_produto_erp(payload)
     if not criado:
-        raise HTTPException(status_code=502, detail="Falha ao criar produto no VHSys")
+        raise HTTPException(status_code=502, detail="Falha ao criar produto no ERP")
 
-    # Salva no consulta_vhsys.db local
-    upsert_produto({
-        "vhsys_id":        criado["id_produto"],
-        "nome":            criado.get("desc_produto", body["desc_produto"]),
-        "ean":             body.get("codigo_barra_produto") or None,
-        "preco":           float(body.get("valor_produto") or 0),
-        "preco_vhsys":     float(body.get("valor_produto") or 0),
+    return {
+        "id_produto":   criado.get("id"),
+        "desc_produto": criado.get("nome", nome),
+        "cod_produto":  criado.get("codigo"),
+        "valor_produto": float(criado.get("preco_venda") or 0),
         "estoque":         0,
         "estoque_vhsys":   0,
         "ativo":           1,
@@ -428,11 +315,6 @@ async def api_criar_mapeamento(request: Request):
         fator_conversao = float(body.get("fator_conversao", 1.0)),
         unidade_estoque = body.get("unidade_estoque", ""),
     )
-
-    # Atualiza categoria no VHSys se informada
-    id_categoria = body.get("id_categoria")
-    if id_categoria:
-        _vhsys_req("PUT", f"produtos/{vhsys_id}", body={"id_categoria": int(id_categoria)})
 
     # Se houver notas aguardando mapeamento, re-enfileira automaticamente
     _reenfileirar_aguardando(str(body["fornecedor_cnpj"]).strip())

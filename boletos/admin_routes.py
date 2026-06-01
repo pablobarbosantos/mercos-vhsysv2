@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from boletos import database as db
-from boletos import boleto_service, vhsys_adapter, webhook_handler
+from boletos import boleto_service, erp_adapter, webhook_handler
 from boletos.pdf_generator import gerar_pdf_boleto
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ async def post_config(request: Request):
 def get_clientes(q: str = ""):
     """Busca clientes VHSys por nome (autocomplete para boleto avulso)."""
     try:
-        return vhsys_adapter.buscar_clientes(q)
+        return erp_adapter.buscar_clientes(q)
     except Exception as e:
         logger.error("[Boletos/clientes] %s", e)
         raise HTTPException(status_code=502, detail=str(e))
@@ -83,7 +83,7 @@ def get_clientes(q: str = ""):
 def get_pedidos(limit: int = 100):
     """Lista últimos pedidos do VHSys para emissão de boleto."""
     try:
-        pedidos = vhsys_adapter.buscar_pedidos_recentes(limit=limit)
+        pedidos = erp_adapter.buscar_pedidos_recentes(limit=limit)
     except Exception as e:
         logger.error("[Boletos/pedidos] %s", e)
         raise HTTPException(status_code=502, detail=str(e))

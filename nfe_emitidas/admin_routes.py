@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from nfe_emitidas import database as db
 from nfe_emitidas.sefaz_client import consultar_protocolo, _parsear_chave
-from nfe_emitidas.vhsys_adapter import (
+from nfe_emitidas.erp_adapter import (
     buscar_nfe_por_chave,
     buscar_cliente_por_id,
 )
