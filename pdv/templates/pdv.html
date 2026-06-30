@@ -517,20 +517,13 @@
     <h2>⚖ Produto por Peso</h2>
     <div id="bal-cod"></div>
     <div id="bal-nome"></div>
-    <div style="display:flex;gap:12px;margin-bottom:4px">
-      <div style="flex:1">
-        <div class="campo-label" style="text-align:left;margin-bottom:6px">Preço / kg (R$)</div>
-        <input id="inp-bal-preco" type="number" min="0" step="0.01"
-               placeholder="0.00" oninput="calcBalanca()"
-               style="font-size:22px;text-align:center;height:52px" />
-      </div>
-      <div style="flex:1">
-        <div class="campo-label" style="text-align:left;margin-bottom:6px">Peso (kg)</div>
-        <input id="inp-bal-peso" type="number" min="0.001" step="0.001"
-               placeholder="0.000" oninput="calcBalanca()"
-               style="font-size:42px;font-weight:800;text-align:center;height:52px;letter-spacing:1px" />
-      </div>
+    <div id="bal-preco-info" style="font-size:13px;color:var(--muted);margin-bottom:18px"></div>
+    <div>
+      <div class="campo-label" style="text-align:left;margin-bottom:6px">Valor (R$)</div>
+      <input id="inp-bal-valor" type="number" min="0.01" step="0.01"
+             placeholder="0,00" oninput="calcBalanca()" />
     </div>
+    <div id="bal-kg-calculado" style="font-size:13px;color:var(--muted);margin:10px 0 4px;min-height:18px"></div>
     <div id="bal-total-display">R$ 0,00</div>
     <div class="modal-btns" style="justify-content:center">
       <button class="btn-modal btn-cancel-modal" onclick="fecharModal('overlay-balanca')">Cancelar (Esc)</button>
@@ -895,31 +888,35 @@ function totalCarrinho() {
 function abrirBalanca(p) {
   produtoBalanca = p;
   const preco = precoAtual(p);
-  document.getElementById('bal-cod').textContent  = p.codigo_balanca ? `[${p.codigo_balanca.toUpperCase()}]` : '';
-  document.getElementById('bal-nome').textContent = p.nome;
-  document.getElementById('inp-bal-preco').value  = preco.toFixed(2);
-  document.getElementById('inp-bal-peso').value   = '';
+  document.getElementById('bal-cod').textContent       = p.codigo_balanca ? `[${p.codigo_balanca.toUpperCase()}]` : '';
+  document.getElementById('bal-nome').textContent      = p.nome;
+  document.getElementById('bal-preco-info').textContent = `R$ ${fmt(preco)} / kg`;
+  document.getElementById('inp-bal-valor').value       = '';
+  document.getElementById('bal-kg-calculado').textContent = '';
   document.getElementById('bal-total-display').textContent = 'R$ 0,00';
   document.getElementById('overlay-balanca').classList.add('aberto');
-  setTimeout(() => document.getElementById('inp-bal-peso').focus(), 60);
+  setTimeout(() => document.getElementById('inp-bal-valor').focus(), 60);
 }
 
 function calcBalanca() {
-  const peso  = parseFloat(document.getElementById('inp-bal-peso').value)  || 0;
-  const preco = parseFloat(document.getElementById('inp-bal-preco').value) || 0;
-  document.getElementById('bal-total-display').textContent = `R$ ${fmt(peso * preco)}`;
+  const valor = parseFloat(document.getElementById('inp-bal-valor').value) || 0;
+  const preco = precoAtual(produtoBalanca);
+  const kg    = preco > 0 ? valor / preco : 0;
+  document.getElementById('bal-kg-calculado').textContent =
+    kg > 0 ? `≈ ${kg.toFixed(3).replace('.', ',')} kg` : '';
+  document.getElementById('bal-total-display').textContent = `R$ ${fmt(valor)}`;
 }
 
 function confirmarBalanca() {
-  const peso  = parseFloat(document.getElementById('inp-bal-peso').value)  || 0;
-  const preco = parseFloat(document.getElementById('inp-bal-preco').value) || 0;
-  if (peso  <= 0) { toast('Informe o peso em kg', 'erro'); return; }
-  if (preco <= 0) { toast('Informe o preço por kg', 'erro'); return; }
-  const pesofmt = peso.toFixed(3).replace('.', ',');
+  const valor = parseFloat(document.getElementById('inp-bal-valor').value) || 0;
+  if (valor <= 0) { toast('Informe o valor em R$', 'erro'); return; }
+  const preco   = precoAtual(produtoBalanca);
+  const kg      = preco > 0 ? valor / preco : 1;
+  const kgfmt   = kg.toFixed(3).replace('.', ',');
   carrinho.push({
     produto_id:     produtoBalanca.id,
-    nome:           `${produtoBalanca.nome} [${pesofmt} kg]`,
-    quantidade:     peso,
+    nome:           `${produtoBalanca.nome} [${kgfmt} kg]`,
+    quantidade:     kg,
     preco_unitario: preco,
   });
   fecharModal('overlay-balanca');
@@ -927,14 +924,11 @@ function confirmarBalanca() {
   buscaEl.value = '';
   produtoAtivo  = null;
   buscaEl.focus();
-  toast(`${produtoBalanca.nome} — ${pesofmt} kg adicionado`, 'ok');
+  toast(`${produtoBalanca.nome} — R$ ${fmt(valor)} adicionado`, 'ok');
 }
 
-// Enter confirma em qualquer campo do modal balança
-['inp-bal-peso', 'inp-bal-preco'].forEach(id => {
-  document.getElementById(id).addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); confirmarBalanca(); }
-  });
+document.getElementById('inp-bal-valor').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmarBalanca(); }
 });
 
 // ════════════════════════════════════════════════════════════════
