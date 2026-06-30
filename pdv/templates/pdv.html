@@ -264,6 +264,17 @@
   #toast.ok   { border-color: var(--ok);   color: #4ade80; }
   #toast.erro { border-color: var(--erro); color: #f87171; }
 
+  /* modal balança */
+  #modal-balanca { width: min(96vw, 420px); text-align: center; }
+  #bal-nome  { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  #bal-cod   { font-size: 12px; color: var(--muted); letter-spacing: 1px; margin-bottom: 4px; }
+  #bal-preco-kg { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+  #inp-bal-peso {
+    font-size: 42px; font-weight: 800; text-align: center;
+    height: 80px; letter-spacing: 2px;
+  }
+  #bal-total-display { font-size: 32px; font-weight: 800; color: #34d399; margin: 16px 0 20px; }
+
   /* scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -417,6 +428,23 @@
 <div id="overlay-pag" class="overlay">
   <div class="modal">
     <h2>Finalizar Venda</h2>
+
+    <div style="display:flex;gap:16px;align-items:flex-end;margin-bottom:16px">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase">Subtotal</div>
+        <div id="mod-subtotal" style="font-size:22px;font-weight:700;color:var(--muted)">R$ 0,00</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase">Desconto</div>
+        <div style="display:flex;gap:4px">
+          <input id="inp-desconto" type="number" value="0" min="0" step="0.01"
+                 oninput="calcDesconto()" style="font-size:16px;flex:1" />
+          <button id="btn-tipo-desc" onclick="toggleTipoDesconto()"
+                  style="padding:8px 12px;background:var(--border);border:none;color:var(--text);border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;min-width:44px">R$</button>
+        </div>
+      </div>
+    </div>
+
     <div id="mod-total-display">R$ 0,00</div>
 
     <div id="pag-linhas"></div>
@@ -436,16 +464,17 @@
 <div id="overlay-precos" class="overlay">
   <div class="modal large">
     <h2>Gerenciar Preços por Forma de Pagamento</h2>
-    <input id="filtro-preco" type="text" placeholder="Filtrar produto…" oninput="filtrarTabelaPrecos(this.value)" />
+    <input id="filtro-preco" type="text" placeholder="Filtrar produto… (ex: lester, b01)" oninput="filtrarTabelaPrecos(this.value)" />
     <table id="tbl-precos">
       <thead>
         <tr>
           <th>Produto</th>
-          <th>Base (VHSys)</th>
+          <th>Base (ERP)</th>
           <th>Dinheiro</th>
           <th>Pix</th>
           <th>Crédito</th>
           <th>Débito</th>
+          <th title="Código para venda por peso (ex: b01)">⚖ Balança</th>
         </tr>
       </thead>
       <tbody id="tbody-precos"></tbody>
@@ -464,7 +493,7 @@
     <table id="tbl-hist">
       <thead>
         <tr>
-          <th>#</th><th>Data</th><th>Total</th><th>Pagamentos</th><th>VHSys</th>
+          <th>#</th><th>Data</th><th>Total</th><th>Pagamentos</th><th>Sync ERP</th>
         </tr>
       </thead>
       <tbody id="tbody-hist"></tbody>
@@ -487,6 +516,26 @@
   </div>
 </div>
 
+<!-- ── MODAL BALANÇA ─────────────────────────────────────────────── -->
+<div id="overlay-balanca" class="overlay">
+  <div class="modal" id="modal-balanca">
+    <h2>⚖ Produto por Peso</h2>
+    <div id="bal-cod"></div>
+    <div id="bal-nome"></div>
+    <div id="bal-preco-kg"></div>
+    <div>
+      <div class="campo-label" style="text-align:left;margin-bottom:6px">Peso (kg)</div>
+      <input id="inp-bal-peso" type="number" min="0.001" step="0.001"
+             placeholder="0.000" oninput="calcBalanca()" />
+    </div>
+    <div id="bal-total-display">R$ 0,00</div>
+    <div class="modal-btns" style="justify-content:center">
+      <button class="btn-modal btn-cancel-modal" onclick="fecharModal('overlay-balanca')">Cancelar (Esc)</button>
+      <button class="btn-modal btn-confirm-modal" onclick="confirmarBalanca()">✔ Adicionar (Enter)</button>
+    </div>
+  </div>
+</div>
+
 <!-- área usada apenas no window.print() -->
 <div id="print-area"></div>
 
@@ -504,6 +553,9 @@ let debounceTimer  = null;
 let produtosCache  = [];      // lista completa carregada na memória
 let precosPendentes = {};     // {produto_id: {dinheiro, pix, credito, debito}}
 let fuse           = null;    // instância Fuse.js (busca fuzzy)
+let valorDesconto  = 0;
+let tipoDesconto   = 'R$';
+let produtoBalanca = null;  // produto em edição no modal de balança
 
 const FORMA_CAMPO = {dinheiro:'preco_dinheiro', pix:'preco_pix', credito:'preco_credito', debito:'preco_debito'};
 
@@ -615,6 +667,10 @@ function buscarLocal(termoRaw) {
   const termo = termoRaw.replace(/[\t\r\n]/g, '').trim();
   if (!termo) return [];
 
+  // 0. Código de balança exato (b01, b02…) — prioridade máxima
+  const bal = produtosCache.filter(p => p.codigo_balanca && p.codigo_balanca === termo.toLowerCase());
+  if (bal.length > 0) return bal;
+
   // 1. Código de barras exato — scanners nunca usam fuzzy
   const bc = produtosCache.filter(p => p.codigo_barras && p.codigo_barras === termo);
   if (bc.length > 0) return bc;
@@ -623,16 +679,40 @@ function buscarLocal(termoRaw) {
   const cod = produtosCache.filter(p => p.codigo && p.codigo === termo);
   if (cod.length > 0) return cod;
 
-  // 3. Busca fuzzy por nome (Fuse.js) ou fallback substring
-  if (fuse && termo.length >= 2) return fuse.search(termo).map(r => r.item);
-  const t = termo.toLowerCase();
-  return produtosCache.filter(p => p.nome.toLowerCase().includes(t));
+  // 3. Multi-keyword: cada token deve ser prefixo de alguma palavra do nome
+  //    "magnus t d" → nome tem palavra começando com "magnus" E com "t" E com "d"
+  const tokens = termo.toLowerCase().split(/\s+/).filter(Boolean);
+  const multiKw = produtosCache.filter(p => {
+    const palavras = p.nome.toLowerCase().split(/\s+/);
+    return tokens.every(tok => palavras.some(pal => pal.startsWith(tok)));
+  });
+  if (multiKw.length > 0) return multiKw.sort((a, b) => (b.freq || 0) - (a.freq || 0));
+
+  // 4. Substring no nome inteiro — cobre buscas no meio de palavras ("ilho" → "MILHO")
+  if (tokens.length === 1) {
+    const sub = produtosCache.filter(p => p.nome.toLowerCase().includes(tokens[0]));
+    if (sub.length > 0) return sub.sort((a, b) => (b.freq || 0) - (a.freq || 0));
+  }
+
+  // 5. Fuzzy (Fuse.js) — último recurso para typos ("milgo" → "milho")
+  if (fuse && termo.length >= 2) {
+    return fuse.search(termo)
+      .map(r => r.item)
+      .sort((a, b) => (b.freq || 0) - (a.freq || 0));
+  }
+  return [];
 }
 
 function selecionarProduto(p) {
   if (!p) return;
   produtoAtivo = p;
-  buscaEl.value  = p.nome;
+  buscaEl.value = p.nome;
+  if (p.codigo_balanca) {
+    // produto por peso — modal especializado
+    fecharDropdown();
+    abrirBalanca(p);
+    return;
+  }
   const preco = precoAtual(p);
   inpUnit.value  = preco.toFixed(2);
   atualizarTotal();
@@ -707,6 +787,12 @@ document.getElementById('btn-incluir').addEventListener('click', incluirNoCarrin
 
 function incluirNoCarrinho() {
   if (!produtoAtivo) { toast('Selecione um produto antes de incluir', 'erro'); return; }
+  if (produtoAtivo.codigo_balanca) {
+    if (!document.getElementById('overlay-balanca').classList.contains('aberto')) {
+      abrirBalanca(produtoAtivo);
+    }
+    return;
+  }
   const qty   = parseFloat(inpQty.value) || 1;
   const unit  = parseFloat(inpUnit.value) || 0;
   const obs      = document.getElementById('obs').value.trim();
@@ -801,17 +887,102 @@ function totalCarrinho() {
 }
 
 // ════════════════════════════════════════════════════════════════
+// MODAL BALANÇA (produtos por peso)
+// ════════════════════════════════════════════════════════════════
+function abrirBalanca(p) {
+  produtoBalanca = p;
+  const preco = precoAtual(p);
+  document.getElementById('bal-cod').textContent  = p.codigo_balanca ? `[${p.codigo_balanca.toUpperCase()}]` : '';
+  document.getElementById('bal-nome').textContent = p.nome;
+  document.getElementById('bal-preco-kg').textContent = `R$ ${fmt(preco)} / kg`;
+  document.getElementById('inp-bal-peso').value   = '';
+  document.getElementById('bal-total-display').textContent = 'R$ 0,00';
+  document.getElementById('overlay-balanca').classList.add('aberto');
+  setTimeout(() => document.getElementById('inp-bal-peso').focus(), 60);
+}
+
+function calcBalanca() {
+  if (!produtoBalanca) return;
+  const peso  = parseFloat(document.getElementById('inp-bal-peso').value) || 0;
+  const preco = precoAtual(produtoBalanca);
+  document.getElementById('bal-total-display').textContent = `R$ ${fmt(peso * preco)}`;
+}
+
+function confirmarBalanca() {
+  const peso = parseFloat(document.getElementById('inp-bal-peso').value) || 0;
+  if (peso <= 0) { toast('Informe o peso em kg', 'erro'); return; }
+  const preco  = precoAtual(produtoBalanca);
+  const pesofmt = peso.toFixed(3).replace('.', ',');
+  carrinho.push({
+    produto_id:     produtoBalanca.id,
+    nome:           `${produtoBalanca.nome} [${pesofmt} kg]`,
+    quantidade:     peso,
+    preco_unitario: preco,
+  });
+  fecharModal('overlay-balanca');
+  renderCarrinho();
+  buscaEl.value = '';
+  produtoAtivo  = null;
+  buscaEl.focus();
+  toast(`${produtoBalanca.nome} — ${pesofmt} kg adicionado`, 'ok');
+}
+
+// Enter no campo de peso confirma, Tab move o foco
+document.getElementById('inp-bal-peso').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmarBalanca(); }
+});
+
+// ════════════════════════════════════════════════════════════════
 // MODAL PAGAMENTO
 // ════════════════════════════════════════════════════════════════
 let linhasPag = [];
 
+function totalFinal() {
+  return Math.max(totalCarrinho() - valorDesconto, 0);
+}
+
 function abrirPagamento() {
   if (carrinho.length === 0) { toast('Carrinho vazio', 'erro'); return; }
-  const total = totalCarrinho();
-  document.getElementById('mod-total-display').textContent = `R$ ${fmt(total)}`;
-  linhasPag = [{ tipo: formaSelecionada, valor: total }];
+  // Reset desconto
+  valorDesconto = 0;
+  tipoDesconto  = 'R$';
+  document.getElementById('inp-desconto').value = '0';
+  document.getElementById('btn-tipo-desc').textContent = 'R$';
+
+  const subtotal = totalCarrinho();
+  document.getElementById('mod-subtotal').textContent = `R$ ${fmt(subtotal)}`;
+  document.getElementById('mod-total-display').textContent = `R$ ${fmt(subtotal)}`;
+  linhasPag = [{ tipo: formaSelecionada, valor: subtotal }];
   renderLinhasPag();
   document.getElementById('overlay-pag').classList.add('aberto');
+}
+
+function toggleTipoDesconto() {
+  tipoDesconto = tipoDesconto === 'R$' ? '%' : 'R$';
+  document.getElementById('btn-tipo-desc').textContent = tipoDesconto;
+  document.getElementById('inp-desconto').value = '0';
+  valorDesconto = 0;
+  calcDesconto();
+}
+
+function calcDesconto() {
+  const subtotal = totalCarrinho();
+  const inp = parseFloat(document.getElementById('inp-desconto').value) || 0;
+  if (tipoDesconto === '%') {
+    valorDesconto = Math.min(Math.round(subtotal * inp / 100 * 100) / 100, subtotal);
+  } else {
+    valorDesconto = Math.min(inp, subtotal);
+  }
+  const total = totalFinal();
+  document.getElementById('mod-subtotal').textContent = `R$ ${fmt(subtotal)}`;
+  document.getElementById('mod-total-display').textContent = `R$ ${fmt(total)}`;
+  // Atualiza primeira linha de pagamento se for a única
+  if (linhasPag.length === 1) {
+    linhasPag[0].valor = total;
+    renderLinhasPag();
+  } else {
+    calcTroco();
+  }
 }
 
 function renderLinhasPag() {
@@ -842,7 +1013,7 @@ function removerLinhaPag(i) {
 }
 
 function calcTroco() {
-  const total = totalCarrinho();
+  const total = totalFinal();
   const pago  = linhasPag.reduce((s, l) => s + (l.valor || 0), 0);
   const btn   = document.getElementById('btn-finalizar');
   const troco = pago - total;
@@ -873,7 +1044,7 @@ async function finalizarVenda() {
     const r = await fetch('/pdv/api/vendas', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ itens: carrinho, pagamentos: linhasPag, desconto: 0 })
+      body: JSON.stringify({ itens: carrinho, pagamentos: linhasPag, desconto: valorDesconto })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Erro');
@@ -882,9 +1053,9 @@ async function finalizarVenda() {
     carrinho = [];
     renderCarrinho();
     document.getElementById('sync-status').innerHTML =
-      `<span class="badge pendente">Sync VHSys…</span>`;
+      `<span class="badge pendente">Sync ERP…</span>`;
 
-    mostrarRecibo({ id: d.id, total: d.total, itens: itensCopy, pagamentos: pagsCopy });
+    mostrarRecibo({ id: d.id, total: d.total, desconto: valorDesconto, itens: itensCopy, pagamentos: pagsCopy });
   } catch(e) {
     toast('Erro ao finalizar: ' + e.message, 'erro');
     btn.disabled = false;
@@ -918,6 +1089,10 @@ function mostrarRecibo(venda) {
       return `${qty} ${nome} R$${fmt(tot).padStart(8)}`;
     }),
     SEP,
+    ...(venda.desconto > 0 ? [
+      `Subtotal:           R$${fmt(venda.total + venda.desconto).padStart(8)}`,
+      `Desconto:          -R$${fmt(venda.desconto).padStart(8)}`,
+    ] : []),
     `TOTAL:              R$${fmt(venda.total).padStart(8)}`,
     SEP,
     ...venda.pagamentos.map(p => {
@@ -955,17 +1130,21 @@ function abrirPrecos() {
   const tbody = document.getElementById('tbody-precos');
   tbody.innerHTML = produtosCache.map(p => {
     const pend = precosPendentes[p.id] || {};
-    const d = pend.dinheiro ?? p.preco_dinheiro ?? p.preco_base;
-    const pi= pend.pix      ?? p.preco_pix      ?? p.preco_base;
-    const cr= pend.credito  ?? p.preco_credito  ?? p.preco_base;
-    const db= pend.debito   ?? p.preco_debito   ?? p.preco_base;
-    return `<tr data-nome="${p.nome.toLowerCase()}" data-id="${p.id}">
-      <td>${p.nome}</td>
+    const d  = pend.dinheiro ?? p.preco_dinheiro ?? p.preco_base;
+    const pi = pend.pix      ?? p.preco_pix      ?? p.preco_base;
+    const cr = pend.credito  ?? p.preco_credito  ?? p.preco_base;
+    const db = pend.debito   ?? p.preco_debito   ?? p.preco_base;
+    const bal = p.codigo_balanca || '';
+    const rowStyle = bal ? 'background:#1a2e1a;' : '';
+    return `<tr data-nome="${p.nome.toLowerCase()} ${bal}" data-id="${p.id}" style="${rowStyle}">
+      <td>${bal ? `<span style="color:#4ade80;font-size:11px;font-weight:700;margin-right:6px">[${bal.toUpperCase()}]</span>` : ''}${p.nome}</td>
       <td style="color:var(--muted)">R$ ${fmt(p.preco_base)}</td>
       <td><input type="number" step="0.01" value="${d.toFixed(2)}" data-campo="dinheiro" /></td>
       <td><input type="number" step="0.01" value="${pi.toFixed(2)}" data-campo="pix" /></td>
       <td><input type="number" step="0.01" value="${cr.toFixed(2)}" data-campo="credito" /></td>
       <td><input type="number" step="0.01" value="${db.toFixed(2)}" data-campo="debito" /></td>
+      <td><input type="text" value="${bal}" data-campo="codigo_balanca" placeholder="b01…"
+           style="width:68px;font-size:12px;text-align:center;font-weight:700;color:#4ade80" /></td>
     </tr>`;
   }).join('');
   document.getElementById('filtro-preco').value = '';
@@ -973,8 +1152,9 @@ function abrirPrecos() {
 }
 
 function filtrarTabelaPrecos(q) {
+  const t = q.toLowerCase();
   document.querySelectorAll('#tbody-precos tr').forEach(tr => {
-    tr.style.display = tr.dataset.nome.includes(q.toLowerCase()) ? '' : 'none';
+    tr.style.display = tr.dataset.nome.includes(t) ? '' : 'none';
   });
 }
 
@@ -985,7 +1165,10 @@ async function salvarTodosPrecos() {
     const id = parseInt(tr.dataset.id);
     const vals = {};
     tr.querySelectorAll('input[data-campo]').forEach(inp => {
-      vals[inp.dataset.campo] = parseFloat(inp.value) || 0;
+      const campo = inp.dataset.campo;
+      vals[campo] = campo === 'codigo_balanca'
+        ? (inp.value.trim().toLowerCase() || null)
+        : (parseFloat(inp.value) || 0);
     });
     precosPendentes[id] = vals;
     promises.push(
@@ -998,7 +1181,8 @@ async function salvarTodosPrecos() {
     const p = produtosCache.find(x => x.id === id);
     if (p) Object.assign(p, {
       preco_dinheiro: vals.dinheiro, preco_pix: vals.pix,
-      preco_credito: vals.credito, preco_debito: vals.debito
+      preco_credito: vals.credito, preco_debito: vals.debito,
+      codigo_balanca: vals.codigo_balanca || null,
     });
   });
   await Promise.all(promises);
@@ -1019,7 +1203,7 @@ async function abrirHistorico() {
       <td>${v.data}</td>
       <td style="color:#34d399;font-weight:600">R$ ${fmt(v.total)}</td>
       <td style="font-size:12px;color:var(--muted)">${formataPagamentos(v.pagamentos)}</td>
-      <td><span class="badge ${v.vhsys_sync}">${v.vhsys_sync}</span></td>
+      <td><span class="badge ${v.erp_sync}">${v.erp_sync}</span></td>
     </tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Nenhuma venda</td></tr>';
   document.getElementById('overlay-hist').classList.add('aberto');
 }
@@ -1036,7 +1220,7 @@ function formataPagamentos(str) {
 // SYNC PRODUTOS
 // ════════════════════════════════════════════════════════════════
 async function sincronizarProdutos() {
-  toast('Sincronizando produtos do VHSys…');
+  toast('Sincronizando produtos do ERP…');
   try {
     const r = await fetch('/pdv/api/produtos/sync', {method:'POST'});
     const d = await r.json();

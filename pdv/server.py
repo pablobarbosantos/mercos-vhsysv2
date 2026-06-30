@@ -94,7 +94,7 @@ async def api_debug_produto(q: str = ""):
 
 @app.post("/pdv/api/produtos/{produto_id}/reativar")
 async def api_reativar_produto(produto_id: int):
-    """Força ativo=1 localmente. Útil quando o produto está inativo no VHSys mas precisa ser vendido."""
+    """Força ativo=1 localmente. Útil quando o produto está inativo no ERP mas precisa ser vendido."""
     p = get_produto(produto_id) or buscar_produtos_debug(str(produto_id))
     reativar_produto(produto_id)
     return {"ok": True, "mensagem": f"Produto {produto_id} reativado localmente."}
@@ -115,21 +115,23 @@ async def api_get_precos(produto_id: int):
     if not p:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     return {
-        "id":       p["id"],
-        "nome":     p["nome"],
-        "base":     p["preco_base"],
-        "dinheiro": p["preco_dinheiro"],
-        "pix":      p["preco_pix"],
-        "credito":  p["preco_credito"],
-        "debito":   p["preco_debito"],
+        "id":             p["id"],
+        "nome":           p["nome"],
+        "base":           p["preco_base"],
+        "dinheiro":       p["preco_dinheiro"],
+        "pix":            p["preco_pix"],
+        "credito":        p["preco_credito"],
+        "debito":         p["preco_debito"],
+        "codigo_balanca": p.get("codigo_balanca") or "",
     }
 
 
 class PrecosPayload(BaseModel):
-    dinheiro: float
-    pix:      float
-    credito:  float
-    debito:   float
+    dinheiro:       float
+    pix:            float
+    credito:        float
+    debito:         float
+    codigo_balanca: str | None = None
 
 
 @app.post("/pdv/api/produtos/{produto_id}/precos")
@@ -178,7 +180,7 @@ async def api_criar_venda(payload: VendaPayload):
         pagamentos=[p.model_dump() for p in payload.pagamentos],
     )
 
-    # Sync VHSys em background (não bloqueia o caixa)
+    # Sync ERP em background (não bloqueia o caixa)
     def _sync():
         try:
             from pdv.erp_adapter import sincronizar_venda

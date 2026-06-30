@@ -85,6 +85,7 @@ def init_pdv_tables():
         # Migrações incrementais — idempotentes
         _migrar(conn, "ALTER TABLE pdv_produtos ADD COLUMN total_vendido_erp REAL DEFAULT 0")
         _migrar(conn, "ALTER TABLE pdv_produtos ADD COLUMN freq_historico REAL DEFAULT 0")
+        _migrar(conn, "ALTER TABLE pdv_produtos ADD COLUMN codigo_balanca TEXT")
         _migrar(conn, "ALTER TABLE pdv_vendas ADD COLUMN sync_erro TEXT")
         _migrar(conn, "ALTER TABLE pdv_vendas ADD COLUMN erp_sync TEXT DEFAULT 'pendente'")
         _migrar(conn, "ALTER TABLE pdv_produtos RENAME COLUMN vhsys_id TO erp_id")
@@ -226,6 +227,7 @@ def upsert_produto(p: dict):
 
 
 def salvar_precos(produto_id: int, precos: dict):
+    cod_bal = (precos.get("codigo_balanca") or "").strip().lower() or None
     with get_conn() as conn:
         conn.execute(
             """
@@ -233,7 +235,8 @@ def salvar_precos(produto_id: int, precos: dict):
             SET preco_dinheiro = ?,
                 preco_pix      = ?,
                 preco_credito  = ?,
-                preco_debito   = ?
+                preco_debito   = ?,
+                codigo_balanca = ?
             WHERE id = ?
             """,
             (
@@ -241,6 +244,7 @@ def salvar_precos(produto_id: int, precos: dict):
                 precos.get("pix"),
                 precos.get("credito"),
                 precos.get("debito"),
+                cod_bal,
                 produto_id,
             ),
         )
@@ -278,6 +282,7 @@ def listar_todos_produtos(limit: int = 9999) -> list[dict]:
             """
             SELECT p.id, p.erp_id, p.codigo, p.codigo_barras, p.nome, p.unidade,
                    p.preco_base, p.preco_dinheiro, p.preco_pix, p.preco_credito, p.preco_debito,
+                   p.codigo_balanca,
                    COALESCE(COUNT(i.id), 0)          AS freq_pdv,
                    COALESCE(p.freq_historico, 0)     AS freq_hist,
                    COALESCE(COUNT(i.id), 0) * 10000
