@@ -265,15 +265,10 @@
   #toast.erro { border-color: var(--erro); color: #f87171; }
 
   /* modal balança */
-  #modal-balanca { width: min(96vw, 420px); text-align: center; }
-  #bal-nome  { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  #modal-balanca { width: min(96vw, 480px); text-align: center; }
+  #bal-nome  { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
   #bal-cod   { font-size: 12px; color: var(--muted); letter-spacing: 1px; margin-bottom: 4px; }
-  #bal-preco-kg { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
-  #inp-bal-peso {
-    font-size: 42px; font-weight: 800; text-align: center;
-    height: 80px; letter-spacing: 2px;
-  }
-  #bal-total-display { font-size: 32px; font-weight: 800; color: #34d399; margin: 16px 0 20px; }
+  #bal-total-display { font-size: 36px; font-weight: 800; color: #34d399; margin: 16px 0 20px; }
 
   /* scrollbar */
   ::-webkit-scrollbar { width: 6px; }
@@ -522,11 +517,19 @@
     <h2>⚖ Produto por Peso</h2>
     <div id="bal-cod"></div>
     <div id="bal-nome"></div>
-    <div id="bal-preco-kg"></div>
-    <div>
-      <div class="campo-label" style="text-align:left;margin-bottom:6px">Peso (kg)</div>
-      <input id="inp-bal-peso" type="number" min="0.001" step="0.001"
-             placeholder="0.000" oninput="calcBalanca()" />
+    <div style="display:flex;gap:12px;margin-bottom:4px">
+      <div style="flex:1">
+        <div class="campo-label" style="text-align:left;margin-bottom:6px">Preço / kg (R$)</div>
+        <input id="inp-bal-preco" type="number" min="0" step="0.01"
+               placeholder="0.00" oninput="calcBalanca()"
+               style="font-size:22px;text-align:center;height:52px" />
+      </div>
+      <div style="flex:1">
+        <div class="campo-label" style="text-align:left;margin-bottom:6px">Peso (kg)</div>
+        <input id="inp-bal-peso" type="number" min="0.001" step="0.001"
+               placeholder="0.000" oninput="calcBalanca()"
+               style="font-size:42px;font-weight:800;text-align:center;height:52px;letter-spacing:1px" />
+      </div>
     </div>
     <div id="bal-total-display">R$ 0,00</div>
     <div class="modal-btns" style="justify-content:center">
@@ -894,7 +897,7 @@ function abrirBalanca(p) {
   const preco = precoAtual(p);
   document.getElementById('bal-cod').textContent  = p.codigo_balanca ? `[${p.codigo_balanca.toUpperCase()}]` : '';
   document.getElementById('bal-nome').textContent = p.nome;
-  document.getElementById('bal-preco-kg').textContent = `R$ ${fmt(preco)} / kg`;
+  document.getElementById('inp-bal-preco').value  = preco.toFixed(2);
   document.getElementById('inp-bal-peso').value   = '';
   document.getElementById('bal-total-display').textContent = 'R$ 0,00';
   document.getElementById('overlay-balanca').classList.add('aberto');
@@ -902,16 +905,16 @@ function abrirBalanca(p) {
 }
 
 function calcBalanca() {
-  if (!produtoBalanca) return;
-  const peso  = parseFloat(document.getElementById('inp-bal-peso').value) || 0;
-  const preco = precoAtual(produtoBalanca);
+  const peso  = parseFloat(document.getElementById('inp-bal-peso').value)  || 0;
+  const preco = parseFloat(document.getElementById('inp-bal-preco').value) || 0;
   document.getElementById('bal-total-display').textContent = `R$ ${fmt(peso * preco)}`;
 }
 
 function confirmarBalanca() {
-  const peso = parseFloat(document.getElementById('inp-bal-peso').value) || 0;
-  if (peso <= 0) { toast('Informe o peso em kg', 'erro'); return; }
-  const preco  = precoAtual(produtoBalanca);
+  const peso  = parseFloat(document.getElementById('inp-bal-peso').value)  || 0;
+  const preco = parseFloat(document.getElementById('inp-bal-preco').value) || 0;
+  if (peso  <= 0) { toast('Informe o peso em kg', 'erro'); return; }
+  if (preco <= 0) { toast('Informe o preço por kg', 'erro'); return; }
   const pesofmt = peso.toFixed(3).replace('.', ',');
   carrinho.push({
     produto_id:     produtoBalanca.id,
@@ -927,9 +930,11 @@ function confirmarBalanca() {
   toast(`${produtoBalanca.nome} — ${pesofmt} kg adicionado`, 'ok');
 }
 
-// Enter no campo de peso confirma, Tab move o foco
-document.getElementById('inp-bal-peso').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); confirmarBalanca(); }
+// Enter confirma em qualquer campo do modal balança
+['inp-bal-peso', 'inp-bal-preco'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmarBalanca(); }
+  });
 });
 
 // ════════════════════════════════════════════════════════════════
