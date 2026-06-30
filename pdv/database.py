@@ -8,7 +8,6 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# Resolve caminho do banco: frozen (.exe) vs script
 if getattr(sys, "frozen", False):
     _BASE = os.path.dirname(sys.executable)
 else:
@@ -32,7 +31,7 @@ def init_pdv_tables():
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS pdv_produtos (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                vhsys_id       INTEGER UNIQUE,
+                erp_id         INTEGER UNIQUE,
                 codigo         TEXT,
                 codigo_barras  TEXT,
                 nome           TEXT NOT NULL,
@@ -52,7 +51,7 @@ def init_pdv_tables():
                 total        REAL NOT NULL,
                 desconto     REAL DEFAULT 0,
                 status       TEXT DEFAULT 'concluida',
-                vhsys_sync   TEXT DEFAULT 'pendente',
+                erp_sync     TEXT DEFAULT 'pendente',
                 criado_em    TEXT NOT NULL
             );
 
@@ -82,23 +81,61 @@ def init_pdv_tables():
                 status TEXT DEFAULT 'pendente_cadastro'
             );
         """)
-        # Migração: adiciona coluna sync_erro se ainda não existir
-        try:
-            conn.execute("ALTER TABLE pdv_vendas ADD COLUMN sync_erro TEXT")
-        except Exception:
-            pass  # coluna já existe
+
+        # Migrações incrementais — idempotentes
+        _migrar(conn, "ALTER TABLE pdv_produtos ADD COLUMN total_vendido_erp REAL DEFAULT 0")
+        _migrar(conn, "ALTER TABLE pdv_produtos ADD COLUMN freq_historico REAL DEFAULT 0")
+        _migrar(conn, "ALTER TABLE pdv_vendas ADD COLUMN sync_erro TEXT")
+        _migrar(conn, "ALTER TABLE pdv_vendas ADD COLUMN erp_sync TEXT DEFAULT 'pendente'")
+        _migrar(conn, "ALTER TABLE pdv_produtos RENAME COLUMN vhsys_id TO erp_id")
+        _migrar(conn, "ALTER TABLE pdv_vendas RENAME COLUMN vhsys_sync TO erp_sync")
+
+        # Remove duplicatas por codigo (ERP remapeou IDs — mantém a linha mais antiga,
+        # que preserva preços manuais configurados pelo operador)
+        conn.execute("""
+            DELETE FROM pdv_produtos
+            WHERE codigo IS NOT NULL AND codigo != ''
+              AND id NOT IN (
+                SELECT MIN(id) FROM pdv_produtos
+                WHERE codigo IS NOT NULL AND codigo != ''
+                GROUP BY codigo
+              )
+        """)
+        # Para produtos sem código, deduplica por nome
+        conn.execute("""
+            DELETE FROM pdv_produtos
+            WHERE (codigo IS NULL OR codigo = '')
+              AND id NOT IN (
+                SELECT MIN(id) FROM pdv_produtos
+                WHERE codigo IS NULL OR codigo = ''
+                GROUP BY nome
+              )
+        """)
+        # Remove linhas sem código quando já existe outra linha com mesmo nome e código preenchido
+        conn.execute("""
+            DELETE FROM pdv_produtos
+            WHERE (codigo IS NULL OR codigo = '')
+              AND nome IN (
+                SELECT nome FROM pdv_produtos
+                WHERE codigo IS NOT NULL AND codigo != ''
+              )
+        """)
 
 
+def _migrar(conn, sql: str):
+    try:
+        conn.execute(sql)
+    except Exception:
+        pass  # coluna já existe ou renomeada
 
 
 # ── Produtos ─────────────────────────────────────────────────────────────────
 
 def buscar_produtos(q: str, limit: int = 20) -> list[dict]:
-    """Busca por nome (LIKE), codigo exato ou codigo_barras exato."""
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT id, vhsys_id, codigo, codigo_barras, nome, unidade,
+            SELECT id, erp_id, codigo, codigo_barras, nome, unidade,
                    preco_base, preco_dinheiro, preco_pix, preco_credito, preco_debito
             FROM pdv_produtos
             WHERE ativo = 1
@@ -124,41 +161,71 @@ def get_produto(produto_id: int) -> dict | None:
 
 
 def upsert_produto(p: dict):
-    """Insere ou atualiza produto (chave: vhsys_id)."""
+    """Insere ou atualiza produto.
+
+    Chave de lookup: `codigo` (estável mesmo quando o ERP remapeia IDs).
+    Fallback: `erp_id` para produtos sem código.
+    Preços manuais (dinheiro/pix/credito/debito) nunca são sobrescritos pelo sync.
+    """
     agora = datetime.now(timezone.utc).isoformat()
+    codigo = str(p.get("codigo") or "").strip()
+    ativo  = 1 if p.get("ativo", True) else 0
+
     with get_conn() as conn:
+        tv_erp = float(p.get("total_vendido_erp") or 0)
+
+        # Tenta achar pelo codigo interno (chave estável)
+        if codigo:
+            row = conn.execute(
+                "SELECT id FROM pdv_produtos WHERE codigo = ?", (codigo,)
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """UPDATE pdv_produtos SET
+                           erp_id = ?, codigo_barras = ?, nome = ?,
+                           unidade = ?, preco_base = ?, total_vendido_erp = ?,
+                           ativo = ?, atualizado_em = ?
+                       WHERE id = ?""",
+                    (
+                        p["erp_id"], p.get("codigo_barras"), p["nome"],
+                        p.get("unidade", "UN"), p["preco_base"], tv_erp,
+                        ativo, agora, row["id"],
+                    ),
+                )
+                return
+
+        # Fallback: INSERT com ON CONFLICT(erp_id)
         conn.execute(
             """
             INSERT INTO pdv_produtos
-                (vhsys_id, codigo, codigo_barras, nome, unidade,
+                (erp_id, codigo, codigo_barras, nome, unidade,
                  preco_base, preco_dinheiro, preco_pix, preco_credito, preco_debito,
-                 ativo, atualizado_em)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(vhsys_id) DO UPDATE SET
-                codigo        = excluded.codigo,
-                codigo_barras = excluded.codigo_barras,
-                nome          = excluded.nome,
-                unidade       = excluded.unidade,
-                preco_base    = excluded.preco_base,
-                ativo         = excluded.ativo,
-                atualizado_em = excluded.atualizado_em
+                 total_vendido_erp, ativo, atualizado_em)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(erp_id) DO UPDATE SET
+                codigo            = excluded.codigo,
+                codigo_barras     = excluded.codigo_barras,
+                nome              = excluded.nome,
+                unidade           = excluded.unidade,
+                preco_base        = excluded.preco_base,
+                total_vendido_erp = excluded.total_vendido_erp,
+                ativo             = excluded.ativo,
+                atualizado_em     = excluded.atualizado_em
             """,
             (
-                p["vhsys_id"], p.get("codigo"), p.get("codigo_barras"),
+                p["erp_id"], codigo, p.get("codigo_barras"),
                 p["nome"], p.get("unidade", "UN"),
                 p["preco_base"],
                 p.get("preco_dinheiro", p["preco_base"]),
                 p.get("preco_pix", p["preco_base"]),
                 p.get("preco_credito", p["preco_base"]),
                 p.get("preco_debito", p["preco_base"]),
-                1 if p.get("ativo", True) else 0,
-                agora,
+                tv_erp, ativo, agora,
             ),
         )
 
 
 def salvar_precos(produto_id: int, precos: dict):
-    """Atualiza os preços manuais por forma de pagamento."""
     with get_conn() as conn:
         conn.execute(
             """
@@ -185,11 +252,10 @@ def contar_produtos() -> int:
 
 
 def buscar_produtos_debug(q: str, limit: int = 50) -> list[dict]:
-    """Busca em TODOS os produtos (incluindo inativos) para diagnóstico."""
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT id, vhsys_id, codigo, codigo_barras, nome, unidade,
+            SELECT id, erp_id, codigo, codigo_barras, nome, unidade,
                    preco_base, preco_dinheiro, preco_pix, preco_credito, preco_debito, ativo, atualizado_em
             FROM pdv_produtos
             WHERE LOWER(nome) LIKE LOWER(?) OR codigo = ? OR codigo_barras = ?
@@ -202,7 +268,6 @@ def buscar_produtos_debug(q: str, limit: int = 50) -> list[dict]:
 
 
 def reativar_produto(produto_id: int):
-    """Força ativo=1 localmente (sem mexer no VHSys)."""
     with get_conn() as conn:
         conn.execute("UPDATE pdv_produtos SET ativo = 1 WHERE id = ?", (produto_id,))
 
@@ -210,9 +275,20 @@ def reativar_produto(produto_id: int):
 def listar_todos_produtos(limit: int = 9999) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT id, vhsys_id, codigo, codigo_barras, nome, unidade,
-                      preco_base, preco_dinheiro, preco_pix, preco_credito, preco_debito
-               FROM pdv_produtos WHERE ativo=1 ORDER BY nome LIMIT ?""",
+            """
+            SELECT p.id, p.erp_id, p.codigo, p.codigo_barras, p.nome, p.unidade,
+                   p.preco_base, p.preco_dinheiro, p.preco_pix, p.preco_credito, p.preco_debito,
+                   COALESCE(COUNT(i.id), 0)          AS freq_pdv,
+                   COALESCE(p.freq_historico, 0)     AS freq_hist,
+                   COALESCE(COUNT(i.id), 0) * 10000
+                       + COALESCE(p.freq_historico, 0) AS freq
+            FROM pdv_produtos p
+            LEFT JOIN pdv_itens i ON i.produto_id = p.id
+            WHERE p.ativo = 1
+            GROUP BY p.id
+            ORDER BY freq DESC, p.nome
+            LIMIT ?
+            """,
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
@@ -250,7 +326,7 @@ def criar_venda(total: float, desconto: float, itens: list[dict], pagamentos: li
 def listar_vendas(limit: int = 50) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT v.id, v.data, v.total, v.desconto, v.status, v.vhsys_sync, v.sync_erro, v.criado_em,
+            """SELECT v.id, v.data, v.total, v.desconto, v.status, v.erp_sync, v.sync_erro, v.criado_em,
                       GROUP_CONCAT(p.tipo || ':' || p.valor, '|') AS pagamentos
                FROM pdv_vendas v
                LEFT JOIN pdv_pagamentos p ON p.venda_id = v.id
@@ -265,7 +341,7 @@ def listar_vendas(limit: int = 50) -> list[dict]:
 def atualizar_sync_venda(venda_id: int, status: str, erro: str | None = None):
     with get_conn() as conn:
         conn.execute(
-            "UPDATE pdv_vendas SET vhsys_sync = ?, sync_erro = ? WHERE id = ?",
+            "UPDATE pdv_vendas SET erp_sync = ?, sync_erro = ? WHERE id = ?",
             (status, erro, venda_id),
         )
 
