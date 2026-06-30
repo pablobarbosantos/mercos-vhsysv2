@@ -181,28 +181,44 @@ def upsert_produto(p: dict):
                 "SELECT id FROM pdv_produtos WHERE codigo = ?", (codigo,)
             ).fetchone()
             if row:
-                conn.execute(
-                    """UPDATE pdv_produtos SET
-                           erp_id = ?, codigo_barras = ?, nome = ?,
-                           unidade = ?, preco_base = ?, total_vendido_erp = ?,
-                           ativo = ?, atualizado_em = ?
-                       WHERE id = ?""",
-                    (
-                        p["erp_id"], p.get("codigo_barras"), p["nome"],
-                        p.get("unidade", "UN"), p["preco_base"], tv_erp,
-                        ativo, agora, row["id"],
-                    ),
-                )
+                cod_bal = p.get("codigo_balanca")
+                if cod_bal:
+                    conn.execute(
+                        """UPDATE pdv_produtos SET
+                               erp_id = ?, codigo_barras = ?, nome = ?,
+                               unidade = ?, preco_base = ?, total_vendido_erp = ?,
+                               codigo_balanca = ?, ativo = ?, atualizado_em = ?
+                           WHERE id = ?""",
+                        (
+                            p["erp_id"], p.get("codigo_barras"), p["nome"],
+                            p.get("unidade", "UN"), p["preco_base"], tv_erp,
+                            cod_bal, ativo, agora, row["id"],
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """UPDATE pdv_produtos SET
+                               erp_id = ?, codigo_barras = ?, nome = ?,
+                               unidade = ?, preco_base = ?, total_vendido_erp = ?,
+                               ativo = ?, atualizado_em = ?
+                           WHERE id = ?""",
+                        (
+                            p["erp_id"], p.get("codigo_barras"), p["nome"],
+                            p.get("unidade", "UN"), p["preco_base"], tv_erp,
+                            ativo, agora, row["id"],
+                        ),
+                    )
                 return
 
         # Fallback: INSERT com ON CONFLICT(erp_id)
+        cod_bal = p.get("codigo_balanca")
         conn.execute(
             """
             INSERT INTO pdv_produtos
                 (erp_id, codigo, codigo_barras, nome, unidade,
                  preco_base, preco_dinheiro, preco_pix, preco_credito, preco_debito,
-                 total_vendido_erp, ativo, atualizado_em)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 total_vendido_erp, codigo_balanca, ativo, atualizado_em)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(erp_id) DO UPDATE SET
                 codigo            = excluded.codigo,
                 codigo_barras     = excluded.codigo_barras,
@@ -210,6 +226,9 @@ def upsert_produto(p: dict):
                 unidade           = excluded.unidade,
                 preco_base        = excluded.preco_base,
                 total_vendido_erp = excluded.total_vendido_erp,
+                codigo_balanca    = CASE WHEN excluded.codigo_balanca IS NOT NULL
+                                         THEN excluded.codigo_balanca
+                                         ELSE pdv_produtos.codigo_balanca END,
                 ativo             = excluded.ativo,
                 atualizado_em     = excluded.atualizado_em
             """,
@@ -221,7 +240,7 @@ def upsert_produto(p: dict):
                 p.get("preco_pix", p["preco_base"]),
                 p.get("preco_credito", p["preco_base"]),
                 p.get("preco_debito", p["preco_base"]),
-                tv_erp, ativo, agora,
+                tv_erp, cod_bal, ativo, agora,
             ),
         )
 

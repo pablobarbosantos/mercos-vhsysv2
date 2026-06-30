@@ -1,4 +1,4 @@
-"""PDV — integração com o ERP app.pabloagro.cloud (substitui vhsys.py)."""
+"""PDV — integração com o ERP app.pabloagro.cloud."""
 import logging
 import sys, os
 
@@ -30,8 +30,8 @@ _FORMA_ERP_MAP = {
 # ── Sincronização de produtos ─────────────────────────────────────────────────
 
 def sincronizar_produtos() -> dict:
-    """Importa todos os produtos ativos do ERP e salva em pdv_produtos."""
-    from pdv.database import upsert_produto
+    """Importa produtos ativos do ERP e desativa localmente os que sumiram."""
+    from pdv.database import upsert_produto, get_conn
 
     try:
         produtos = erp.get("/api/produtos", params={"situacao": "Ativo", "limit": 5000})
@@ -45,21 +45,45 @@ def sincronizar_produtos() -> dict:
         logger.error(msg)
         return {"importados": 0, "erro": msg}
 
+    codigos_ativos = set()
     total = 0
     for p in produtos:
         try:
+            codigo = str(p.get("codigo", "") or "").strip()
+            cod_bal = str(p.get("cod_balanca") or "").strip().lower() or None
             upsert_produto({
-                "vhsys_id":     p["id"],
-                "codigo":       str(p.get("codigo", "") or "").strip(),
-                "codigo_barras": str(p.get("ean", "") or "").strip(),
-                "nome":         str(p.get("nome", "")).strip(),
-                "unidade":      str(p.get("unidade", "UN") or "UN"),
-                "preco_base":   float(p.get("preco_venda") or 0),
-                "ativo":        True,
+                "erp_id":            p["id"],
+                "codigo":            codigo,
+                "codigo_barras":     str(p.get("ean", "") or "").strip(),
+                "nome":              str(p.get("nome", "")).strip(),
+                "unidade":           str(p.get("unidade", "UN") or "UN"),
+                "preco_base":        float(p.get("preco_venda") or 0),
+                "total_vendido_erp": float(p.get("total_vendido") or 0),
+                "codigo_balanca":    cod_bal,
+                "ativo":             True,
             })
+            if codigo:
+                codigos_ativos.add(codigo)
+            else:
+                codigos_ativos.add(f"__erp_id__{p['id']}")
             total += 1
         except Exception as e:
             logger.warning(f"[ERP/Sync] erro no produto {p.get('codigo')}: {e}")
+
+    # Desativa localmente produtos que não vieram no sync (inativados no ERP)
+    desativados = 0
+    with get_conn() as conn:
+        locais = conn.execute(
+            "SELECT id, codigo, erp_id FROM pdv_produtos WHERE ativo = 1"
+        ).fetchall()
+        for row in locais:
+            chave = row["codigo"] if row["codigo"] else f"__erp_id__{row['erp_id']}"
+            if chave not in codigos_ativos:
+                conn.execute("UPDATE pdv_produtos SET ativo = 0 WHERE id = ?", (row["id"],))
+                desativados += 1
+
+    if desativados:
+        logger.info(f"[PDV/Sync] {desativados} produto(s) desativado(s) localmente (inativo no ERP)")
 
     logger.info(f"[PDV/Sync] {total} produtos importados do ERP")
     return {"importados": total, "erro": None}
