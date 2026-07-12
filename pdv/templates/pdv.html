@@ -218,6 +218,7 @@
     padding: 8px 10px; background: var(--input);
     border: 1px solid var(--border); color: var(--text);
     border-radius: 6px; font-size: 13px;
+    appearance: none; -webkit-appearance: none;
   }
   #btn-add-pag {
     background: none; border: 1px dashed var(--border);
@@ -1033,8 +1034,7 @@ function renderLinhasPag() {
   const wrap = document.getElementById('pag-linhas');
   wrap.innerHTML = linhasPag.map((l, i) => `
     <div class="pag-linha">
-      <select onchange="linhasPag[${i}].tipo=this.value; calcTroco()"
-        style="background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:14px;cursor:pointer;outline:none;">
+      <select onchange="linhasPag[${i}].tipo=this.value; calcTroco()">
         ${['dinheiro','pix','credito','debito'].map(f =>
           `<option value="${f}" ${f===l.tipo?'selected':''}>${f.charAt(0).toUpperCase()+f.slice(1)}</option>`
         ).join('')}
